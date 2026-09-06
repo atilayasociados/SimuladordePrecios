@@ -1009,9 +1009,11 @@ async function cerrarRonda(){
           eq.precioAnterior = res.precioFinal;
           eq.rondasJugadas = ronda;
           eq.historial = eq.historial || [];
+          const preciosCompetidores = {};
+          r.resultados.filter(x=>x.esBot).forEach(b=>{ preciosCompetidores[b.nombre] = b.precioFinal; });
           eq.historial.push({
             ronda, precioMercado: r.precioMercado, poolDeRonda: r.poolDeRonda,
-            neutra: !!esNeutra,
+            neutra: !!esNeutra, preciosCompetidores,
             precioFinal: res.precioFinal, participacion: res.participacion,
             pasajerosGanados: res.pasajerosGanados, capacidad: res.capacidad,
             metricas: res.metricas, estadoResultados: res.estadoResultados,
