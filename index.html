@@ -640,13 +640,7 @@ function vistaDecision(){
         <div class="ref-nota" style="margin-top:8px;">Por eso comprarlo no te informa mejor sobre la competencia (ya la conoces) — te informa mejor sobre tu propio límite de precio, que es el único de los tres números del panel que trae incertidumbre si no lo compras.</div>
         <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como una señal fuerte, no como una certeza.</div>
       </div>
-      ${d.comprarWTP ? `
-      <div class="referencia" style="margin-top:10px;">
-        <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
-        <div class="ref-fila"><span>Seguro de viaje — referencia de mercado (estimado)</span><b>${money2(p.refSeguro)}</b></div>
-        <div class="ref-fila"><span>Suscripción tipo Pase Frecuente — referencia de mercado (estimado)</span><b>${money2(p.refPaseFrecuente)}/mes</b></div>
-        <div class="ref-nota">El dato de equipaje es real y verificado. Ninguna aerolínea boliviana ofrece hoy un Pase Frecuente ni un seguro de viaje exactamente así — las otras dos cifras son una referencia razonada, no un precio publicado.</div>
-      </div>` : ''}
+      <div id="panelReferenciaExtras">${contenidoPanelExtrasWTP(d.comprarWTP, e, p)}</div>
     `, activo('wtp',ronda), 2)}
 
     ${grupo('Ingresos complementarios', 'Producto ancla y complementario', `
@@ -728,6 +722,15 @@ function boostMkt(g){
 function contenidoPanelMarketing(gasto){
   return `<div class="ref-fila"><span>Aumento de atractivo con esta inversión</span><b>+${(boostMkt(gasto)*100).toFixed(1)}%</b></div>
     <div class="ref-nota">Rinde cada vez menos por dólar adicional: duplicar la inversión no duplica el resultado.</div>`;
+}
+function contenidoPanelExtrasWTP(comprarWTP, e, p){
+  if(!comprarWTP) return '';
+  return `<div class="referencia" style="margin-top:10px;">
+    <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
+    <div class="ref-fila"><span>Seguro de viaje — referencia de mercado (estimado)</span><b>${money2(p.refSeguro)}</b></div>
+    <div class="ref-fila"><span>Suscripción tipo Pase Frecuente — referencia de mercado (estimado)</span><b>${money2(p.refPaseFrecuente)}/mes</b></div>
+    <div class="ref-nota">El dato de equipaje es real y verificado. Ninguna aerolínea boliviana ofrece hoy un Pase Frecuente ni un seguro de viaje exactamente así — las otras dos cifras son una referencia razonada, no un precio publicado.</div>
+  </div>`;
 }
 
 /* ============================================================
@@ -1093,6 +1096,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         alert('Ya viste los datos precisos de esta investigación en esta ronda — no puedes deshacer la compra. Si de verdad no quieres pagarla, recarga la página antes de enviar (perderás el resto de lo que llevas escrito).');
         return;
       }
+      const panelExtras = document.getElementById('panelReferenciaExtras');
+      if(panelExtras) panelExtras.innerHTML = contenidoPanelExtrasWTP(APP.decisionActual.comprarWTP, APP.equipo, PARAMS.perfiles[APP.equipo.perfil]);
       actualizarPanelesEnVivo();
     }
     if(e.target.id === 'dElast'){
