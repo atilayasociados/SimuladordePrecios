@@ -342,7 +342,11 @@ function filaAConfig(f){
     rondaActual: f.ronda_actual, eqDomestica: f.eq_domestica, eqInternacional: f.eq_internacional,
     metaOcupacion: f.meta_ocupacion != null ? Number(f.meta_ocupacion) : null,
     poolDomestica: f.pool_domestica, pctDomestica: f.pct_domestica != null ? Number(f.pct_domestica) : null,
-    poolInternacional: f.pool_internacional, pctInternacional: f.pct_internacional != null ? Number(f.pct_internacional) : null
+    poolInternacional: f.pool_internacional, pctInternacional: f.pct_internacional != null ? Number(f.pct_internacional) : null,
+    costoWtpDomestica: f.costo_wtp_domestica != null ? Number(f.costo_wtp_domestica) : 80,
+    costoWtpInternacional: f.costo_wtp_internacional != null ? Number(f.costo_wtp_internacional) : 200,
+    costoElasticidadDomestica: f.costo_elasticidad_domestica != null ? Number(f.costo_elasticidad_domestica) : 100,
+    costoElasticidadInternacional: f.costo_elasticidad_internacional != null ? Number(f.costo_elasticidad_internacional) : 250
   };
 }
 function configAFila(c){
@@ -546,6 +550,9 @@ function vistaDecision(){
   const ses = sesionDeRonda(ronda);
   const p = PARAMS.perfiles[e.perfil];
   const d = APP.decisionActual;
+  const cfg = APP.config || {};
+  const costoWtpActual = e.perfil==='domestica' ? (cfg.costoWtpDomestica ?? 80) : (cfg.costoWtpInternacional ?? 200);
+  const costoElasticidadActual = e.perfil==='domestica' ? (cfg.costoElasticidadDomestica ?? 100) : (cfg.costoElasticidadInternacional ?? 250);
 
   if(APP.enviada){
     return `<h2 class="titulo">Decisión enviada</h2>
@@ -617,7 +624,7 @@ function vistaDecision(){
     ${grupo('Investigación de mercado', 'Disposición a pagar (WTP)', `
       <div class="interruptor">
         <input type="checkbox" id="dWTP" ${d.comprarWTP?'checked':''}>
-        <label for="dWTP">Comprar estudio de mercado — ${money(p.costoWTP)}</label>
+        <label for="dWTP">Comprar estudio de mercado — ${money(costoWtpActual)}</label>
       </div>
       <div class="referencia">
         <div class="ref-nota">Te entrega los precios reales de la competencia y una encuesta de intención de compra, para calcular tu techo con precisión en vez de estimarlo.</div>
@@ -670,7 +677,7 @@ function vistaDecision(){
     ${grupo('Estudio de elasticidad', 'Elasticidad controlada', `
       <div class="interruptor">
         <input type="checkbox" id="dElast" ${d.comprarElasticidad?'checked':''}>
-        <label for="dElast">Comprar estudio de elasticidad — ${money(p.costoElasticidad)}</label>
+        <label for="dElast">Comprar estudio de elasticidad — ${money(costoElasticidadActual)}</label>
       </div>
     `, activo('elasticidad',ronda), 5)}
 

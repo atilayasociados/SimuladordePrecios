@@ -680,14 +680,20 @@ function filaAConfig(f){
     rondaActual: f.ronda_actual, eqDomestica: f.eq_domestica, eqInternacional: f.eq_internacional,
     metaOcupacion: f.meta_ocupacion != null ? Number(f.meta_ocupacion) : null,
     poolDomestica: f.pool_domestica, pctDomestica: f.pct_domestica != null ? Number(f.pct_domestica) : null,
-    poolInternacional: f.pool_internacional, pctInternacional: f.pct_internacional != null ? Number(f.pct_internacional) : null
+    poolInternacional: f.pool_internacional, pctInternacional: f.pct_internacional != null ? Number(f.pct_internacional) : null,
+    costoWtpDomestica: f.costo_wtp_domestica != null ? Number(f.costo_wtp_domestica) : 80,
+    costoWtpInternacional: f.costo_wtp_internacional != null ? Number(f.costo_wtp_internacional) : 200,
+    costoElasticidadDomestica: f.costo_elasticidad_domestica != null ? Number(f.costo_elasticidad_domestica) : 100,
+    costoElasticidadInternacional: f.costo_elasticidad_internacional != null ? Number(f.costo_elasticidad_internacional) : 250
   };
 }
 function configAFila(c){
   return {
     id:1, ronda_actual:c.rondaActual, eq_domestica:c.eqDomestica, eq_internacional:c.eqInternacional,
     meta_ocupacion:c.metaOcupacion, pool_domestica:c.poolDomestica, pct_domestica:c.pctDomestica,
-    pool_internacional:c.poolInternacional, pct_internacional:c.pctInternacional
+    pool_internacional:c.poolInternacional, pct_internacional:c.pctInternacional,
+    costo_wtp_domestica:c.costoWtpDomestica, costo_wtp_internacional:c.costoWtpInternacional,
+    costo_elasticidad_domestica:c.costoElasticidadDomestica, costo_elasticidad_internacional:c.costoElasticidadInternacional
   };
 }
 
@@ -817,6 +823,20 @@ function vistaConfiguracion(){
     </div>
 
     <div class="bloque">
+      <h3>Costos de investigación de mercado</h3>
+      <p class="sub" style="margin-bottom:14px;">Por defecto, calibrados para que un equipo pueda comprar la investigación todas las rondas sin que eso arruine su resultado — no para que sea gratis, pero sí para que sea una decisión recurrente, no un riesgo grande y aislado.</p>
+      <div class="campos">
+        <div class="campo"><label for="cWtpDom">WTP — Doméstica ($)</label><input type="number" id="cWtpDom" min="0" value="${c.costoWtpDomestica ?? 80}"></div>
+        <div class="campo"><label for="cWtpInt">WTP — Internacional ($)</label><input type="number" id="cWtpInt" min="0" value="${c.costoWtpInternacional ?? 200}"></div>
+        <div class="campo"><label for="cElastDom">Elasticidad — Doméstica ($)</label><input type="number" id="cElastDom" min="0" value="${c.costoElasticidadDomestica ?? 100}"></div>
+        <div class="campo"><label for="cElastInt">Elasticidad — Internacional ($)</label><input type="number" id="cElastInt" min="0" value="${c.costoElasticidadInternacional ?? 250}"></div>
+      </div>
+      <div class="acciones">
+        <button class="btn-sec" id="btnGuardarCostos">Guardar costos</button>
+      </div>
+    </div>
+
+    <div class="bloque">
       <h3>Equipos registrados</h3>
       ${D.equipos.length ? `<div class="lista-equipos">
         ${D.equipos.map(e=>`<div class="eq-fila">
@@ -936,12 +956,20 @@ async function cerrarRonda(){
   const c = D.config, ronda = c.rondaActual;
   const filas = [];
 
+  // Clonar los parámetros por defecto y sobreescribir los costos de
+  // investigación con lo que el profesor haya configurado (Configuración)
+  const paramsRonda = JSON.parse(JSON.stringify(PARAMS_DEFECTO));
+  paramsRonda.perfiles.domestica.costoInvestigacionWTP = c.costoWtpDomestica ?? paramsRonda.perfiles.domestica.costoInvestigacionWTP;
+  paramsRonda.perfiles.domestica.costoEstudioElasticidad = c.costoElasticidadDomestica ?? paramsRonda.perfiles.domestica.costoEstudioElasticidad;
+  paramsRonda.perfiles.internacional.costoInvestigacionWTP = c.costoWtpInternacional ?? paramsRonda.perfiles.internacional.costoInvestigacionWTP;
+  paramsRonda.perfiles.internacional.costoEstudioElasticidad = c.costoElasticidadInternacional ?? paramsRonda.perfiles.internacional.costoEstudioElasticidad;
+
   for(const perfilKey of ['domestica','internacional']){
     const delPerfil = D.equipos.filter(e => e.perfil === perfilKey);
     if(!delPerfil.length) continue;
 
     const poolFijo = perfilKey==='domestica' ? c.poolDomestica : c.poolInternacional;
-    const bots = PARAMS_DEFECTO.perfiles[perfilKey].bots;
+    const bots = paramsRonda.perfiles[perfilKey].bots;
     const preciosBot = Object.values(PRECIOS_BOT_BASE[perfilKey]);
     const promedioBots = preciosBot.reduce((a,b)=>a+b,0)/preciosBot.length;
 
@@ -950,7 +978,7 @@ async function cerrarRonda(){
       const dec = guardada || decisionNeutra(promedioBots);
       return {
         nombre: e.nombre,
-        puntajeValor: e.tresC ? e.tresC.valor : PARAMS_DEFECTO.benchmarkValor,
+        puntajeValor: e.tresC ? e.tresC.valor : paramsRonda.benchmarkValor,
         caja: e.caja,
         decision: dec,
         _neutra: !guardada
@@ -959,7 +987,7 @@ async function cerrarRonda(){
 
     const r = ejecutarRonda({
       perfilKey, ronda, poolFijo, choque: D.choque,
-      equipos: equiposMotor, semilla: 'nur-mkt202'
+      equipos: equiposMotor, semilla: 'nur-mkt202', params: paramsRonda
     });
 
     for(const res of r.resultados){
@@ -1062,6 +1090,16 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         eqDomestica:nD, eqInternacional:nI, numEquipos:nD+nI, metaOcupacion:oc,
         poolDomestica: cd.poolFijo, pctDomestica: cd.pctPenetracion,
         poolInternacional: ci.poolFijo, pctInternacional: ci.pctPenetracion };
+      await escribir('config', D.config);
+      render(); return;
+    }
+    if(e.target.id === 'btnGuardarCostos'){
+      D.config = { ...(D.config||{ rondaActual:1 }),
+        costoWtpDomestica: parseFloat(document.getElementById('cWtpDom').value) || 0,
+        costoWtpInternacional: parseFloat(document.getElementById('cWtpInt').value) || 0,
+        costoElasticidadDomestica: parseFloat(document.getElementById('cElastDom').value) || 0,
+        costoElasticidadInternacional: parseFloat(document.getElementById('cElastInt').value) || 0
+      };
       await escribir('config', D.config);
       render(); return;
     }
