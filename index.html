@@ -932,6 +932,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     document.getElementById('app').style.display='block';
     render();
     if(!APP.intervalo) APP.intervalo = setInterval(async ()=>{
+      if(APP.vista==='decision') recolectar();
       await sincronizar();
       if(APP.vista==='tablero') await cargarTablero();
       render();
