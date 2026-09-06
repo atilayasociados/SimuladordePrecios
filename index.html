@@ -693,8 +693,13 @@ function vistaReporte(){
     </div>
 
     <table class="er">
+      ${er.desglosePrecio ? `
+      <tr><td>Pasajeros Tarifa Flex × precio</td><td>${er.desglosePrecio.flex.pax} × ${money2(er.desglosePrecio.flex.precio)}</td></tr>
+      <tr><td>Pasajeros Tarifa Promocional × precio</td><td>${er.desglosePrecio.promo.pax} × ${money2(er.desglosePrecio.promo.precio)}</td></tr>
+      ` : `
       <tr><td>Pasajeros a bordo</td><td>${cap.abordados}</td></tr>
       <tr><td>× Precio de venta</td><td>${money2(er.precioVenta)}</td></tr>
+      `}
       ${fila('= Ingresos', er.ingresos, 'total')}
       ${fila('Costos Operativos Directos (avión, tripulación, combustible)', -er.doc, 'resta')}
       ${fila('Costos Operativos Indirectos (catering, reservas, equipaje)', -er.ioc, 'resta')}
@@ -724,6 +729,10 @@ function observaciones(rep){
   const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
   const o = [];
   o.push(`Tu precio fue de ${money2(rep.precioFinal)}; el promedio del mercado, ${money2(rep.precioMercado)}.`);
+  if(er.desglosePrecio){
+    const d = er.desglosePrecio;
+    o.push(`De tus ${cap.abordados} pasajeros, ${d.promo.pax} compraron con la Tarifa Promocional (${money2(d.promo.precio)}) y solo ${d.flex.pax} pagaron la Tarifa Flex completa (${money2(d.flex.precio)}).`);
+  }
   o.push(`Volaste al ${m.loadFactor}% de ocupación. Tus costos de operación (${money2(er.doc)}) fueron los mismos que si hubieras volado lleno.`);
   o.push(`Cada pasajero a bordo dejó ${money2(er.ingresos/Math.max(1,cap.abordados) - (er.ioc/Math.max(1,cap.abordados)))} después de su costo directo.`);
   if(er.gastosComerciales>0 || er.gastosAdministrativos>0){
@@ -750,6 +759,13 @@ function diagnosticos(rep){
   const piso = p.docPorRonda/p.capacidad + p.iocPorPasajero;
   if(rep.precioFinal < piso){
     d.push(`Tu precio quedó ${money2(piso-rep.precioFinal)} por debajo de tu piso de ${money2(piso)}. ¿Qué le pasó a tu resultado con cada pasajero que subió al avión?`);
+  }
+  // Dilución alta hacia la Tarifa Promocional
+  if(er.desglosePrecio && cap.abordados > 0){
+    const pctPromo = er.desglosePrecio.promo.pax / cap.abordados;
+    if(pctPromo > 0.70){
+      d.push(`El ${(pctPromo*100).toFixed(0)}% de tus pasajeros compró con la Tarifa Promocional, no con la Flex. ¿Tu valla fue lo bastante fuerte para proteger al viajero de negocios?`);
+    }
   }
   // Gasto desproporcionado
   const gastos = er.gastosComerciales + er.gastosAdministrativos;

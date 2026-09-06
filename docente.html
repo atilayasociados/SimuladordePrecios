@@ -110,7 +110,7 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
 
 <script>
 /* ============================================================
-   MOTOR DE CÁLCULO — idéntico al verificado con 37 pruebas
+   MOTOR DE CÁLCULO — idéntico al verificado con 43 pruebas
    ============================================================ */
 /* ============================================================
    MOTOR DE CÁLCULO — Simulador de Pricing & Revenue Management
@@ -337,7 +337,19 @@ function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
   const p = params.perfiles[datos.perfil];
 
   // --- Ingresos ---
-  const ingresoTarifas = datos.abordados * datos.precioRealizado;
+  // Si hay Tarifa Promocional activa, el ingreso se reparte entre los pasajeros
+  // que compraron Flex y los que compraron Promocional (Herramienta #5 - valla)
+  let ingresoTarifas, desglosePrecio = null;
+  if (datos.pasajerosPromocional && datos.pasajerosPromocional > 0) {
+    ingresoTarifas = (datos.pasajerosFlex * datos.precioRealizado) +
+                      (datos.pasajerosPromocional * datos.precioPromocional);
+    desglosePrecio = {
+      flex: { pax: datos.pasajerosFlex, precio: datos.precioRealizado },
+      promo: { pax: datos.pasajerosPromocional, precio: datos.precioPromocional }
+    };
+  } else {
+    ingresoTarifas = datos.abordados * datos.precioRealizado;
+  }
   const ingresoAncillaries = datos.ingresoAncillaries || 0;
   const ingresoPaseFrecuente = datos.ingresoPaseFrecuente || 0;
   const ingresos = ingresoTarifas + ingresoAncillaries + ingresoPaseFrecuente;
@@ -369,6 +381,7 @@ function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
   return {
     pax: datos.abordados,
     precioVenta: redondear(datos.precioRealizado),
+    desglosePrecio,
     ingresoTarifas: redondear(ingresoTarifas),
     ingresoAncillaries: redondear(ingresoAncillaries),
     ingresoPaseFrecuente: redondear(ingresoPaseFrecuente),
@@ -554,10 +567,16 @@ function ejecutarRonda(config) {
       ? redondear(cap.abordados * c.precioFinal * 0.10)
       : 0;
 
+    // Segmentación con valla (Herramienta #5): solo equipos, no bots
+    const seg = c.esBot ? null : segmentarIngreso(cap.abordados, c.decision, p.segmentos);
+
     const er = c.esBot ? null : estadoDeResultados({
       perfil: perfilKey,
       abordados: cap.abordados,
       precioRealizado: c.precioFinal,
+      pasajerosFlex: seg ? seg.pasajerosFlex : cap.abordados,
+      pasajerosPromocional: seg ? seg.pasajerosPromocional : 0,
+      precioPromocional: c.decision.tarifaPromocional || 0,
       ingresoAncillaries,
       ingresoPaseFrecuente: (c.decision.cuotaPaseFrecuente || 0) * Math.round(cap.abordados * 0.2),
       gastoMarketing: c.decision.marketing || 0,
@@ -609,6 +628,26 @@ function ejecutarRonda(config) {
     sumaAtractivo: redondear(sumaAtractivo, 4),
     resultados
   };
+}
+
+/* ---------- SEGMENTACIÓN CON VALLA (Herramienta #5) ---------- */
+/* Determina qué fracción de la demanda de NEGOCIO "se diluye" hacia la
+   Tarifa Promocional según qué tan fuerte sea la restricción (valla).
+   Sin valla, casi todos aprovechan el precio bajo; con valla fuerte,
+   el segmento de negocio se queda mayormente en la Tarifa Flex. */
+const FUGA_POR_VALLA = { sin_valla: 0.80, basica: 0.35, fuerte: 0.08 };
+
+function segmentarIngreso(abordados, decision, segmentosPerfil) {
+  const precioPromo = decision.tarifaPromocional;
+  if (!precioPromo || precioPromo <= 0) {
+    return { pasajerosFlex: abordados, pasajerosPromocional: 0 };
+  }
+  const fuga = FUGA_POR_VALLA[decision.fuerzaValla] ?? FUGA_POR_VALLA.sin_valla;
+  const pasPromocional = Math.round(
+    abordados * segmentosPerfil.placer + abordados * segmentosPerfil.negocio * fuga
+  );
+  const pasFlex = Math.max(0, abordados - pasPromocional);
+  return { pasajerosFlex: pasFlex, pasajerosPromocional: pasPromocional };
 }
 
 
