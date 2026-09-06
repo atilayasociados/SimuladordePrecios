@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Pricing &amp; Revenue Management — Equipos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cabina:#0E1B2C;
+  --panel:#16283F;
+  --panel-alto:#1E3350;
+  --borde:rgba(255,255,255,0.10);
+  --ambar:#E8A23C;
+  --ambar-tenue:rgba(232,162,60,0.12);
+  --verde:#5FBF8F;
+  --rojo:#E0645A;
+  --teal:#4FA8A0;
+  --texto:#ECEFF4;
+  --texto-tenue:#8FA0B6;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;background:var(--cabina);color:var(--texto);
+  font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.cifra{font-family:'Space Grotesk',system-ui,sans-serif;}
+.cifra{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";}
+button{font-family:inherit;cursor:pointer;}
+input,select{font-family:inherit;}
+:focus-visible{outline:2px solid var(--ambar);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+/* ---------- Registro ---------- */
+.registro{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:
+    radial-gradient(ellipse at 20% 15%, rgba(232,162,60,0.10), transparent 45%),
+    radial-gradient(ellipse at 80% 85%, rgba(79,168,160,0.10), transparent 50%),
+    var(--cabina);
+}
+.registro-caja{
+  max-width:460px;width:100%;background:var(--panel);
+  border:1px solid var(--borde);border-radius:14px;padding:34px 30px;
+}
+.modulo{color:var(--ambar);font-size:12.5px;letter-spacing:0.03em;margin-bottom:10px;}
+.registro-caja h1{font-size:29px;line-height:1.15;margin:0 0 10px;font-weight:600;}
+.registro-caja .intro{color:var(--texto-tenue);font-size:14.5px;line-height:1.6;margin:0 0 24px;}
+.campo{margin-bottom:16px;}
+.campo label{display:block;font-size:13px;color:var(--texto-tenue);margin-bottom:6px;}
+.campo input,.campo select,.campo textarea{
+  width:100%;padding:11px 12px;background:var(--panel-alto);
+  border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:15px;
+}
+.campo textarea{resize:vertical;min-height:64px;}
+.btn{
+  width:100%;padding:13px;background:var(--ambar);color:#221606;border:none;
+  border-radius:8px;font-weight:600;font-size:15px;margin-top:8px;
+}
+.btn:hover{background:#f2ad48;}
+.btn-sec{
+  background:transparent;border:1px solid var(--borde);color:var(--texto-tenue);
+  padding:9px 16px;border-radius:8px;font-size:13.5px;width:auto;margin:0;
+}
+.btn-sec:hover{color:var(--texto);border-color:var(--texto-tenue);}
+.aviso{color:var(--rojo);font-size:13px;margin-top:10px;display:none;}
+.nota-pie{
+  margin-top:20px;padding-top:16px;border-top:1px solid var(--borde);
+  font-size:12.5px;color:var(--texto-tenue);line-height:1.55;
+}
+
+/* ---------- Shell ---------- */
+#app{display:none;}
+.barra{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;
+  padding:18px 24px;background:var(--panel);border-bottom:1px solid var(--borde);
+}
+.barra .nombre{font-size:21px;font-weight:600;margin:0 0 5px;}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--texto-tenue);
+  background:var(--panel-alto);border:1px solid var(--borde);padding:4px 11px;border-radius:20px;
+}
+.chip b{color:var(--ambar);font-weight:600;}
+.barra-der{text-align:right;}
+.caja-label{font-size:11px;color:var(--texto-tenue);letter-spacing:0.04em;}
+.caja-valor{font-size:30px;font-weight:700;color:var(--ambar);line-height:1.1;}
+.caja-delta{font-size:12.5px;margin-top:2px;}
+.caja-delta.pos{color:var(--verde);}
+.caja-delta.neg{color:var(--rojo);}
+
+.tabs{display:flex;gap:2px;padding:10px 20px 0;background:var(--panel);overflow-x:auto;border-bottom:1px solid var(--borde);}
+.tab{
+  background:transparent;border:none;color:var(--texto-tenue);padding:10px 16px 13px;
+  font-size:13.5px;white-space:nowrap;border-bottom:2px solid transparent;font-weight:500;
+}
+.tab.activa{color:var(--texto);border-bottom-color:var(--ambar);}
+main{padding:22px;max-width:920px;margin:0 auto;}
+h2.titulo{font-size:20px;font-weight:600;margin:0 0 4px;}
+p.sub{color:var(--texto-tenue);font-size:13.5px;margin:0 0 20px;line-height:1.55;}
+
+/* ---------- Briefing 3C ---------- */
+.tres-c{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+.c-item{background:var(--panel);border:1px solid var(--borde);border-radius:10px;padding:16px;}
+.c-item .c-nombre{font-size:12.5px;color:var(--texto-tenue);margin-bottom:6px;}
+.c-item .c-valor{font-size:26px;font-weight:600;}
+.c-item .c-bench{font-size:11.5px;color:var(--texto-tenue);margin-top:4px;}
+.c-item.destacado{border-color:var(--ambar);}
+.c-item.destacado .c-valor{color:var(--ambar);}
+
+/* ---------- Hoja de decisión ---------- */
+.grupo{
+  background:var(--panel);border:1px solid var(--borde);border-radius:12px;
+  padding:18px 20px;margin-bottom:14px;
+}
+.grupo-cab{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px;}
+.grupo-cab h3{font-size:15.5px;margin:0;font-weight:600;}
+.herramienta{font-size:11.5px;color:var(--texto-tenue);}
+.campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;}
+.campo-dec label{display:block;font-size:12.5px;color:var(--texto-tenue);margin-bottom:6px;}
+.campo-dec input,.campo-dec select{
+  width:100%;padding:10px 11px;background:var(--panel-alto);
+  border:1px solid var(--borde);border-radius:7px;color:var(--texto);font-size:15px;
+}
+.interruptor{display:flex;align-items:center;gap:10px;padding:10px 0;}
+.interruptor input{width:auto;}
+.interruptor label{font-size:13.5px;color:var(--texto);margin:0;}
+
+/* Panel de referencia — el corazón pedagógico */
+.referencia{
+  background:var(--ambar-tenue);border-left:3px solid var(--ambar);
+  border-radius:0 8px 8px 0;padding:12px 14px;margin-top:12px;font-size:13px;line-height:1.6;
+}
+.referencia .ref-fila{display:flex;justify-content:space-between;gap:12px;padding:2px 0;}
+.referencia .ref-fila b{color:var(--ambar);font-weight:600;}
+.referencia .ref-nota{color:var(--texto-tenue);font-size:12px;margin-top:6px;}
+.barra-rango{height:6px;background:var(--panel-alto);border-radius:3px;margin:10px 0 6px;position:relative;overflow:hidden;}
+.barra-rango .zona{position:absolute;top:0;bottom:0;background:rgba(95,191,143,0.35);}
+.barra-rango .marcador{position:absolute;top:-3px;width:2px;height:12px;background:var(--ambar);}
+.alerta-equilibrio{
+  background:rgba(224,100,90,0.10);border-left:3px solid var(--rojo);
+  border-radius:0 8px 8px 0;padding:11px 14px;margin-top:10px;font-size:13px;line-height:1.55;
+}
+.bloqueado{opacity:0.45;pointer-events:none;}
+.candado{font-size:11.5px;color:var(--texto-tenue);}
+
+.acciones{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px;}
+.enviado{
+  background:rgba(95,191,143,0.12);border:1px solid rgba(95,191,143,0.4);color:var(--verde);
+  padding:12px 16px;border-radius:8px;font-size:13.5px;
+}
+
+/* ---------- Reporte ---------- */
+table.er{width:100%;border-collapse:collapse;font-size:13.5px;}
+table.er td{padding:9px 12px;border-bottom:1px solid var(--borde);}
+table.er td:last-child{text-align:right;font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums;}
+table.er tr.total td{font-weight:600;background:var(--panel-alto);}
+table.er tr.total.final td{color:var(--ambar);font-size:15px;}
+table.er tr.resta td:first-child{padding-left:24px;color:var(--texto-tenue);}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:16px 0;}
+.kpi{background:var(--panel);border:1px solid var(--borde);border-radius:10px;padding:14px;}
+.kpi .k-nombre{font-size:11.5px;color:var(--texto-tenue);margin-bottom:5px;}
+.kpi .k-valor{font-size:22px;font-weight:600;}
+.explica{
+  background:var(--panel);border:1px solid var(--borde);border-radius:10px;
+  padding:14px 16px;font-size:13.5px;line-height:1.65;margin-top:14px;
+}
+.explica h4{margin:0 0 8px;font-size:13.5px;color:var(--ambar);font-weight:600;}
+.explica ul{margin:0;padding-left:18px;}
+.explica li{margin-bottom:5px;}
+.preguntas{
+  background:rgba(79,168,160,0.08);border:1px solid rgba(79,168,160,0.3);
+  border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.65;margin-top:12px;
+}
+.preguntas h4{margin:0 0 8px;font-size:13.5px;color:var(--teal);font-weight:600;}
+.preguntas ul{margin:0;padding-left:18px;}
+.preguntas li{margin-bottom:7px;}
+
+/* ---------- Tablero ---------- */
+table.tab-pos{width:100%;border-collapse:collapse;font-size:14px;}
+table.tab-pos th{
+  text-align:left;font-size:11.5px;color:var(--texto-tenue);letter-spacing:0.03em;
+  padding:8px 12px;border-bottom:1px solid var(--borde);font-weight:500;
+}
+table.tab-pos td{padding:12px;border-bottom:1px solid var(--borde);}
+table.tab-pos tr.yo{background:var(--ambar-tenue);}
+table.tab-pos td:last-child{text-align:right;font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums;color:var(--ambar);font-weight:600;}
+.puesto{
+  display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+  border-radius:50%;background:var(--panel-alto);font-size:12px;font-weight:600;
+}
+.puesto.primero{background:var(--ambar);color:#221606;}
+.marca-bot{font-size:11px;color:var(--texto-tenue);margin-left:6px;}
+.vacio{color:var(--texto-tenue);font-size:13.5px;padding:28px 0;text-align:center;}
+
+footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 20px 40px;}
+@media (max-width:560px){
+  .barra{flex-direction:column;}
+  .barra-der{text-align:left;width:100%;}
+  main{padding:16px;}
+}
+</style>
+</head>
+<body>
+
+<div class="registro" id="pantallaRegistro">
+  <div class="registro-caja">
+    <div class="modulo">MKT202 · Gestión de Precios &amp; Revenue Management</div>
+    <h1>Tu aerolínea despega aquí</h1>
+    <p class="intro">Registra tu equipo y compite durante 12 trimestres contra las demás aerolíneas del curso y contra dos operadores reales del mercado boliviano.</p>
+
+    <div class="campo">
+      <label for="inNombre">Nombre de la aerolínea</label>
+      <input type="text" id="inNombre" maxlength="40" placeholder="Andes Wings">
+    </div>
+    <div class="campo">
+      <label for="inIntegrantes">Integrantes del equipo</label>
+      <textarea id="inIntegrantes" placeholder="Un nombre por línea"></textarea>
+    </div>
+    <div class="campo">
+      <label for="inPerfil">Perfil de ruta</label>
+      <select id="inPerfil">
+        <option value="domestica">Doméstica — SCZ-LPB y SCZ-CBB (70 asientos)</option>
+        <option value="internacional">Internacional — SCZ-LIM y SCZ-EZE (140 asientos)</option>
+      </select>
+    </div>
+    <button class="btn" id="btnEntrar">Entrar al simulador</button>
+    <div class="aviso" id="avisoRegistro"></div>
+    <div class="nota-pie">Si tu equipo ya se registró antes, escribe el mismo nombre de aerolínea para retomar donde quedaron.</div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="barra">
+    <div>
+      <p class="nombre" id="hdNombre">—</p>
+      <span class="chip">Perfil <b id="hdPerfil">—</b></span>
+      <span class="chip" style="margin-left:6px;">Ronda <b id="hdRonda">—</b> de 12</span>
+    </div>
+    <div class="barra-der">
+      <div class="caja-label">CAJA ACUMULADA</div>
+      <div class="caja-valor cifra" id="hdCaja">$0</div>
+      <div class="caja-delta" id="hdDelta"></div>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <main id="contenido"></main>
+  <footer>Material preparado por Atila y Asociados e IEAC Business School para uso exclusivo de la Universidad NUR.</footer>
+</div>
+
+<script>
+/* ============================================================
+   MOTOR (mismas fórmulas del Acta — versión navegador)
+   ============================================================ */
+const PARAMS = {
+  capitalSemilla: 50000,
+  perfiles: {
+    domestica: { nombre:'Doméstica', rutas:['SCZ-LPB','SCZ-CBB'], capacidad:70,
+      iocPorPasajero:10, docPorRonda:801.84, precioBase:33.00, noShowPct:0.06,
+      costoWTP:800, costoElasticidad:1000, bots:['BoA'] },
+    internacional: { nombre:'Internacional', rutas:['SCZ-LIM','SCZ-EZE'], capacidad:140,
+      iocPorPasajero:22, docPorRonda:16401.89, precioBase:225.75, noShowPct:0.03,
+      costoWTP:1600, costoElasticidad:2000, bots:['LATAM','BoA'] }
+  },
+  proporcionAdmin:0.601, proporcionComercial:0.399,
+  topeBoost:0.45, marketing:{factor:0.08, divisor:400, tope:0.30},
+  topePase:0.05, boostAnclaje:0.03, madurez:{min:-0.08,max:0.08},
+  benchmarkValor:5.76, umbralValor:0.75, sensValor:0.4, factorValorPct:0.073,
+  probDeteccion:0.30, penalConfianza:0.15, rondasTotales:12
+};
+const PRECIOS_BOT = {
+  domestica:{ 'BoA':33.00 },
+  internacional:{ 'LATAM':234.00, 'BoA':217.50 }
+};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const red=(v,d=2)=>{const f=Math.pow(10,d);return Math.round(v*f)/f;};
+const money=n=>'$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:0});
+const money2=n=>'$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* Qué se desbloquea en cada sesión (Acta Sección 3) */
+const DESBLOQUEO = {
+  precio:1, marketing:1,
+  valla:2, wtp:2, equilibrio:2,
+  ancillaries:3, paseFrecuente:3, anclaje:3,
+  overbooking:4, dynamic:4,
+  elasticidad:5, algoritmico:5, madurez:5
+};
+/* Rondas por sesión: 3/3/2/2/2 (Acta Sección 2) */
+function sesionDeRonda(r){
+  if(r<=3) return 1; if(r<=6) return 2; if(r<=8) return 3; if(r<=10) return 4; return 5;
+}
+function activo(clave, ronda){ return sesionDeRonda(ronda) >= DESBLOQUEO[clave]; }
+
+/* ============================================================
+   ALMACENAMIENTO — Supabase (funciona fuera de Claude, en GitHub Pages)
+   Claves: config (Panel Docente) · equipo:<nombre> · decision:<ronda>:<nombre>
+   Se mantienen las mismas 3 funciones (leer/escribir/listar) que antes
+   usaban window.storage, para no tener que tocar el resto del código.
+   ============================================================ */
+const SUPA_URL = 'https://hvwdubczgtfshiwtgmnk.supabase.co';
+const SUPA_KEY = 'sb_publishable_K2ZXIPwBmvos69eaZb_FWw_Y7gKqr94';
+const SUPA_HEAD = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY, 'Content-Type':'application/json' };
+
+function filaAEquipo(f){
+  return {
+    nombre: f.nombre_display || f.nombre, perfil: f.perfil, integrantes: f.integrantes,
+    caja: Number(f.caja), tresC: f.tres_c, historial: f.historial || [],
+    rondasJugadas: f.rondas_jugadas, precioAnterior: f.precio_anterior != null ? Number(f.precio_anterior) : null
+  };
+}
+function equipoAFila(e){
+  return {
+    nombre: e.nombre.trim().toLowerCase(), nombre_display: e.nombre.trim(),
+    perfil: e.perfil, integrantes: e.integrantes || '',
+    caja: e.caja, tres_c: e.tresC, historial: e.historial || [],
+    rondas_jugadas: e.rondasJugadas || 0, precio_anterior: e.precioAnterior
+  };
+}
+function filaAConfig(f){
+  return {
+    rondaActual: f.ronda_actual, eqDomestica: f.eq_domestica, eqInternacional: f.eq_internacional,
+    metaOcupacion: f.meta_ocupacion != null ? Number(f.meta_ocupacion) : null,
+    poolDomestica: f.pool_domestica, pctDomestica: f.pct_domestica != null ? Number(f.pct_domestica) : null,
+    poolInternacional: f.pool_internacional, pctInternacional: f.pct_internacional != null ? Number(f.pct_internacional) : null
+  };
+}
+function configAFila(c){
+  return {
+    id:1, ronda_actual:c.rondaActual, eq_domestica:c.eqDomestica, eq_internacional:c.eqInternacional,
+    meta_ocupacion:c.metaOcupacion, pool_domestica:c.poolDomestica, pct_domestica:c.pctDomestica,
+    pool_internacional:c.poolInternacional, pct_internacional:c.pctInternacional
+  };
+}
+
+async function leer(clave){
+  try{
+    if(clave === 'config'){
+      const r = await fetch(`${SUPA_URL}/rest/v1/config?id=eq.1&select=*`, {headers:SUPA_HEAD});
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.length ? filaAConfig(j[0]) : null;
+    }
+    if(clave.startsWith('equipo:')){
+      const nombre = clave.slice(7);
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?nombre=eq.${encodeURIComponent(nombre)}&select=*`, {headers:SUPA_HEAD});
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.length ? filaAEquipo(j[0]) : null;
+    }
+    if(clave.startsWith('decision:')){
+      const p = clave.split(':'); const ronda = p[1], nombre = p.slice(2).join(':');
+      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?ronda=eq.${ronda}&equipo=eq.${encodeURIComponent(nombre)}&select=decision`, {headers:SUPA_HEAD});
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.length ? j[0].decision : null;
+    }
+    return null;
+  }catch(e){ console.error('leer', e); return null; }
+}
+async function escribir(clave, valor){
+  try{
+    if(clave === 'config'){
+      const r = await fetch(`${SUPA_URL}/rest/v1/config?on_conflict=id`, {
+        method:'POST', headers:{...SUPA_HEAD, 'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify(configAFila(valor))
+      });
+      return r.ok;
+    }
+    if(clave.startsWith('equipo:')){
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?on_conflict=nombre`, {
+        method:'POST', headers:{...SUPA_HEAD, 'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify(equipoAFila(valor))
+      });
+      return r.ok;
+    }
+    if(clave.startsWith('decision:')){
+      const p = clave.split(':'); const ronda = parseInt(p[1],10), nombre = p.slice(2).join(':');
+      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?on_conflict=ronda,equipo`, {
+        method:'POST', headers:{...SUPA_HEAD, 'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify({ ronda, equipo: nombre, decision: valor })
+      });
+      return r.ok;
+    }
+    return false;
+  }catch(e){ console.error('No se pudo guardar:', e); return false; }
+}
+async function listar(prefijo){
+  try{
+    if(prefijo === 'equipo:'){
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?select=nombre`, {headers:SUPA_HEAD});
+      if(!r.ok) return [];
+      const j = await r.json();
+      return j.map(x => 'equipo:'+x.nombre);
+    }
+    return [];
+  }catch(e){ return []; }
+}
+const claveEquipo = n => 'equipo:' + n.trim().toLowerCase();
+const claveDecision = (r,n) => 'decision:' + r + ':' + n.trim().toLowerCase();
+
+/* ============================================================
+   ESTADO
+   ============================================================ */
+const APP = {
+  equipo:null, config:null, decisionActual:{}, enviada:false,
+  vista:'decision', ultimoReporte:null, tablero:[], intervalo:null
+};
+
+/* ============================================================
+   CÁLCULOS DE LOS PANELES DE REFERENCIA (herramientas 2, 3, 4)
+   ============================================================ */
+function precioReferenciaMercado(perfilKey, historial){
+  // Si hay rondas jugadas, usa el promedio real del mercado de la ronda anterior.
+  // En la Ronda 1 no existe ese dato: se usa el precio real de los bots (público).
+  if(historial && historial.length){
+    const ult = historial[historial.length-1];
+    if(ult.precioMercado) return ult.precioMercado;
+  }
+  const bots = PRECIOS_BOT[perfilKey];
+  const vals = Object.values(bots);
+  return red(vals.reduce((a,b)=>a+b,0)/vals.length);
+}
+function panelPrecio(perfilKey, puntajeValor, historial, tieneWTP){
+  const p = PARAMS.perfiles[perfilKey];
+  const ref = precioReferenciaMercado(perfilKey, historial);
+  const dif = (puntajeValor - PARAMS.benchmarkValor) * PARAMS.factorValorPct * ref;
+  const techo = red(ref + dif);
+  const piso = red(p.docPorRonda / p.capacidad + p.iocPorPasajero);
+  return { piso, techo, ref: red(ref), dif: red(dif), preciso: !!tieneWTP };
+}
+function puntoEquilibrio(precioAnterior, precioNuevo, costoVariable){
+  const margen = precioNuevo - costoVariable;
+  if(margen <= 0) return null;
+  return red(((precioNuevo - precioAnterior)/margen)*100, 1);
+}
+
+/* ============================================================
+   RENDER — barra superior y pestañas
+   ============================================================ */
+function renderBarra(){
+  const e = APP.equipo;
+  document.getElementById('hdNombre').textContent = e.nombre;
+  document.getElementById('hdPerfil').textContent = PARAMS.perfiles[e.perfil].nombre;
+  document.getElementById('hdRonda').textContent = APP.config ? APP.config.rondaActual : 1;
+  document.getElementById('hdCaja').textContent = money(e.caja);
+  const delta = e.caja - PARAMS.capitalSemilla;
+  const el = document.getElementById('hdDelta');
+  el.textContent = (delta>=0?'+':'') + money(delta) + ' desde el inicio';
+  el.className = 'caja-delta ' + (delta>=0?'pos':'neg');
+}
+function renderTabs(){
+  const vistas = [
+    {id:'briefing', txt:'Diagnóstico 3C'},
+    {id:'decision', txt:'Hoja de decisión'},
+    {id:'reporte',  txt:'Resultado de la ronda'},
+    {id:'tablero',  txt:'Tablero'}
+  ];
+  document.getElementById('tabs').innerHTML = vistas.map(v =>
+    `<button class="tab ${APP.vista===v.id?'activa':''}" data-vista="${v.id}">${v.txt}</button>`
+  ).join('');
+}
+
+/* ============================================================
+   VISTA — Diagnóstico 3C (briefing)
+   ============================================================ */
+function vistaBriefing(){
+  const e = APP.equipo;
+  const c = e.tresC || {costo:PARAMS.benchmarkValor, competencia:PARAMS.benchmarkValor, valor:PARAMS.benchmarkValor};
+  const items = [
+    {n:'Costo', v:c.costo, d:'Qué tanto fijas precios mirando tus costos'},
+    {n:'Competencia', v:c.competencia, d:'Qué tanto reaccionas a lo que cobran los demás'},
+    {n:'Valor', v:c.valor, d:'Qué tanto cobras por el valor que entregas'}
+  ];
+  const maxV = Math.max(...items.map(i=>i.v));
+  return `
+    <h2 class="titulo">Cómo fija precios tu aerolínea</h2>
+    <p class="sub">Todas las aerolíneas arrancan igual. A partir de la Ronda 1, cada precio que fijes mueve estos tres puntajes: acercarte a tu techo te vuelve más orientado al valor; quedarte pegado a tu costo, más orientado al costo.</p>
+    <div class="tres-c">
+      ${items.map(i=>`
+        <div class="c-item ${i.v===maxV && maxV>PARAMS.benchmarkValor ? 'destacado':''}">
+          <div class="c-nombre">${i.n}</div>
+          <div class="c-valor cifra">${i.v.toFixed(2)}</div>
+          <div class="c-bench">Referencia de industria: ${PARAMS.benchmarkValor.toFixed(2)}</div>
+        </div>`).join('')}
+    </div>
+    <div class="explica">
+      <h4>Por qué importa el puntaje de Valor</h4>
+      <p style="margin:0;">De los tres enfoques, el único que la investigación asocia con mayor margen es el de valor. Tu puntaje de Valor alimenta directamente el atractivo de tu aerolínea frente a la competencia: mientras más alto, más margen de precio tienes sobre el mercado antes de perder pasajeros.</p>
+    </div>`;
+}
+
+/* ============================================================
+   VISTA — Hoja de decisión
+   ============================================================ */
+function campoNum(id, etiqueta, valor, extra=''){
+  return `<div class="campo-dec">
+    <label for="${id}">${etiqueta}</label>
+    <input type="number" step="any" id="${id}" value="${valor ?? ''}" ${extra}>
+  </div>`;
+}
+function grupo(titulo, herramienta, contenido, desbloqueado, sesionNecesaria){
+  if(!desbloqueado){
+    return `<div class="grupo bloqueado">
+      <div class="grupo-cab"><h3>${titulo}</h3><span class="candado">Se activa en la Sesión ${sesionNecesaria}</span></div>
+    </div>`;
+  }
+  return `<div class="grupo">
+    <div class="grupo-cab"><h3>${titulo}</h3><span class="herramienta">${herramienta}</span></div>
+    ${contenido}
+  </div>`;
+}
+
+function vistaDecision(){
+  const e = APP.equipo;
+  const ronda = APP.config ? APP.config.rondaActual : 1;
+  const ses = sesionDeRonda(ronda);
+  const p = PARAMS.perfiles[e.perfil];
+  const d = APP.decisionActual;
+
+  if(APP.enviada){
+    return `<h2 class="titulo">Decisión enviada</h2>
+      <p class="sub">Tu equipo ya envió su decisión de la Ronda ${ronda}. El docente cerrará la ronda cuando todos los equipos hayan decidido.</p>
+      <div class="enviado">Decisión registrada. Vuelve a esta pantalla cuando se abra la siguiente ronda.</div>`;
+  }
+
+  const pan = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, d.comprarWTP);
+  const precioAct = parseFloat(d.precio) || pan.ref;
+  const posMarcador = clamp(((precioAct - pan.piso) / Math.max(1, pan.techo - pan.piso)) * 100, 0, 100);
+
+  let alertaEq = '';
+  if(activo('equilibrio', ronda) && e.precioAnterior && d.precio && parseFloat(d.precio) !== e.precioAnterior){
+    const cv = p.iocPorPasajero;
+    const tol = puntoEquilibrio(e.precioAnterior, parseFloat(d.precio), cv);
+    if(tol !== null){
+      const sube = parseFloat(d.precio) > e.precioAnterior;
+      alertaEq = `<div class="alerta-equilibrio">
+        ${sube ? 'Subes' : 'Bajas'} el precio de ${money2(e.precioAnterior)} a ${money2(parseFloat(d.precio))}.
+        ${sube
+          ? `Conviene si tus ventas caen menos de <b>${Math.abs(tol)}%</b>.`
+          : `Necesitas que tus ventas suban más de <b>${Math.abs(tol)}%</b> para compensar.`}
+      </div>`;
+    }
+  }
+
+  return `
+    <h2 class="titulo">Ronda ${ronda} de 12 · Sesión ${ses}</h2>
+    <p class="sub">Cada trimestre decides cómo compite tu aerolínea. Las decisiones se van habilitando conforme avanzas en el curso.</p>
+
+    ${grupo('Precio', 'Rango piso-techo · EVC', `
+      <div class="campos">
+        ${campoNum('dPrecio','Tarifa Flex ($)', d.precio ?? '')}
+        ${activo('valla',ronda) ? campoNum('dPromo','Tarifa Promocional ($)', d.tarifaPromocional ?? '') : ''}
+        ${activo('valla',ronda) ? `<div class="campo-dec">
+          <label for="dValla">Fuerza de la valla</label>
+          <select id="dValla">
+            <option value="sin_valla" ${d.fuerzaValla==='sin_valla'?'selected':''}>Sin restricciones</option>
+            <option value="basica" ${d.fuerzaValla==='basica'?'selected':''}>Básica — 7 días de anticipación</option>
+            <option value="fuerte" ${d.fuerzaValla==='fuerte'?'selected':''}>Fuerte — 21 días, no reembolsable</option>
+          </select></div>` : ''}
+      </div>
+      <div class="referencia">
+        <div class="ref-fila"><span>Precio de referencia del mercado</span><b>${money2(pan.ref)}</b></div>
+        <div class="ref-fila"><span>Piso — bajo esto pierdes dinero por pasajero</span><b>${money2(pan.piso)}</b></div>
+        <div class="ref-fila"><span>Techo / EVC — tu límite de valor</span><b>${money2(pan.techo)}</b></div>
+        <div class="barra-rango">
+          <div class="zona" style="left:0;right:0;"></div>
+          <div class="marcador" style="left:${posMarcador}%;"></div>
+        </div>
+        <div class="ref-nota">${pan.preciso
+          ? 'Cifras calculadas con los datos de mercado que compraste esta ronda.'
+          : 'Estimación sin investigación de mercado. Compra el estudio para afinar estas cifras.'}</div>
+      </div>
+      ${alertaEq}
+    `, true, 1)}
+
+    ${grupo('Marketing', 'Inversión en demanda', `
+      <div class="campos">${campoNum('dMarketing','Inversión esta ronda ($)', d.marketing ?? 0)}</div>
+      <div class="referencia">
+        <div class="ref-fila"><span>Aumento de atractivo con esta inversión</span><b>+${(boostMkt(d.marketing||0)*100).toFixed(1)}%</b></div>
+        <div class="ref-nota">Rinde cada vez menos por dólar adicional: duplicar la inversión no duplica el resultado.</div>
+      </div>
+    `, true, 1)}
+
+    ${grupo('Investigación de mercado', 'Disposición a pagar (WTP)', `
+      <div class="interruptor">
+        <input type="checkbox" id="dWTP" ${d.comprarWTP?'checked':''}>
+        <label for="dWTP">Comprar estudio de mercado — ${money(p.costoWTP)}</label>
+      </div>
+      <div class="referencia">
+        <div class="ref-nota">Te entrega los precios reales de la competencia y una encuesta de intención de compra, para calcular tu techo con precisión en vez de estimarlo.</div>
+        <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como una señal fuerte, no como una certeza.</div>
+      </div>
+    `, activo('wtp',ronda), 2)}
+
+    ${grupo('Ingresos complementarios', 'Producto ancla y complementario', `
+      <div class="campos">
+        ${campoNum('dEquipaje','Precio del equipaje ($)', d.precioEquipaje ?? 0)}
+        ${campoNum('dSeguro','Precio del seguro de viaje ($)', d.precioSeguro ?? 0)}
+      </div>
+    `, activo('ancillaries',ronda), 3)}
+
+    ${grupo('Pase Frecuente', 'Tarifa de dos partes', `
+      <div class="campos">
+        ${campoNum('dCuota','Cuota fija mensual ($) — 0 si no lo ofreces', d.cuotaPaseFrecuente ?? 0)}
+      </div>
+    `, activo('paseFrecuente',ronda), 3)}
+
+    ${grupo('Tarifa tachada', 'Índice de anclaje', `
+      <div class="interruptor">
+        <input type="checkbox" id="dAnclaje" ${d.anclaje?'checked':''}>
+        <label for="dAnclaje">Mostrar una tarifa más alta tachada junto a la tuya</label>
+      </div>
+    `, activo('anclaje',ronda), 3)}
+
+    ${grupo('Overbooking', 'Fractil crítico', `
+      <div class="campos">
+        ${campoNum('dOverbooking','Asientos extra sobre los '+p.capacidad+' físicos', d.overbooking ?? 0)}
+      </div>
+      <div class="referencia"><div class="ref-nota">En esta ruta, alrededor del ${(p.noShowPct*100).toFixed(0)}% de los pasajeros con reserva no se presenta. Vender de más cubre esas ausencias, pero si se presentan todos, pagas compensación.</div></div>
+    `, activo('overbooking',ronda), 4)}
+
+    ${grupo('Precio dinámico', 'Dynamic pricing', `
+      <div class="interruptor">
+        <input type="checkbox" id="dDynamic" ${d.dynamicPricing?'checked':''}>
+        <label for="dDynamic">Ajustar el precio automáticamente según el ritmo de venta</label>
+      </div>
+      <div class="campos">${campoNum('dSens','Sensibilidad del ajuste (0 a 1)', d.sensibilidadDynamic ?? 0.5, 'min="0" max="1" step="0.1"')}</div>
+    `, activo('dynamic',ronda), 4)}
+
+    ${grupo('Estudio de elasticidad', 'Elasticidad controlada', `
+      <div class="interruptor">
+        <input type="checkbox" id="dElast" ${d.comprarElasticidad?'checked':''}>
+        <label for="dElast">Comprar estudio de elasticidad — ${money(p.costoElasticidad)}</label>
+      </div>
+    `, activo('elasticidad',ronda), 5)}
+
+    ${grupo('Madurez organizacional', 'Talento, Procesos y Datos', `
+      <div class="campos">
+        ${campoNum('dTalento','Talento (1 a 7)', d.talento ?? 4, 'min="1" max="7"')}
+        ${campoNum('dProcesos','Procesos (1 a 7)', d.procesos ?? 4, 'min="1" max="7"')}
+        ${campoNum('dDatos','Datos (1 a 7)', d.datos ?? 4, 'min="1" max="7"')}
+        ${campoNum('dGastoMad','Inversión ($)', d.gastoMadurez ?? 0)}
+      </div>
+      <div class="referencia"><div class="ref-nota">Lo que limita a tu organización es el pilar más bajo, no el promedio.</div></div>
+    `, activo('madurez',ronda), 5)}
+
+    ${grupo('Precios personalizados', 'Riesgo y reputación', `
+      <div class="interruptor">
+        <input type="checkbox" id="dAlgo" ${d.pricingAlgoritmico?'checked':''}>
+        <label for="dAlgo">Personalizar precios según el historial de cada pasajero</label>
+      </div>
+      <div class="referencia"><div class="ref-nota">Aumenta el ingreso, pero si se detecta la práctica tu reputación cae y pierdes atractivo frente a la competencia.</div></div>
+    `, activo('algoritmico',ronda), 5)}
+
+    <div class="acciones">
+      <button class="btn" style="width:auto;padding:12px 26px;" id="btnEnviar">Enviar decisión de la Ronda ${ronda}</button>
+      <button class="btn-sec" id="btnRecalcular">Actualizar referencias</button>
+    </div>`;
+}
+function boostMkt(g){
+  if(!g || g<=0) return 0;
+  return Math.min(PARAMS.marketing.tope, PARAMS.marketing.factor*Math.sqrt(g/PARAMS.marketing.divisor));
+}
+
+/* ============================================================
+   VISTA — Reporte de la ronda
+   ============================================================ */
+function vistaReporte(){
+  const rep = APP.ultimoReporte;
+  if(!rep){
+    return `<h2 class="titulo">Aún no hay resultados</h2>
+      <p class="sub">Cuando el docente cierre la ronda, aquí verás cuántos pasajeros ganó tu aerolínea, tu estado de resultados y las métricas de la operación.</p>`;
+  }
+  const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
+  const fila = (t,v,cls='') => `<tr class="${cls}"><td>${t}</td><td>${money2(v)}</td></tr>`;
+
+  return `
+    <h2 class="titulo">Resultado de la Ronda ${rep.ronda}</h2>
+    <p class="sub">Ganaste ${rep.pasajerosGanados} pasajeros de los ${rep.poolDeRonda} que buscaban vuelo${cap.spill>0?`, pero ${cap.spill} se fueron con la competencia porque no tenías asientos`:''}.</p>
+
+    <div class="kpis">
+      <div class="kpi"><div class="k-nombre">Participación de mercado</div><div class="k-valor cifra">${rep.participacion}%</div></div>
+      <div class="kpi"><div class="k-nombre">Pasajeros a bordo</div><div class="k-valor cifra">${cap.abordados}</div></div>
+      <div class="kpi"><div class="k-nombre">Ocupación</div><div class="k-valor cifra">${m.loadFactor}%</div></div>
+      <div class="kpi"><div class="k-nombre">Yield</div><div class="k-valor cifra">${m.yield}¢</div></div>
+      <div class="kpi"><div class="k-nombre">RASM</div><div class="k-valor cifra">${m.rasm}¢</div></div>
+    </div>
+
+    <table class="er">
+      <tr><td>Pasajeros a bordo</td><td>${cap.abordados}</td></tr>
+      <tr><td>× Precio de venta</td><td>${money2(er.precioVenta)}</td></tr>
+      ${fila('= Ingresos', er.ingresos, 'total')}
+      ${fila('Costos Operativos Directos (avión, tripulación, combustible)', -er.doc, 'resta')}
+      ${fila('Costos Operativos Indirectos (catering, reservas, equipaje)', -er.ioc, 'resta')}
+      ${fila('= Utilidad Bruta', er.utilidadBruta, 'total')}
+      ${fila('Gastos administrativos', -er.gastosAdministrativos, 'resta')}
+      ${fila('Gastos comerciales', -er.gastosComerciales, 'resta')}
+      ${fila('= Utilidad Operativa', er.utilidadOperativa, 'total')}
+      ${er.otrosGastos>0 ? fila('Otros gastos (compensaciones, sanciones)', -er.otrosGastos, 'resta') : ''}
+      ${fila('= Utilidad Neta de la ronda', er.utilidadNeta, 'total final')}
+    </table>
+
+    <div class="explica">
+      <h4>Lo que pasó esta ronda</h4>
+      <ul>${observaciones(rep).map(o=>`<li>${o}</li>`).join('')}</ul>
+    </div>
+    ${diagnosticos(rep).length ? `<div class="preguntas">
+      <h4>Para conversar con tu equipo</h4>
+      <ul>${diagnosticos(rep).map(d=>`<li>${d}</li>`).join('')}</ul>
+    </div>` : ''}`;
+}
+
+/* ============================================================
+   NIVEL 1 — Observaciones: describen lo que ocurrió, sin explicar
+   el principio detrás. El estudiante saca su propia conclusión.
+   ============================================================ */
+function observaciones(rep){
+  const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
+  const o = [];
+  o.push(`Tu precio fue de ${money2(rep.precioFinal)}; el promedio del mercado, ${money2(rep.precioMercado)}.`);
+  o.push(`Volaste al ${m.loadFactor}% de ocupación. Tus costos de operación (${money2(er.doc)}) fueron los mismos que si hubieras volado lleno.`);
+  o.push(`Cada pasajero a bordo dejó ${money2(er.ingresos/Math.max(1,cap.abordados) - (er.ioc/Math.max(1,cap.abordados)))} después de su costo directo.`);
+  if(er.gastosComerciales>0 || er.gastosAdministrativos>0){
+    const tot = er.gastosComerciales + er.gastosAdministrativos;
+    const pct = er.ingresos>0 ? ((tot/er.ingresos)*100).toFixed(0) : '—';
+    o.push(`Gastaste ${money2(tot)} en marketing, estudios e inversiones: el ${pct}% de tus ingresos.`);
+  }
+  o.push(`Tu margen bruto fue ${er.margenBrutoPct}%.`);
+  if(cap.noShows>0) o.push(`${cap.noShows} pasajeros con reserva no se presentaron al vuelo.`);
+  return o;
+}
+
+/* ============================================================
+   NIVEL 2 — Diagnósticos: aparecen SOLO si el equipo incurrió en
+   esa situación, y siempre como pregunta abierta. Nunca revelan
+   el principio: obligan al equipo a formularlo.
+   ============================================================ */
+function diagnosticos(rep){
+  const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
+  const p = PARAMS.perfiles[APP.equipo.perfil];
+  const d = [];
+
+  // Vendió por debajo del piso
+  const piso = p.docPorRonda/p.capacidad + p.iocPorPasajero;
+  if(rep.precioFinal < piso){
+    d.push(`Tu precio quedó ${money2(piso-rep.precioFinal)} por debajo de tu piso de ${money2(piso)}. ¿Qué le pasó a tu resultado con cada pasajero que subió al avión?`);
+  }
+  // Gasto desproporcionado
+  const gastos = er.gastosComerciales + er.gastosAdministrativos;
+  if(er.ingresos>0 && gastos/er.ingresos > 0.15){
+    d.push(`Tus gastos equivalieron al ${((gastos/er.ingresos)*100).toFixed(0)}% de tus ingresos. ¿Cuántos pasajeros más te trajeron, comparado con la ronda anterior?`);
+  }
+  // Spill
+  if(cap.spill>0){
+    d.push(`${cap.spill} pasajeros querían volar contigo y se quedaron sin asiento. ¿Qué podrías haber hecho distinto?`);
+  }
+  // Overbooking excesivo
+  if(cap.denegados>0){
+    d.push(`Negaste embarque a ${cap.denegados} pasajeros y pagaste ${money2(er.compensacionDenegados)} en compensaciones. ¿Cuántos asientos extra habrían sido suficientes?`);
+  }
+  // Ocupación muy baja
+  if(m.loadFactor < 60){
+    d.push(`Volaste con ${p.capacidad - cap.abordados} asientos vacíos. ¿Fue tu precio, o fue que la competencia resultó más atractiva por otra razón?`);
+  }
+  // Ocupación llena sin spill: pudo cobrar más
+  if(m.loadFactor >= 98 && cap.spill===0){
+    d.push(`Llenaste el avión. ¿Habrías podido cobrar más sin perder pasajeros?`);
+  }
+  // Pérdida en la ronda
+  if(er.utilidadNeta < 0){
+    d.push(`Cerraste la ronda con pérdida de ${money2(Math.abs(er.utilidadNeta))}. ¿Vino de tu precio, de tu ocupación, o de tus gastos?`);
+  }
+  // Detectado en pricing algorítmico
+  if(rep.componentes.detectado){
+    d.push(`Se detectó tu personalización de precios y tu reputación cayó. ¿Compensó el ingreso adicional que buscabas?`);
+  }
+  // Decisión neutra por no haber enviado
+  if(rep.neutra){
+    d.push(`No enviaste decisión esta ronda: recibiste el precio promedio del mercado sin ninguna inversión. ¿Dónde habrías competido distinto?`);
+  }
+  return d;
+}
+
+/* ============================================================
+   VISTA — Tablero
+   ============================================================ */
+function vistaTablero(){
+  const filas = APP.tablero;
+  if(!filas.length){
+    return `<h2 class="titulo">Tablero</h2><div class="vacio">Todavía no hay aerolíneas registradas.</div>`;
+  }
+  return `
+    <h2 class="titulo">Tablero de posiciones</h2>
+    <p class="sub">Ranking por caja acumulada. Se actualiza solo cada pocos segundos.</p>
+    <table class="tab-pos">
+      <thead><tr><th></th><th>Aerolínea</th><th>Perfil</th><th>Ronda</th><th>Caja</th></tr></thead>
+      <tbody>
+        ${filas.map((t,i)=>{
+          const yo = APP.equipo && t.nombre.toLowerCase()===APP.equipo.nombre.toLowerCase();
+          return `<tr class="${yo?'yo':''}">
+            <td><span class="puesto ${i===0?'primero':''}">${i+1}</span></td>
+            <td>${esc(t.nombre)}${yo?'<span class="marca-bot">tu equipo</span>':''}</td>
+            <td>${PARAMS.perfiles[t.perfil] ? PARAMS.perfiles[t.perfil].nombre : '—'}</td>
+            <td>${t.rondasJugadas||0}</td>
+            <td>${money(t.caja)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* ============================================================
+   RENDER PRINCIPAL
+   ============================================================ */
+function render(){
+  renderBarra(); renderTabs();
+  const c = document.getElementById('contenido');
+  if(APP.vista==='briefing') c.innerHTML = vistaBriefing();
+  else if(APP.vista==='decision') c.innerHTML = vistaDecision();
+  else if(APP.vista==='reporte') c.innerHTML = vistaReporte();
+  else c.innerHTML = vistaTablero();
+}
+
+/* ---------- Recolectar lo que el estudiante escribió ---------- */
+function recolectar(){
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  const ch = id => { const el = document.getElementById(id); return el ? el.checked : false; };
+  const n = v => v===null||v==='' ? null : parseFloat(v);
+  const d = APP.decisionActual;
+  if(document.getElementById('dPrecio')) d.precio = n(g('dPrecio'));
+  if(document.getElementById('dPromo')) d.tarifaPromocional = n(g('dPromo'));
+  if(document.getElementById('dValla')) d.fuerzaValla = g('dValla');
+  if(document.getElementById('dMarketing')) d.marketing = n(g('dMarketing')) || 0;
+  if(document.getElementById('dWTP')) d.comprarWTP = ch('dWTP');
+  if(document.getElementById('dEquipaje')) d.precioEquipaje = n(g('dEquipaje')) || 0;
+  if(document.getElementById('dSeguro')) d.precioSeguro = n(g('dSeguro')) || 0;
+  if(document.getElementById('dCuota')) d.cuotaPaseFrecuente = n(g('dCuota')) || 0;
+  if(document.getElementById('dAnclaje')) d.anclaje = ch('dAnclaje');
+  if(document.getElementById('dOverbooking')) d.overbooking = n(g('dOverbooking')) || 0;
+  if(document.getElementById('dDynamic')) d.dynamicPricing = ch('dDynamic');
+  if(document.getElementById('dSens')) d.sensibilidadDynamic = n(g('dSens'));
+  if(document.getElementById('dElast')) d.comprarElasticidad = ch('dElast');
+  if(document.getElementById('dTalento')) d.talento = n(g('dTalento')) || 4;
+  if(document.getElementById('dProcesos')) d.procesos = n(g('dProcesos')) || 4;
+  if(document.getElementById('dDatos')) d.datos = n(g('dDatos')) || 4;
+  if(document.getElementById('dGastoMad')) d.gastoMadurez = n(g('dGastoMad')) || 0;
+  if(document.getElementById('dAlgo')) d.pricingAlgoritmico = ch('dAlgo');
+}
+
+/* ---------- Sincronizar con el almacenamiento compartido ---------- */
+async function sincronizar(){
+  APP.config = await leer('config') || { rondaActual:1, rondaAbierta:true };
+  const eq = await leer(claveEquipo(APP.equipo.nombre));
+  if(eq){
+    APP.equipo = { ...APP.equipo, ...eq };
+    const hist = eq.historial || [];
+    APP.ultimoReporte = hist.length ? hist[hist.length-1] : null;
+  }
+  const yaEnviada = await leer(claveDecision(APP.config.rondaActual, APP.equipo.nombre));
+  APP.enviada = !!yaEnviada;
+  if(yaEnviada) APP.decisionActual = yaEnviada;
+}
+async function cargarTablero(){
+  const claves = await listar('equipo:');
+  const filas = [];
+  for(const k of claves){
+    const t = await leer(k);
+    if(t) filas.push(t);
+  }
+  filas.sort((a,b)=>(b.caja||0)-(a.caja||0));
+  APP.tablero = filas;
+}
+
+/* ============================================================
+   INICIO
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('btnEntrar').addEventListener('click', async ()=>{
+    const nombre = document.getElementById('inNombre').value.trim();
+    const av = document.getElementById('avisoRegistro');
+    if(!nombre){ av.textContent='Escribe el nombre de tu aerolínea.'; av.style.display='block'; return; }
+    av.style.display='none';
+    const btn = document.getElementById('btnEntrar');
+    btn.disabled = true; btn.textContent = 'Entrando…';
+
+    const perfil = document.getElementById('inPerfil').value;
+    const integrantes = document.getElementById('inIntegrantes').value.trim();
+
+    let eq = await leer(claveEquipo(nombre));
+    if(!eq){
+      eq = {
+        nombre, perfil, integrantes,
+        caja: PARAMS.capitalSemilla,
+        tresC: { costo:PARAMS.benchmarkValor, competencia:PARAMS.benchmarkValor, valor:PARAMS.benchmarkValor },
+        historial: [], rondasJugadas:0, precioAnterior:null
+      };
+      await escribir(claveEquipo(nombre), eq);
+    }
+    APP.equipo = eq;
+    await sincronizar();
+    await cargarTablero();
+
+    document.getElementById('pantallaRegistro').style.display='none';
+    document.getElementById('app').style.display='block';
+    render();
+    if(!APP.intervalo) APP.intervalo = setInterval(async ()=>{
+      await sincronizar();
+      if(APP.vista==='tablero') await cargarTablero();
+      render();
+    }, 12000);
+  });
+
+  document.getElementById('inNombre').addEventListener('keydown', e=>{
+    if(e.key==='Enter') document.getElementById('btnEntrar').click();
+  });
+
+  document.getElementById('tabs').addEventListener('click', async e=>{
+    const b = e.target.closest('[data-vista]');
+    if(!b) return;
+    if(APP.vista==='decision') recolectar();
+    APP.vista = b.dataset.vista;
+    if(APP.vista==='tablero') await cargarTablero();
+    render();
+  });
+
+  document.getElementById('contenido').addEventListener('click', async e=>{
+    if(e.target.id==='btnRecalcular'){ recolectar(); render(); return; }
+    if(e.target.id==='btnEnviar'){
+      recolectar();
+      const d = APP.decisionActual;
+      if(!d.precio || d.precio<=0){ alert('Escribe tu Tarifa Flex antes de enviar.'); return; }
+      e.target.disabled = true; e.target.textContent='Enviando…';
+      await escribir(claveDecision(APP.config.rondaActual, APP.equipo.nombre), d);
+      APP.enviada = true;
+      render();
+    }
+  });
+
+  /* Al escribir en el precio o el marketing, las referencias se actualizan solas */
+  document.getElementById('contenido').addEventListener('input', e=>{
+    if(['dPrecio','dMarketing'].includes(e.target.id)){
+      recolectar();
+      const ronda = APP.config ? APP.config.rondaActual : 1;
+      if(APP.vista==='decision'){
+        const foco = e.target.id, pos = e.target.selectionStart;
+        render();
+        const nuevo = document.getElementById(foco);
+        if(nuevo){ nuevo.focus(); try{ nuevo.setSelectionRange(pos,pos); }catch(_){} }
+      }
+    }
+  });
+});
+</script>
+</body>
+</html>

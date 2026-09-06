@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Docente — Simulador de Pricing &amp; Revenue Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cabina:#0E1B2C; --panel:#16283F; --panel-alto:#1E3350;
+  --borde:rgba(255,255,255,0.10);
+  --ambar:#E8A23C; --ambar-tenue:rgba(232,162,60,0.12);
+  --verde:#5FBF8F; --rojo:#E0645A; --teal:#4FA8A0;
+  --texto:#ECEFF4; --texto-tenue:#8FA0B6;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--cabina);color:var(--texto);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,.cifra{font-family:'Space Grotesk',system-ui,sans-serif;}
+.cifra{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";}
+button{font-family:inherit;cursor:pointer;}
+input,select{font-family:inherit;}
+:focus-visible{outline:2px solid var(--ambar);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+.barra{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:18px 24px;background:var(--panel);border-bottom:1px solid var(--borde);}
+.barra h1{font-size:20px;margin:0;font-weight:600;}
+.barra .modulo{font-size:12px;color:var(--ambar);margin-bottom:3px;}
+.estado-ronda{text-align:right;}
+.estado-ronda .et{font-size:11px;color:var(--texto-tenue);letter-spacing:0.04em;}
+.estado-ronda .val{font-size:26px;font-weight:700;color:var(--ambar);line-height:1.1;}
+
+.tabs{display:flex;gap:2px;padding:10px 20px 0;background:var(--panel);overflow-x:auto;border-bottom:1px solid var(--borde);}
+.tab{background:transparent;border:none;color:var(--texto-tenue);padding:10px 16px 13px;font-size:13.5px;
+  white-space:nowrap;border-bottom:2px solid transparent;font-weight:500;}
+.tab.activa{color:var(--texto);border-bottom-color:var(--ambar);}
+main{padding:22px;max-width:980px;margin:0 auto;}
+h2.titulo{font-size:20px;font-weight:600;margin:0 0 4px;}
+p.sub{color:var(--texto-tenue);font-size:13.5px;margin:0 0 20px;line-height:1.55;}
+
+.bloque{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:18px 20px;margin-bottom:14px;}
+.bloque h3{font-size:15.5px;margin:0 0 12px;font-weight:600;}
+.campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;}
+.campo label{display:block;font-size:12.5px;color:var(--texto-tenue);margin-bottom:6px;}
+.campo input,.campo select{width:100%;padding:10px 11px;background:var(--panel-alto);
+  border:1px solid var(--borde);border-radius:7px;color:var(--texto);font-size:15px;}
+.btn{background:var(--ambar);color:#221606;border:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14.5px;}
+.btn:hover{background:#f2ad48;}
+.btn:disabled{opacity:0.5;cursor:not-allowed;}
+.btn-sec{background:transparent;border:1px solid var(--borde);color:var(--texto-tenue);
+  padding:10px 18px;border-radius:8px;font-size:13.5px;}
+.btn-sec:hover{color:var(--texto);border-color:var(--texto-tenue);}
+.btn-peligro{background:transparent;border:1px solid rgba(224,100,90,0.5);color:var(--rojo);
+  padding:10px 18px;border-radius:8px;font-size:13.5px;}
+.acciones{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px;}
+
+.resultado-cal{background:var(--ambar-tenue);border-left:3px solid var(--ambar);
+  border-radius:0 8px 8px 0;padding:14px 16px;margin-top:14px;font-size:13.5px;line-height:1.7;}
+.resultado-cal .fila{display:flex;justify-content:space-between;gap:16px;}
+.resultado-cal b{color:var(--ambar);}
+
+.lista-equipos{display:flex;flex-direction:column;gap:8px;}
+.eq-fila{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  background:var(--panel-alto);border:1px solid var(--borde);border-radius:8px;padding:12px 14px;}
+.eq-fila .eq-nom{font-size:14.5px;}
+.eq-fila .eq-int{font-size:12px;color:var(--texto-tenue);margin-top:2px;}
+.marca{font-size:12px;padding:4px 10px;border-radius:20px;white-space:nowrap;}
+.marca.listo{background:rgba(95,191,143,0.15);color:var(--verde);border:1px solid rgba(95,191,143,0.35);}
+.marca.falta{background:var(--panel);color:var(--texto-tenue);border:1px solid var(--borde);}
+
+.opciones-choque{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.op-choque{background:var(--panel-alto);border:1px solid var(--borde);color:var(--texto-tenue);
+  padding:10px 16px;border-radius:8px;font-size:13.5px;}
+.op-choque.sel{border-color:var(--ambar);color:var(--ambar);background:var(--ambar-tenue);}
+
+table.datos{width:100%;border-collapse:collapse;font-size:13.5px;}
+table.datos th{text-align:left;font-size:11.5px;color:var(--texto-tenue);letter-spacing:0.03em;
+  padding:8px 10px;border-bottom:1px solid var(--borde);font-weight:500;}
+table.datos td{padding:10px;border-bottom:1px solid var(--borde);}
+table.datos td.num{text-align:right;font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums;}
+table.datos tr.bot td{color:var(--texto-tenue);}
+.puesto{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+  border-radius:50%;background:var(--panel-alto);font-size:12px;font-weight:600;}
+.puesto.primero{background:var(--ambar);color:#221606;}
+.vacio{color:var(--texto-tenue);font-size:13.5px;padding:28px 0;text-align:center;}
+.nota{font-size:12.5px;color:var(--texto-tenue);line-height:1.6;margin-top:10px;}
+footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 20px 40px;}
+</style>
+</head>
+<body>
+
+<div class="barra">
+  <div>
+    <div class="modulo">MKT202 · Panel Docente</div>
+    <h1>Simulador de Pricing &amp; Revenue Management</h1>
+  </div>
+  <div class="estado-ronda">
+    <div class="et">RONDA ACTUAL</div>
+    <div class="val cifra" id="hdRonda">—</div>
+  </div>
+</div>
+
+<div class="tabs" id="tabs"></div>
+<main id="contenido"></main>
+<footer>Material preparado por Atila y Asociados e IEAC Business School para uso exclusivo de la Universidad NUR.</footer>
+
+<script>
+/* ============================================================
+   MOTOR DE CÁLCULO — idéntico al verificado con 37 pruebas
+   ============================================================ */
+/* ============================================================
+   MOTOR DE CÁLCULO — Simulador de Pricing & Revenue Management
+   Implementa el diseño del Acta de Acuerdos (v. 15 páginas):
+     Etapa 1 — Demanda (Pool fijo, DGAC × % penetración)
+     Etapa 2 — Reparto (elección discreta: Precio × Producto × Confianza)
+     Etapa 3 — Restricción de oferta (capacidad, no-shows, overbooking, spill)
+     + Estado de Resultados por función (NIC 1) y caja acumulada
+   ============================================================ */
+
+/* ---------- PARÁMETROS POR DEFECTO (editables por el profesor) ---------- */
+const PARAMS_DEFECTO = {
+  moneda: 'USD',
+  capitalSemilla: 50000,
+
+  perfiles: {
+    domestica: {
+      nombre: 'Doméstica',
+      rutas: ['SCZ-LPB', 'SCZ-CBB'],
+      capacidad: 70,
+      traficoRealTrimestral: 456000,   // DGAC nov-2025 × 3
+      iocPorPasajero: 10,
+      docPorRonda: 801.84,             // fijo por avión/ronda: calibrado a 29.2% de margen bruto al 85% de ocupación
+      precioBase: 33.00,               // promedio precios reales BoA
+      noShowPct: 0.06,
+      costoInvestigacionWTP: 800,
+      costoEstudioElasticidad: 1000,
+      segmentos: { negocio: 0.40, placer: 0.60 },
+      bots: ['BoA']
+    },
+    internacional: {
+      nombre: 'Internacional',
+      rutas: ['SCZ-LIM', 'SCZ-EZE'],
+      capacidad: 140,
+      traficoRealTrimestral: 78639,
+      iocPorPasajero: 22,
+      docPorRonda: 16401.89,           // fijo por avión/ronda: calibrado a 29.2% de margen bruto al 85% de ocupación
+      precioBase: 225.75,              // promedio precios reales LATAM/BoA
+      noShowPct: 0.03,
+      costoInvestigacionWTP: 1600,
+      costoEstudioElasticidad: 2000,
+      segmentos: { negocio: 0.45, placer: 0.55 },
+      bots: ['LATAM', 'BoA']
+    }
+  },
+
+  // Márgenes de referencia (promedio América Latina, Acta Sección 9)
+  margenBruto: 0.292,
+  margenOperativo: 0.144,
+  margenNeto: 0.064,
+  // Proporción real LATAM 2025 para separar administrativo/comercial
+  proporcionAdministrativo: 0.601,
+  proporcionComercial: 0.399,
+
+  // Motor de atractivo (calibrado: ver nota de calibración al final)
+  topeBoostCombinado: 0.45,
+  marketing: { factor: 0.08, divisor: 400, tope: 0.30 },
+  topePaseFrecuente: 0.05,
+  boostAnclaje: 0.03,
+  madurez: { min: -0.08, max: 0.08 },
+  benchmarkValor: 5.76,
+  umbralNeutroValor: 0.75,
+  sensibilidadValor: 0.4,
+  factorValorAPorcentaje: 0.073,   // 7.3% de prima por punto sobre benchmark
+
+  // Riesgo-reputación
+  probabilidadDeteccion: 0.30,
+  penalizacionConfianza: 0.15,
+
+  // Choque de mercado (activable por el profesor, por ronda)
+  choqueAlza: 1.10,
+  choqueBaja: 0.90,
+
+  rondasTotales: 12
+};
+
+/* ---------- UTILIDADES ---------- */
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function redondear(v, d = 2) { const f = Math.pow(10, d); return Math.round(v * f) / f; }
+
+/* PRNG determinista: misma semilla → mismo resultado (auditabilidad) */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  return h >>> 0;
+}
+
+/* ============================================================
+   ETAPA 1 — DEMANDA
+   Asistente de Calibración: equipos EN ESE PERFIL + meta de ocupación → Pool fijo
+   Importante: cada perfil compite por separado, así que se calibra con los
+   equipos que jugarán ese perfil, no con el total del curso. Calibrar con el
+   total satura el mercado (todos llenan el avión sin esfuerzo) y anula el
+   incentivo a competir.
+   ============================================================ */
+function calibrarPool(perfilKey, equiposEnEstePerfil, metaOcupacion, params = PARAMS_DEFECTO) {
+  const p = params.perfiles[perfilKey];
+  const competidores = equiposEnEstePerfil + p.bots.length;
+  const capacidadTotal = competidores * p.capacidad;
+  const poolFijo = Math.round(capacidadTotal * metaOcupacion);
+  return {
+    perfil: p.nombre,
+    equiposEnEstePerfil,
+    competidores,
+    capacidadTotal,
+    poolFijo,
+    pctPenetracion: redondear((poolFijo / p.traficoRealTrimestral) * 100, 4)
+  };
+}
+
+/* Pool de la ronda: fijo, salvo choque de mercado activado por el profesor */
+function poolDeRonda(poolFijo, choque, params = PARAMS_DEFECTO) {
+  if (choque === 'alza') return Math.round(poolFijo * params.choqueAlza);
+  if (choque === 'baja') return Math.round(poolFijo * params.choqueBaja);
+  return poolFijo;
+}
+
+/* ============================================================
+   ETAPA 2 — REPARTO (elección discreta)
+   ============================================================ */
+
+/* Boost de marketing con retornos decrecientes */
+function boostMarketing(gasto, params = PARAMS_DEFECTO) {
+  if (!gasto || gasto <= 0) return 0;
+  const m = params.marketing;
+  return Math.min(m.tope, m.factor * Math.sqrt(gasto / m.divisor));
+}
+
+/* Boost de pase frecuente: competitivo si la cuota es baja frente al precio de mercado */
+function boostPaseFrecuente(cuotaFija, precioMercado, params = PARAMS_DEFECTO) {
+  if (!cuotaFija || cuotaFija <= 0) return 0;
+  const ratio = clamp(1 - (cuotaFija / precioMercado), 0, 1);
+  return redondear(params.topePaseFrecuente * ratio, 4);
+}
+
+/* Boost de madurez = inversión en pilar débil + comportamiento de valor (3C) */
+function boostMadurez(talento, procesos, datos, puntajeValor, params = PARAMS_DEFECTO) {
+  const pilarDebil = Math.min(talento, procesos, datos);
+  // Pilar débil en escala 1-7: 4 es neutro
+  const porInversion = ((pilarDebil - 4) / 3) * params.madurez.max;
+  const porValor = (puntajeValor - params.benchmarkValor) * 0.02;
+  return clamp(porInversion + porValor, params.madurez.min, params.madurez.max);
+}
+
+/* Componente Producto: suma de boosts, con tope combinado */
+function componenteProducto(decision, precioMercado, puntajeValor, params = PARAMS_DEFECTO) {
+  const bMkt = boostMarketing(decision.marketing, params);
+  const bPase = boostPaseFrecuente(decision.cuotaPaseFrecuente, precioMercado, params);
+  const bAncl = decision.anclaje ? params.boostAnclaje : 0;
+  const bMad = boostMadurez(
+    decision.talento ?? 4, decision.procesos ?? 4, decision.datos ?? 4,
+    puntajeValor ?? params.benchmarkValor, params
+  );
+  const sumaBruta = bMkt + bPase + bAncl + bMad;
+  const sumaConTope = Math.min(sumaBruta, params.topeBoostCombinado);
+  return {
+    valor: redondear(1 + sumaConTope, 4),
+    detalle: {
+      marketing: redondear(bMkt, 4),
+      paseFrecuente: redondear(bPase, 4),
+      anclaje: redondear(bAncl, 4),
+      madurez: redondear(bMad, 4),
+      sumaBruta: redondear(sumaBruta, 4),
+      recortadoPorTope: sumaBruta > params.topeBoostCombinado
+    }
+  };
+}
+
+/* Componente Precio: 2 − (precio propio ÷ precio promedio del mercado) */
+function componentePrecio(precio, precioMercado) {
+  if (!precioMercado || precioMercado <= 0) return 1;
+  return redondear(Math.max(0.05, 2 - (precio / precioMercado)), 4);
+}
+
+/* Componente Confianza: baja si se activó pricing algorítmico y fue detectado */
+function componenteConfianza(activo, rng, params = PARAMS_DEFECTO) {
+  if (!activo) return { valor: 1, detectado: false };
+  const detectado = rng() < params.probabilidadDeteccion;
+  return {
+    valor: detectado ? redondear(1 - params.penalizacionConfianza, 4) : 1,
+    detectado
+  };
+}
+
+/* Dynamic pricing: ajusta el precio según el ritmo de venta esperado vs. real */
+function aplicarDynamicPricing(precioBase, decision, ritmoRelativo) {
+  if (!decision.dynamicPricing) return precioBase;
+  const sens = clamp(decision.sensibilidadDynamic ?? 0.5, 0, 1);
+  const ajuste = 1 + (ritmoRelativo * sens * 0.20);
+  return redondear(precioBase * clamp(ajuste, 0.80, 1.20), 2);
+}
+
+/* ============================================================
+   ETAPA 3 — RESTRICCIÓN DE OFERTA
+   ============================================================ */
+function aplicarCapacidad(pasajerosGanados, perfil, overbooking, params = PARAMS_DEFECTO) {
+  const p = params.perfiles[perfil];
+  const cupoVenta = p.capacidad + (overbooking || 0);
+  const reservas = Math.min(Math.round(pasajerosGanados), cupoVenta);
+  const spill = Math.max(0, Math.round(pasajerosGanados) - cupoVenta);
+  const noShows = Math.round(reservas * p.noShowPct);
+  const presentados = reservas - noShows;
+  // Si se presentan más de los asientos físicos → denegación de embarque
+  const denegados = Math.max(0, presentados - p.capacidad);
+  const abordados = presentados - denegados;
+  return { cupoVenta, reservas, spill, noShows, presentados, denegados, abordados };
+}
+
+/* ============================================================
+   ESTADO DE RESULTADOS (NIC 1, método de la función del gasto)
+   Estructura: Ingresos − (DOC + IOC) = Utilidad Bruta
+               − Gastos Administrativos − Gastos Comerciales = Utilidad Operativa
+               − Otros Gastos = Utilidad Neta
+   ============================================================ */
+function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
+  const p = params.perfiles[datos.perfil];
+
+  // --- Ingresos ---
+  const ingresoTarifas = datos.abordados * datos.precioRealizado;
+  const ingresoAncillaries = datos.ingresoAncillaries || 0;
+  const ingresoPaseFrecuente = datos.ingresoPaseFrecuente || 0;
+  const ingresos = ingresoTarifas + ingresoAncillaries + ingresoPaseFrecuente;
+
+  // --- Costo de Ventas ---
+  // IOC: crece con cada pasajero (catering, distribución, equipaje)
+  const ioc = datos.abordados * p.iocPorPasajero;
+  // DOC: FIJO por ronda — el avión, la tripulación y el combustible cuestan
+  // lo mismo vuele lleno o medio vacío. Llenar el avión reparte este costo
+  // entre más pasajeros: ahí está el incentivo real del revenue management.
+  const doc = p.docPorRonda;
+  const costoVentas = doc + ioc;
+  const utilidadBruta = ingresos - costoVentas;
+
+  // --- Gastos operativos: decisiones reales del equipo ---
+  const gastosComerciales =
+    (datos.gastoMarketing || 0) +
+    (datos.gastoInvestigacionWTP || 0) +
+    (datos.gastoEstudioElasticidad || 0);
+  const gastosAdministrativos = datos.gastoMadurez || 0;
+  const utilidadOperativa = utilidadBruta - gastosComerciales - gastosAdministrativos;
+
+  // --- Otros gastos: compensación por denegación + sanción algorítmica ---
+  const compensacionDenegados = (datos.denegados || 0) * (datos.precioRealizado * 2);
+  const sancionAlgoritmica = datos.sancionAlgoritmica || 0;
+  const otrosGastos = compensacionDenegados + sancionAlgoritmica;
+  const utilidadNeta = utilidadOperativa - otrosGastos;
+
+  return {
+    pax: datos.abordados,
+    precioVenta: redondear(datos.precioRealizado),
+    ingresoTarifas: redondear(ingresoTarifas),
+    ingresoAncillaries: redondear(ingresoAncillaries),
+    ingresoPaseFrecuente: redondear(ingresoPaseFrecuente),
+    ingresos: redondear(ingresos),
+    doc: redondear(doc),
+    ioc: redondear(ioc),
+    costoVentas: redondear(costoVentas),
+    utilidadBruta: redondear(utilidadBruta),
+    gastosAdministrativos: redondear(gastosAdministrativos),
+    gastosComerciales: redondear(gastosComerciales),
+    utilidadOperativa: redondear(utilidadOperativa),
+    compensacionDenegados: redondear(compensacionDenegados),
+    sancionAlgoritmica: redondear(sancionAlgoritmica),
+    otrosGastos: redondear(otrosGastos),
+    utilidadNeta: redondear(utilidadNeta),
+    margenBrutoPct: ingresos > 0 ? redondear((utilidadBruta / ingresos) * 100, 1) : 0,
+    margenOperativoPct: ingresos > 0 ? redondear((utilidadOperativa / ingresos) * 100, 1) : 0,
+    margenNetoPct: ingresos > 0 ? redondear((utilidadNeta / ingresos) * 100, 1) : 0
+  };
+}
+
+/* ---------- MÉTRICAS DE REVENUE MANAGEMENT (Herramienta 11) ---------- */
+function metricasRM(abordados, capacidad, ingresos, distanciaKm = 1) {
+  const asm = capacidad * distanciaKm;
+  const rpm = abordados * distanciaKm;
+  return {
+    loadFactor: capacidad > 0 ? redondear((abordados / capacidad) * 100, 1) : 0,
+    yield: rpm > 0 ? redondear((ingresos / rpm) * 100, 2) : 0,   // centavos
+    rasm: asm > 0 ? redondear((ingresos / asm) * 100, 2) : 0     // centavos
+  };
+}
+
+/* ---------- PUNTAJE DE VALOR (Diagnóstico 3C, evoluciona por ronda) ---------- */
+function actualizarPuntajeValor(puntajeActual, precio, techo, params = PARAMS_DEFECTO) {
+  if (!techo || techo <= 0) return puntajeActual;
+  const proximidad = precio / techo;
+  const ajuste = (proximidad - params.umbralNeutroValor) * params.sensibilidadValor;
+  return redondear(clamp(puntajeActual + ajuste, 1, 7), 3);
+}
+
+/* ---------- PANEL DE REFERENCIA: piso, techo y EVC (Herramientas 2 y 3) ---------- */
+function panelPrecio(perfilKey, precioReferencia, puntajeValor, docPorPax, params = PARAMS_DEFECTO) {
+  const diferenciacion = (puntajeValor - params.benchmarkValor) * params.factorValorAPorcentaje * precioReferencia;
+  const techo = redondear(precioReferencia + diferenciacion);
+  const piso = redondear(docPorPax + params.perfiles[perfilKey].iocPorPasajero);
+  return { piso, techo, evc: techo, precioReferencia: redondear(precioReferencia) };
+}
+
+/* ---------- PUNTO DE EQUILIBRIO ANTE CAMBIO DE PRECIO (Herramienta 4) ---------- */
+function puntoEquilibrio(precioAnterior, precioNuevo, costoVariable) {
+  const margenNuevo = precioNuevo - costoVariable;
+  if (margenNuevo <= 0) return null;
+  const caidaTolerable = ((precioNuevo - precioAnterior) / margenNuevo) * 100;
+  return redondear(caidaTolerable, 1);
+}
+
+/* ============================================================
+   DECISIÓN NEUTRA POR DEFECTO
+   (equipo que no alcanza a decidir — Acta Sección 11)
+   ============================================================ */
+function decisionNeutra(precioMercado) {
+  return {
+    precio: precioMercado,      // Componente Precio = 1.0
+    marketing: 0,
+    tarifaPromocional: null,
+    fuerzaValla: 'sin_valla',
+    cuotaPaseFrecuente: 0,
+    anclaje: false,
+    overbooking: 0,
+    dynamicPricing: false,
+    comprarWTP: false,
+    comprarElasticidad: false,
+    pricingAlgoritmico: false,
+    talento: 4, procesos: 4, datos: 4,
+    esNeutraPorDefecto: true
+  };
+}
+
+/* ---------- COMPORTAMIENTO DE LOS BOTS (competidores reales) ---------- */
+/* Se recalibran cada ronda contra el promedio real del mercado (Acta Sección 5) */
+const PRECIOS_BOT_BASE = {
+  domestica:     { 'BoA': 33.00 },
+  internacional: { 'LATAM': 234.00, 'BoA': 217.50 }
+};
+
+function decisionBot(nombreBot, perfilKey, precioPromedioMercado, ronda) {
+  const base = PRECIOS_BOT_BASE[perfilKey][nombreBot];
+  // El bot ajusta suavemente hacia el promedio del mercado (50% de peso a cada lado)
+  const precio = redondear(base * 0.5 + precioPromedioMercado * 0.5);
+  return {
+    nombre: nombreBot,
+    esBot: true,
+    precio,
+    marketing: 0,
+    cuotaPaseFrecuente: 0,
+    anclaje: false,
+    overbooking: 0,
+    dynamicPricing: false,
+    pricingAlgoritmico: false,
+    talento: 4, procesos: 4, datos: 4
+  };
+}
+
+/* ============================================================
+   FUNCIÓN PRINCIPAL — EJECUTAR UNA RONDA COMPLETA
+   ============================================================ */
+function ejecutarRonda(config) {
+  const {
+    perfilKey,
+    ronda,
+    poolFijo,
+    choque = 'sin_choque',
+    equipos,              // [{ nombre, decision, puntajeValor, caja, precioAnterior }]
+    params = PARAMS_DEFECTO,
+    semilla = 'ronda'
+  } = config;
+
+  const p = params.perfiles[perfilKey];
+  const rng = mulberry32(hashStr(semilla + '::' + perfilKey + '::' + ronda));
+
+  /* --- ETAPA 1: Pool de la ronda (fijo, salvo choque del profesor) --- */
+  const pool = poolDeRonda(poolFijo, choque, params);
+
+  /* --- Precio promedio provisional (solo equipos) para calibrar a los bots --- */
+  const preciosEquipos = equipos.map(e => e.decision.precio);
+  const promedioEquipos = preciosEquipos.reduce((a, b) => a + b, 0) / preciosEquipos.length;
+
+  /* --- Los bots entran como competidores reales --- */
+  const bots = p.bots.map(nb => ({
+    nombre: nb,
+    esBot: true,
+    decision: decisionBot(nb, perfilKey, promedioEquipos, ronda),
+    puntajeValor: params.benchmarkValor,
+    caja: null
+  }));
+  bots.forEach(b => { b.decision.precio = b.decision.precio; });
+
+  /* --- Precio promedio REAL del mercado (equipos + bots) --- */
+  const todos = [
+    ...equipos.map(e => ({ ...e, esBot: false })),
+    ...bots.map(b => ({ nombre: b.nombre, decision: b.decision, puntajeValor: b.puntajeValor, esBot: true, caja: null }))
+  ];
+  const precioMercado = redondear(
+    todos.reduce((acc, c) => acc + c.decision.precio, 0) / todos.length
+  );
+
+  /* --- ETAPA 2: Atractivo de cada competidor --- */
+  const conAtractivo = todos.map(c => {
+    const d = c.decision;
+    // Dynamic pricing: ajusta el precio antes de calcular el componente
+    const ritmoRelativo = (precioMercado - d.precio) / precioMercado;
+    const precioFinal = aplicarDynamicPricing(d.precio, d, ritmoRelativo);
+
+    const cPrecio = componentePrecio(precioFinal, precioMercado);
+    const cProducto = componenteProducto(d, precioMercado, c.puntajeValor, params);
+    const cConfianza = componenteConfianza(d.pricingAlgoritmico, rng, params);
+    const atractivo = redondear(cPrecio * cProducto.valor * cConfianza.valor, 4);
+
+    return { ...c, precioFinal, cPrecio, cProducto, cConfianza, atractivo };
+  });
+
+  const sumaAtractivo = conAtractivo.reduce((a, c) => a + c.atractivo, 0);
+
+  /* --- ETAPA 2b: Reparto proporcional del pool --- */
+  const conDemanda = conAtractivo.map(c => {
+    const participacion = c.atractivo / sumaAtractivo;
+    return {
+      ...c,
+      participacion: redondear(participacion * 100, 2),
+      pasajerosGanados: Math.round(pool * participacion)
+    };
+  });
+
+  /* --- ETAPA 3: Capacidad, no-shows, overbooking, spill --- */
+  const resultados = conDemanda.map(c => {
+    const cap = aplicarCapacidad(c.pasajerosGanados, perfilKey, c.decision.overbooking, params);
+
+    // Ingreso por ancillaries (Herramienta 9): solo equipos, no bots
+    const ingresoAncillaries = c.esBot ? 0 :
+      cap.abordados * ((c.decision.precioEquipaje || 0) * 0.5 + (c.decision.precioSeguro || 0) * 0.3);
+
+    const sancion = (c.cConfianza.detectado)
+      ? redondear(cap.abordados * c.precioFinal * 0.10)
+      : 0;
+
+    const er = c.esBot ? null : estadoDeResultados({
+      perfil: perfilKey,
+      abordados: cap.abordados,
+      precioRealizado: c.precioFinal,
+      ingresoAncillaries,
+      ingresoPaseFrecuente: (c.decision.cuotaPaseFrecuente || 0) * Math.round(cap.abordados * 0.2),
+      gastoMarketing: c.decision.marketing || 0,
+      gastoInvestigacionWTP: c.decision.comprarWTP ? p.costoInvestigacionWTP : 0,
+      gastoEstudioElasticidad: c.decision.comprarElasticidad ? p.costoEstudioElasticidad : 0,
+      gastoMadurez: c.decision.gastoMadurez || 0,
+      denegados: cap.denegados,
+      sancionAlgoritmica: sancion
+    }, params);
+
+    const panel = panelPrecio(perfilKey, precioMercado, c.puntajeValor, 
+      er ? (er.doc / Math.max(1, cap.abordados)) : 0, params);
+
+    const nuevoPuntajeValor = c.esBot ? c.puntajeValor :
+      actualizarPuntajeValor(c.puntajeValor, c.precioFinal, panel.techo, params);
+
+    return {
+      nombre: c.nombre,
+      esBot: c.esBot,
+      precioDecidido: c.decision.precio,
+      precioFinal: c.precioFinal,
+      componentes: {
+        precio: c.cPrecio,
+        producto: c.cProducto.valor,
+        productoDetalle: c.cProducto.detalle,
+        confianza: c.cConfianza.valor,
+        detectado: c.cConfianza.detectado
+      },
+      atractivo: c.atractivo,
+      participacion: c.participacion,
+      pasajerosGanados: c.pasajerosGanados,
+      capacidad: cap,
+      metricas: metricasRM(cap.abordados, p.capacidad, er ? er.ingresos : 0),
+      estadoResultados: er,
+      puntajeValorAnterior: c.puntajeValor,
+      puntajeValorNuevo: nuevoPuntajeValor,
+      cajaAnterior: c.caja,
+      cajaNueva: (c.caja !== null && er) ? redondear(c.caja + er.utilidadNeta) : null
+    };
+  });
+
+  return {
+    ronda,
+    perfil: p.nombre,
+    choque,
+    poolFijo,
+    poolDeRonda: pool,
+    precioMercado,
+    sumaAtractivo: redondear(sumaAtractivo, 4),
+    resultados
+  };
+}
+
+
+</script>
+<script>
+/* ============================================================
+   ALMACENAMIENTO — Supabase (funciona fuera de Claude, en GitHub Pages)
+   ============================================================ */
+const SUPA_URL = 'https://hvwdubczgtfshiwtgmnk.supabase.co';
+const SUPA_KEY = 'sb_publishable_K2ZXIPwBmvos69eaZb_FWw_Y7gKqr94';
+const SUPA_HEAD = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY, 'Content-Type':'application/json' };
+
+function filaAEquipo(f){
+  return {
+    nombre: f.nombre_display || f.nombre, perfil: f.perfil, integrantes: f.integrantes,
+    caja: Number(f.caja), tresC: f.tres_c, historial: f.historial || [],
+    rondasJugadas: f.rondas_jugadas, precioAnterior: f.precio_anterior != null ? Number(f.precio_anterior) : null
+  };
+}
+function equipoAFila(e){
+  return {
+    nombre: e.nombre.trim().toLowerCase(), nombre_display: e.nombre.trim(),
+    perfil: e.perfil, integrantes: e.integrantes || '',
+    caja: e.caja, tres_c: e.tresC, historial: e.historial || [],
+    rondas_jugadas: e.rondasJugadas || 0, precio_anterior: e.precioAnterior
+  };
+}
+function filaAConfig(f){
+  return {
+    rondaActual: f.ronda_actual, eqDomestica: f.eq_domestica, eqInternacional: f.eq_internacional,
+    metaOcupacion: f.meta_ocupacion != null ? Number(f.meta_ocupacion) : null,
+    poolDomestica: f.pool_domestica, pctDomestica: f.pct_domestica != null ? Number(f.pct_domestica) : null,
+    poolInternacional: f.pool_internacional, pctInternacional: f.pct_internacional != null ? Number(f.pct_internacional) : null
+  };
+}
+function configAFila(c){
+  return {
+    id:1, ronda_actual:c.rondaActual, eq_domestica:c.eqDomestica, eq_internacional:c.eqInternacional,
+    meta_ocupacion:c.metaOcupacion, pool_domestica:c.poolDomestica, pct_domestica:c.pctDomestica,
+    pool_internacional:c.poolInternacional, pct_internacional:c.pctInternacional
+  };
+}
+
+async function leer(clave){
+  try{
+    if(clave === 'config'){
+      const r = await fetch(`${SUPA_URL}/rest/v1/config?id=eq.1&select=*`, {headers:SUPA_HEAD});
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.length ? filaAConfig(j[0]) : null;
+    }
+    if(clave.startsWith('equipo:')){
+      const nombre = clave.slice(7);
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?nombre=eq.${encodeURIComponent(nombre)}&select=*`, {headers:SUPA_HEAD});
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.length ? filaAEquipo(j[0]) : null;
+    }
+    if(clave.startsWith('decision:')){
+      const p = clave.split(':'); const ronda = p[1], nombre = p.slice(2).join(':');
+      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?ronda=eq.${ronda}&equipo=eq.${encodeURIComponent(nombre)}&select=decision`, {headers:SUPA_HEAD});
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.length ? j[0].decision : null;
+    }
+    return null;
+  }catch(e){ console.error('leer', e); return null; }
+}
+async function escribir(clave, valor){
+  try{
+    if(clave === 'config'){
+      const r = await fetch(`${SUPA_URL}/rest/v1/config?on_conflict=id`, {
+        method:'POST', headers:{...SUPA_HEAD, 'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify(configAFila(valor))
+      });
+      return r.ok;
+    }
+    if(clave.startsWith('equipo:')){
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?on_conflict=nombre`, {
+        method:'POST', headers:{...SUPA_HEAD, 'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify(equipoAFila(valor))
+      });
+      return r.ok;
+    }
+    if(clave.startsWith('decision:')){
+      const p = clave.split(':'); const ronda = parseInt(p[1],10), nombre = p.slice(2).join(':');
+      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?on_conflict=ronda,equipo`, {
+        method:'POST', headers:{...SUPA_HEAD, 'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify({ ronda, equipo: nombre, decision: valor })
+      });
+      return r.ok;
+    }
+    return false;
+  }catch(e){ console.error(e); return false; }
+}
+async function listar(prefijo){
+  try{
+    if(prefijo === 'equipo:'){
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?select=nombre`, {headers:SUPA_HEAD});
+      if(!r.ok) return [];
+      const j = await r.json();
+      return j.map(x => 'equipo:'+x.nombre);
+    }
+    return [];
+  }catch(e){ return []; }
+}
+async function borrar(clave){
+  try{
+    if(clave.startsWith('equipo:')){
+      const nombre = clave.slice(7);
+      await fetch(`${SUPA_URL}/rest/v1/equipos?nombre=eq.${encodeURIComponent(nombre)}`, {method:'DELETE', headers:SUPA_HEAD});
+      return true;
+    }
+    return false;
+  }catch(e){ return false; }
+}
+const claveEquipo = n => 'equipo:' + n.trim().toLowerCase();
+const claveDecision = (r,n) => 'decision:' + r + ':' + n.trim().toLowerCase();
+
+const D = {
+  vista:'configuracion', config:null, equipos:[], decisiones:{},
+  choque:'sin_choque', calculando:false, previa:null
+};
+const money = n => '$'+Number(n).toLocaleString('es-ES',{maximumFractionDigits:0});
+const money2 = n => '$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* ============================================================
+   VISTA 1 — CONFIGURACIÓN INICIAL
+   ============================================================ */
+function vistaConfiguracion(){
+  const c = D.config || {};
+  const yaArrancado = c.rondaActual > 1;
+  const calDom = c.poolDomestica ? {poolFijo:c.poolDomestica, pct:c.pctDomestica} : null;
+  const calInt = c.poolInternacional ? {poolFijo:c.poolInternacional, pct:c.pctInternacional} : null;
+
+  return `
+    <h2 class="titulo">Configuración del módulo</h2>
+    <p class="sub">Se define una sola vez, antes de la Ronda 1. El tamaño del mercado queda fijo las 12 rondas: no cambia si un equipo falta una sesión.</p>
+
+    <div class="bloque">
+      <h3>Asistente de calibración del mercado</h3>
+      <div class="campos">
+        <div class="campo">
+          <label for="cEqDom">Equipos en el perfil Doméstico</label>
+          <input type="number" id="cEqDom" min="0" max="10" value="${c.eqDomestica ?? 2}" ${yaArrancado?'disabled':''}>
+        </div>
+        <div class="campo">
+          <label for="cEqInt">Equipos en el perfil Internacional</label>
+          <input type="number" id="cEqInt" min="0" max="10" value="${c.eqInternacional ?? 2}" ${yaArrancado?'disabled':''}>
+        </div>
+        <div class="campo">
+          <label for="cOcupacion">Ocupación objetivo del mercado (%)</label>
+          <input type="number" id="cOcupacion" min="40" max="100" step="5" value="${c.metaOcupacion ? c.metaOcupacion*100 : 75}" ${yaArrancado?'disabled':''}>
+        </div>
+      </div>
+      <div class="nota">Cada perfil compite por separado, así que el tamaño de su mercado depende de cuántos equipos jueguen en él. Con una ocupación objetivo alta (85%), casi todos llenan sus aviones y compiten poco; con una baja (65%), la competencia se endurece y los errores de precio se notan mucho más.</div>
+      ${calDom && calInt ? `
+        <div class="resultado-cal">
+          <div class="fila"><span>Mercado doméstico por ronda</span><b>${calDom.poolFijo} pasajeros</b></div>
+          <div class="fila"><span>Mercado internacional por ronda</span><b>${calInt.poolFijo} pasajeros</b></div>
+          <div class="fila"><span>Penetración sobre el tráfico real (DGAC)</span><b>${calDom.pct}% · ${calInt.pct}%</b></div>
+        </div>` : ''}
+      ${!yaArrancado ? `<div class="acciones">
+        <button class="btn" id="btnCalibrar">Calcular y guardar</button>
+      </div>` : `<div class="nota">La simulación ya arrancó: el mercado quedó fijo y no puede recalibrarse.</div>`}
+    </div>
+
+    <div class="bloque">
+      <h3>Equipos registrados</h3>
+      ${D.equipos.length ? `<div class="lista-equipos">
+        ${D.equipos.map(e=>`<div class="eq-fila">
+          <div>
+            <div class="eq-nom">${esc(e.nombre)}</div>
+            <div class="eq-int">${e.integrantes ? esc(e.integrantes).replace(/\\n/g,' · ') : 'Sin integrantes registrados'} — perfil ${MOTOR_PERFIL(e.perfil)}</div>
+          </div>
+          <button class="btn-peligro" data-borrar="${esc(e.nombre)}">Quitar</button>
+        </div>`).join('')}
+      </div>` : `<div class="vacio">Ningún equipo se ha registrado todavía. Comparte con ellos el archivo de equipos.</div>`}
+    </div>`;
+}
+function MOTOR_PERFIL(k){ return PARAMS_DEFECTO.perfiles[k] ? PARAMS_DEFECTO.perfiles[k].nombre : '—'; }
+
+/* ============================================================
+   VISTA 2 — CONTROL DE LA RONDA
+   ============================================================ */
+function vistaRonda(){
+  const c = D.config;
+  if(!c || !c.poolDomestica){
+    return `<h2 class="titulo">Falta calibrar el mercado</h2>
+      <p class="sub">Ve a Configuración y define cuántos equipos jugarán antes de abrir la primera ronda.</p>`;
+  }
+  const ronda = c.rondaActual;
+  const listos = D.equipos.filter(e => D.decisiones[e.nombre.toLowerCase()]);
+  const faltan = D.equipos.length - listos.length;
+
+  return `
+    <h2 class="titulo">Ronda ${ronda} de 12</h2>
+    <p class="sub">${listos.length} de ${D.equipos.length} equipos han enviado su decisión${faltan>0 ? `. Los ${faltan} que falten al cerrar recibirán una decisión neutra: precio igual al promedio del mercado, sin inversiones.` : '. Puedes cerrar la ronda.'}</p>
+
+    <div class="bloque">
+      <h3>Estado de los equipos</h3>
+      ${D.equipos.length ? `<div class="lista-equipos">
+        ${D.equipos.map(e=>{
+          const listo = !!D.decisiones[e.nombre.toLowerCase()];
+          return `<div class="eq-fila">
+            <div><div class="eq-nom">${esc(e.nombre)}</div>
+              <div class="eq-int">Caja ${money(e.caja)} — perfil ${MOTOR_PERFIL(e.perfil)}</div></div>
+            <span class="marca ${listo?'listo':'falta'}">${listo?'Decisión enviada':'Pendiente'}</span>
+          </div>`;
+        }).join('')}
+      </div>` : `<div class="vacio">Ningún equipo registrado.</div>`}
+    </div>
+
+    <div class="bloque">
+      <h3>Condiciones del mercado esta ronda</h3>
+      <div class="opciones-choque">
+        <button class="op-choque ${D.choque==='sin_choque'?'sel':''}" data-choque="sin_choque">Mercado normal</button>
+        <button class="op-choque ${D.choque==='alza'?'sel':''}" data-choque="alza">Temporada alta (+10% de demanda)</button>
+        <button class="op-choque ${D.choque==='baja'?'sel':''}" data-choque="baja">Temporada baja (−10% de demanda)</button>
+      </div>
+      <div class="nota">El cambio afecta a todas las aerolíneas por igual, así que nadie gana ni pierde ventaja por él.</div>
+      <div class="acciones">
+        <button class="btn" id="btnCerrar" ${D.equipos.length===0?'disabled':''}>${D.calculando?'Calculando…':'Cerrar ronda y calcular resultados'}</button>
+        <button class="btn-sec" id="btnRefrescar">Actualizar estado</button>
+      </div>
+    </div>
+
+    ${D.previa ? vistaPrevia() : ''}`;
+}
+
+function vistaPrevia(){
+  const p = D.previa;
+  return `<div class="bloque">
+    <h3>Resultados de la Ronda ${p.ronda}</h3>
+    <p class="sub" style="margin-bottom:14px;">Mercado: ${p.poolTotal} pasajeros. Puedes comentar estos resultados en clase antes de que cada equipo revise su propio reporte.</p>
+    <table class="datos">
+      <thead><tr><th></th><th>Aerolínea</th><th class="num">Precio</th><th class="num">Part.</th><th class="num">A bordo</th><th class="num">Ocupación</th><th class="num">Utilidad neta</th></tr></thead>
+      <tbody>
+        ${p.filas.map((f,i)=>`<tr class="${f.esBot?'bot':''}">
+          <td>${f.esBot?'':`<span class="puesto ${i===0?'primero':''}">${i+1}</span>`}</td>
+          <td>${esc(f.nombre)}${f.esBot?' <span style="font-size:11px;">referencia de mercado</span>':''}${f.neutra?' <span style="font-size:11px;color:var(--rojo);">no decidió</span>':''}</td>
+          <td class="num">${money2(f.precio)}</td>
+          <td class="num">${f.participacion}%</td>
+          <td class="num">${f.abordados}</td>
+          <td class="num">${f.ocupacion}%</td>
+          <td class="num">${f.utilidadNeta!==null?money(f.utilidadNeta):'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+/* ============================================================
+   VISTA 3 — TABLERO
+   ============================================================ */
+function vistaTablero(){
+  const orden = [...D.equipos].sort((a,b)=>(b.caja||0)-(a.caja||0));
+  if(!orden.length) return `<h2 class="titulo">Tablero</h2><div class="vacio">Ningún equipo registrado.</div>`;
+  return `
+    <h2 class="titulo">Tablero de posiciones</h2>
+    <p class="sub">Ranking por caja acumulada, igual al que ven los equipos.</p>
+    <table class="datos">
+      <thead><tr><th></th><th>Aerolínea</th><th>Perfil</th><th class="num">Rondas</th><th class="num">Caja</th><th class="num">Ganancia</th></tr></thead>
+      <tbody>
+        ${orden.map((e,i)=>{
+          const g = (e.caja||0) - PARAMS_DEFECTO.capitalSemilla;
+          return `<tr>
+            <td><span class="puesto ${i===0?'primero':''}">${i+1}</span></td>
+            <td>${esc(e.nombre)}</td>
+            <td>${MOTOR_PERFIL(e.perfil)}</td>
+            <td class="num">${e.rondasJugadas||0}</td>
+            <td class="num">${money(e.caja)}</td>
+            <td class="num" style="color:${g>=0?'var(--verde)':'var(--rojo)'}">${g>=0?'+':''}${money(g)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* ============================================================
+   CIERRE DE RONDA — ejecuta el motor
+   ============================================================ */
+async function cerrarRonda(){
+  D.calculando = true; render();
+  const c = D.config, ronda = c.rondaActual;
+  const filas = [];
+
+  for(const perfilKey of ['domestica','internacional']){
+    const delPerfil = D.equipos.filter(e => e.perfil === perfilKey);
+    if(!delPerfil.length) continue;
+
+    const poolFijo = perfilKey==='domestica' ? c.poolDomestica : c.poolInternacional;
+    const bots = PARAMS_DEFECTO.perfiles[perfilKey].bots;
+    const preciosBot = Object.values(PRECIOS_BOT_BASE[perfilKey]);
+    const promedioBots = preciosBot.reduce((a,b)=>a+b,0)/preciosBot.length;
+
+    const equiposMotor = delPerfil.map(e=>{
+      const guardada = D.decisiones[e.nombre.toLowerCase()];
+      const dec = guardada || decisionNeutra(promedioBots);
+      return {
+        nombre: e.nombre,
+        puntajeValor: e.tresC ? e.tresC.valor : PARAMS_DEFECTO.benchmarkValor,
+        caja: e.caja,
+        decision: dec,
+        _neutra: !guardada
+      };
+    });
+
+    const r = ejecutarRonda({
+      perfilKey, ronda, poolFijo, choque: D.choque,
+      equipos: equiposMotor, semilla: 'nur-mkt202'
+    });
+
+    for(const res of r.resultados){
+      const esNeutra = equiposMotor.find(x=>x.nombre===res.nombre)?._neutra;
+      filas.push({
+        nombre: res.nombre, esBot: res.esBot, neutra: !res.esBot && esNeutra,
+        precio: res.precioFinal, participacion: res.participacion,
+        abordados: res.capacidad.abordados, ocupacion: res.metricas.loadFactor,
+        utilidadNeta: res.estadoResultados ? res.estadoResultados.utilidadNeta : null,
+        _caja: res.cajaNueva, _pv: res.puntajeValorNuevo, _r: res
+      });
+
+      if(!res.esBot){
+        const eq = D.equipos.find(x=>x.nombre===res.nombre);
+        if(eq){
+          eq.caja = res.cajaNueva;
+          eq.tresC = eq.tresC || {costo:PARAMS_DEFECTO.benchmarkValor, competencia:PARAMS_DEFECTO.benchmarkValor, valor:PARAMS_DEFECTO.benchmarkValor};
+          eq.tresC.valor = res.puntajeValorNuevo;
+          eq.precioAnterior = res.precioFinal;
+          eq.rondasJugadas = ronda;
+          eq.historial = eq.historial || [];
+          eq.historial.push({
+            ronda, precioMercado: r.precioMercado, poolDeRonda: r.poolDeRonda,
+            neutra: !!esNeutra,
+            precioFinal: res.precioFinal, participacion: res.participacion,
+            pasajerosGanados: res.pasajerosGanados, capacidad: res.capacidad,
+            metricas: res.metricas, estadoResultados: res.estadoResultados,
+            componentes: res.componentes
+          });
+          await escribir(claveEquipo(eq.nombre), eq);
+        }
+      }
+    }
+  }
+
+  filas.sort((a,b)=>{
+    if(a.esBot !== b.esBot) return a.esBot ? 1 : -1;
+    return (b.utilidadNeta??-1e9) - (a.utilidadNeta??-1e9);
+  });
+  D.previa = { ronda, poolTotal: (c.poolDomestica||0)+(c.poolInternacional||0), filas };
+
+  c.rondaActual = Math.min(ronda+1, PARAMS_DEFECTO.rondasTotales);
+  await escribir('config', c);
+  D.decisiones = {}; D.choque = 'sin_choque'; D.calculando = false;
+  await cargarDatos();
+  render();
+}
+
+/* ============================================================
+   CARGA Y RENDER
+   ============================================================ */
+async function cargarDatos(){
+  D.config = await leer('config') || { rondaActual:1, numEquipos:4, metaOcupacion:0.80 };
+  const claves = await listar('equipo:');
+  const eqs = [];
+  for(const k of claves){ const e = await leer(k); if(e) eqs.push(e); }
+  D.equipos = eqs;
+  D.decisiones = {};
+  for(const e of eqs){
+    const dec = await leer(claveDecision(D.config.rondaActual, e.nombre));
+    if(dec) D.decisiones[e.nombre.toLowerCase()] = dec;
+  }
+}
+function render(){
+  document.getElementById('hdRonda').textContent = D.config ? D.config.rondaActual + ' / 12' : '—';
+  const vistas = [
+    {id:'configuracion', txt:'Configuración'},
+    {id:'ronda', txt:'Control de ronda'},
+    {id:'tablero', txt:'Tablero'}
+  ];
+  document.getElementById('tabs').innerHTML = vistas.map(v=>
+    `<button class="tab ${D.vista===v.id?'activa':''}" data-vista="${v.id}">${v.txt}</button>`).join('');
+  const c = document.getElementById('contenido');
+  if(D.vista==='configuracion') c.innerHTML = vistaConfiguracion();
+  else if(D.vista==='ronda') c.innerHTML = vistaRonda();
+  else c.innerHTML = vistaTablero();
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  await cargarDatos();
+  D.vista = (D.config && D.config.poolDomestica) ? 'ronda' : 'configuracion';
+  render();
+
+  document.getElementById('tabs').addEventListener('click', async e=>{
+    const b = e.target.closest('[data-vista]');
+    if(!b) return;
+    D.vista = b.dataset.vista;
+    await cargarDatos(); render();
+  });
+
+  document.getElementById('contenido').addEventListener('click', async e=>{
+    if(e.target.id === 'btnCalibrar'){
+      const nD = parseInt(document.getElementById('cEqDom').value,10) || 0;
+      const nI = parseInt(document.getElementById('cEqInt').value,10) || 0;
+      if(nD + nI === 0){ alert('Indica cuántos equipos jugarán en cada perfil.'); return; }
+      const oc = (parseFloat(document.getElementById('cOcupacion').value) || 75)/100;
+      const cd = calibrarPool('domestica', nD, oc);
+      const ci = calibrarPool('internacional', nI, oc);
+      D.config = { ...(D.config||{}), rondaActual: D.config?.rondaActual || 1,
+        eqDomestica:nD, eqInternacional:nI, numEquipos:nD+nI, metaOcupacion:oc,
+        poolDomestica: cd.poolFijo, pctDomestica: cd.pctPenetracion,
+        poolInternacional: ci.poolFijo, pctInternacional: ci.pctPenetracion };
+      await escribir('config', D.config);
+      render(); return;
+    }
+    const bChoque = e.target.closest('[data-choque]');
+    if(bChoque){ D.choque = bChoque.dataset.choque; render(); return; }
+    if(e.target.id === 'btnRefrescar'){ await cargarDatos(); render(); return; }
+    if(e.target.id === 'btnCerrar'){ await cerrarRonda(); return; }
+    const bBorrar = e.target.closest('[data-borrar]');
+    if(bBorrar){
+      const nom = bBorrar.dataset.borrar;
+      if(confirm('¿Quitar a "'+nom+'" del simulador? Se perderá su progreso.')){
+        try{ await borrar(claveEquipo(nom)); }catch(_){}
+        await cargarDatos(); render();
+      }
+    }
+  });
+});
+</script>
+</body>
+</html>
