@@ -262,10 +262,10 @@ const PARAMS = {
   perfiles: {
     domestica: { nombre:'Doméstica', rutas:['SCZ-LPB','SCZ-CBB'], capacidad:70,
       iocPorPasajero:10, docPorRonda:801.84, precioBase:33.00, noShowPct:0.06,
-      costoWTP:800, costoElasticidad:1000, bots:['BoA'] },
+      costoWTP:800, costoElasticidad:1000, bots:['BoA'], segmentos:{negocio:0.40, placer:0.60} },
     internacional: { nombre:'Internacional', rutas:['SCZ-LIM','SCZ-EZE'], capacidad:140,
       iocPorPasajero:22, docPorRonda:16401.89, precioBase:225.75, noShowPct:0.03,
-      costoWTP:1600, costoElasticidad:2000, bots:['LATAM','BoA'] }
+      costoWTP:1600, costoElasticidad:2000, bots:['LATAM','BoA'], segmentos:{negocio:0.45, placer:0.55} }
   },
   proporcionAdmin:0.601, proporcionComercial:0.399,
   topeBoost:0.45, marketing:{factor:0.08, divisor:400, tope:0.30},
@@ -576,6 +576,12 @@ function vistaDecision(){
           ? 'Cifras calculadas con los datos de mercado que compraste esta ronda.'
           : 'Estimación sin investigación de mercado. Compra el estudio para afinar estas cifras.'}</div>
       </div>
+      ${activo('valla',ronda) ? `
+      <div class="referencia" style="margin-top:10px;">
+        <div class="ref-fila"><span>Viajeros de negocio en este mercado (deciden con poca anticipación, la empresa paga)</span><b>${(p.segmentos.negocio*100).toFixed(0)}%</b></div>
+        <div class="ref-fila"><span>Viajeros de placer (planean con tiempo, cuidan el bolsillo)</span><b>${(p.segmentos.placer*100).toFixed(0)}%</b></div>
+        <div class="ref-nota">Esta proporción es fija — no la decides tú, es propia de este mercado. La valla solo puede impedir que el viajero de negocio use tu Tarifa Promocional; el viajero de placer la va a preferir de todas formas, sin importar qué tan fuerte sea la valla.</div>
+      </div>` : ''}
       ${alertaEq}
     `, true, 1)}
 
