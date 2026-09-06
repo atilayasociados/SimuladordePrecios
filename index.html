@@ -627,7 +627,9 @@ function vistaDecision(){
         <label for="dWTP">Comprar estudio de mercado — ${money(costoWtpActual)}</label>
       </div>
       <div class="referencia">
-        <div class="ref-nota">Te entrega los precios reales de la competencia y una encuesta de intención de compra, para calcular tu techo con precisión en vez de estimarlo.</div>
+        <div class="ref-nota"><b>El precio de referencia y tu piso ya los ves gratis, sin comprar nada</b> — son datos que ya existen: lo que cobra la competencia (un hecho público) y tu propio costo (algo que tú ya conoces).</div>
+        <div class="ref-nota" style="margin-top:8px;">Lo único que no puedes saber gratis es tu <b>techo</b>: cuánto más que el promedio del mercado tus propios pasajeros están dispuestos a pagar por volar contigo, específicamente. Ese número no vive en lo que cobra BoA o LATAM — vive en la cabeza de tus clientes. Nadie te lo puede decir sin preguntarles, y eso es justo lo que hace este estudio.</div>
+        <div class="ref-nota" style="margin-top:8px;">Por eso comprarlo no te informa mejor sobre la competencia (ya la conoces) — te informa mejor sobre tu propio límite de precio, que es el único de los tres números del panel que trae incertidumbre si no lo compras.</div>
         <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como una señal fuerte, no como una certeza.</div>
       </div>
       ${d.comprarWTP ? `
@@ -678,6 +680,12 @@ function vistaDecision(){
       <div class="interruptor">
         <input type="checkbox" id="dElast" ${d.comprarElasticidad?'checked':''}>
         <label for="dElast">Comprar estudio de elasticidad — ${money(costoElasticidadActual)}</label>
+      </div>
+      <div class="referencia">
+        <div class="ref-fila"><span>Qué mide</span><b>Qué tanto cae tu venta si subes el precio</b></div>
+        <div class="ref-nota">Algunos productos casi no pierden clientes cuando suben de precio (poco elásticos); otros pierden muchos (muy elásticos). Este estudio te dice en cuál de los dos casos estás, con un número real en vez de adivinar.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Cómo usarlo:</b> el aviso de "punto de equilibrio" (el que aparece arriba, junto al precio, cuando cambias tu tarifa) ya existe sin comprar este estudio — pero es una aproximación general. Comprándolo, ese mismo aviso deja de ser una aproximación y pasa a calcularse con la sensibilidad real de tus clientes.</div>
+        <div class="ref-nota" style="margin-top:8px;">Si no lo compras y vas a subir el precio bastante, trata el aviso como una guía amplia, no como un número exacto — sube con más cautela de la que el aviso sugiere.</div>
       </div>
     `, activo('elasticidad',ronda), 5)}
 
