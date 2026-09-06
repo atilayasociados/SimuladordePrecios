@@ -564,13 +564,13 @@ function vistaDecision(){
             <option value="fuerte" ${d.fuerzaValla==='fuerte'?'selected':''}>Fuerte — 21 días, no reembolsable</option>
           </select></div>` : ''}
       </div>
-      <div class="referencia">
-        <div class="ref-fila"><span>Precio de referencia del mercado</span><b>${money2(pan.ref)}</b></div>
-        <div class="ref-fila"><span>Piso — bajo esto pierdes dinero por pasajero</span><b>${money2(pan.piso)}</b></div>
-        <div class="ref-fila"><span>Techo / EVC — tu límite de valor</span><b>${money2(pan.techo)}</b></div>
+      <div class="referencia" id="panelReferenciaPrecio">
+        <div class="ref-fila"><span>Precio de referencia del mercado</span><b id="refValorMercado">${money2(pan.ref)}</b></div>
+        <div class="ref-fila"><span>Piso — bajo esto pierdes dinero por pasajero</span><b id="refValorPiso">${money2(pan.piso)}</b></div>
+        <div class="ref-fila"><span>Techo / EVC — tu límite de valor</span><b id="refValorTecho">${money2(pan.techo)}</b></div>
         <div class="barra-rango">
           <div class="zona" style="left:0;right:0;"></div>
-          <div class="marcador" style="left:${posMarcador}%;"></div>
+          <div class="marcador" id="refMarcador" style="left:${posMarcador}%;"></div>
         </div>
         <div class="ref-nota">${pan.preciso
           ? 'Cifras calculadas con los datos de mercado que compraste esta ronda.'
@@ -582,15 +582,12 @@ function vistaDecision(){
         <div class="ref-fila"><span>Viajeros de placer (planean con tiempo, cuidan el bolsillo)</span><b>${(p.segmentos.placer*100).toFixed(0)}%</b></div>
         <div class="ref-nota">Esta proporción es fija — no la decides tú, es propia de este mercado. La valla solo puede impedir que el viajero de negocio use tu Tarifa Promocional; el viajero de placer la va a preferir de todas formas, sin importar qué tan fuerte sea la valla.</div>
       </div>` : ''}
-      ${alertaEq}
+      <div id="cajaAlertaEquilibrio">${alertaEq}</div>
     `, true, 1)}
 
     ${grupo('Marketing', 'Inversión en demanda', `
       <div class="campos">${campoNum('dMarketing','Inversión esta ronda ($)', d.marketing ?? 0)}</div>
-      <div class="referencia">
-        <div class="ref-fila"><span>Aumento de atractivo con esta inversión</span><b>+${(boostMkt(d.marketing||0)*100).toFixed(1)}%</b></div>
-        <div class="ref-nota">Rinde cada vez menos por dólar adicional: duplicar la inversión no duplica el resultado.</div>
-      </div>
+      <div class="referencia" id="panelReferenciaMarketing">${contenidoPanelMarketing(d.marketing||0)}</div>
     `, true, 1)}
 
     ${grupo('Investigación de mercado', 'Disposición a pagar (WTP)', `
@@ -672,6 +669,59 @@ function vistaDecision(){
 function boostMkt(g){
   if(!g || g<=0) return 0;
   return Math.min(PARAMS.marketing.tope, PARAMS.marketing.factor*Math.sqrt(g/PARAMS.marketing.divisor));
+}
+function contenidoPanelMarketing(gasto){
+  return `<div class="ref-fila"><span>Aumento de atractivo con esta inversión</span><b>+${(boostMkt(gasto)*100).toFixed(1)}%</b></div>
+    <div class="ref-nota">Rinde cada vez menos por dólar adicional: duplicar la inversión no duplica el resultado.</div>`;
+}
+
+/* ============================================================
+   ACTUALIZACIÓN EN VIVO — solo cambia números de referencia,
+   nunca reconstruye los campos de entrada (evita perder el
+   cursor o el orden de los dígitos mientras se escribe).
+   ============================================================ */
+function actualizarPanelesEnVivo(){
+  const e = APP.equipo;
+  const inPrecio = document.getElementById('dPrecio');
+  const inMarketing = document.getElementById('dMarketing');
+  if(inPrecio){
+    const precioAct = parseFloat(inPrecio.value) || 0;
+    const pan = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, APP.decisionActual.comprarWTP);
+    const posMarcador = clamp(((precioAct - pan.piso) / Math.max(1, pan.techo - pan.piso)) * 100, 0, 100);
+    const elMercado = document.getElementById('refValorMercado');
+    const elPiso = document.getElementById('refValorPiso');
+    const elTecho = document.getElementById('refValorTecho');
+    const elMarcador = document.getElementById('refMarcador');
+    if(elMercado) elMercado.textContent = money2(pan.ref);
+    if(elPiso) elPiso.textContent = money2(pan.piso);
+    if(elTecho) elTecho.textContent = money2(pan.techo);
+    if(elMarcador) elMarcador.style.left = posMarcador+'%';
+
+    // Aviso de punto de equilibrio, sin tocar el campo de precio
+    const ronda = APP.config ? APP.config.rondaActual : 1;
+    const cajaAlerta = document.getElementById('cajaAlertaEquilibrio');
+    if(cajaAlerta){
+      let html = '';
+      if(activo('equilibrio',ronda) && e.precioAnterior && precioAct && precioAct !== e.precioAnterior){
+        const p = PARAMS.perfiles[e.perfil];
+        const tol = puntoEquilibrio(e.precioAnterior, precioAct, p.iocPorPasajero);
+        if(tol !== null){
+          const sube = precioAct > e.precioAnterior;
+          html = `<div class="alerta-equilibrio">
+            ${sube ? 'Subes' : 'Bajas'} el precio de ${money2(e.precioAnterior)} a ${money2(precioAct)}.
+            ${sube
+              ? `Conviene si tus ventas caen menos de <b>${Math.abs(tol)}%</b>.`
+              : `Necesitas que tus ventas suban más de <b>${Math.abs(tol)}%</b> para compensar.`}
+          </div>`;
+        }
+      }
+      cajaAlerta.innerHTML = html;
+    }
+  }
+  if(inMarketing){
+    const panelMkt = document.getElementById('panelReferenciaMarketing');
+    if(panelMkt) panelMkt.innerHTML = contenidoPanelMarketing(parseFloat(inMarketing.value)||0);
+  }
 }
 
 /* ============================================================
@@ -933,9 +983,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     render();
     if(!APP.intervalo) APP.intervalo = setInterval(async ()=>{
       if(APP.vista==='decision') recolectar();
+      const rondaAntes = APP.config ? APP.config.rondaActual : null;
       await sincronizar();
       if(APP.vista==='tablero') await cargarTablero();
-      render();
+      const rondaCambio = APP.config && APP.config.rondaActual !== rondaAntes;
+      // Mientras se está decidiendo, solo se reconstruye la pantalla si la ronda
+      // cambió de verdad (el docente la cerró) — así nunca se interrumpe mientras
+      // el equipo está escribiendo, y los campos nunca se resetean sin motivo.
+      if(APP.vista !== 'decision' || rondaCambio || APP.enviada){
+        render();
+      }
     }, 12000);
   });
 
@@ -965,17 +1022,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   });
 
-  /* Al escribir en el precio o el marketing, las referencias se actualizan solas */
+  /* Al escribir en el precio o el marketing, las referencias se actualizan solas,
+     sin reconstruir los campos de entrada (así el cursor nunca salta). */
   document.getElementById('contenido').addEventListener('input', e=>{
     if(['dPrecio','dMarketing'].includes(e.target.id)){
-      recolectar();
-      const ronda = APP.config ? APP.config.rondaActual : 1;
-      if(APP.vista==='decision'){
-        const foco = e.target.id, pos = e.target.selectionStart;
-        render();
-        const nuevo = document.getElementById(foco);
-        if(nuevo){ nuevo.focus(); try{ nuevo.setSelectionRange(pos,pos); }catch(_){} }
-      }
+      actualizarPanelesEnVivo();
     }
   });
 });
