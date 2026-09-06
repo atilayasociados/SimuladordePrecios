@@ -278,6 +278,19 @@ const PRECIOS_BOT = {
   internacional:{ 'LATAM':234.00, 'BoA':217.50 }
 };
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s){
+  let h = 0;
+  for(let i=0;i<s.length;i++) h = Math.imul(31,h)+s.charCodeAt(i) | 0;
+  return h >>> 0;
+}
 const red=(v,d=2)=>{const f=Math.pow(10,d);return Math.round(v*f)/f;};
 const money=n=>'$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:0});
 const money2=n=>'$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -426,13 +439,22 @@ function precioReferenciaMercado(perfilKey, historial){
   const vals = Object.values(bots);
   return red(vals.reduce((a,b)=>a+b,0)/vals.length);
 }
-function panelPrecio(perfilKey, puntajeValor, historial, tieneWTP){
+function panelPrecio(perfilKey, puntajeValor, historial, tieneWTP, semilla){
   const p = PARAMS.perfiles[perfilKey];
   const ref = precioReferenciaMercado(perfilKey, historial);
   const dif = (puntajeValor - PARAMS.benchmarkValor) * PARAMS.factorValorPct * ref;
-  const techo = red(ref + dif);
+  const techoReal = red(ref + dif);
   const piso = red(p.docPorRonda / p.capacidad + p.iocPorPasajero);
-  return { piso, techo, ref: red(ref), dif: red(dif), preciso: !!tieneWTP };
+  if (tieneWTP) {
+    return { piso, techo: techoReal, ref: red(ref), dif: red(dif), preciso: true };
+  }
+  // Sin investigación de mercado: el techo mostrado trae un margen de error real
+  // (±12%), estable para este equipo y esta ronda — no cambia cada vez que se
+  // vuelve a dibujar la pantalla, pero tampoco es el número verdadero.
+  const rng = mulberry32(hashStr((semilla || 'x') + '::techo'));
+  const ruido = (rng() * 2 - 1) * 0.12;
+  const techoEstimado = red(techoReal * (1 + ruido));
+  return { piso, techo: techoEstimado, ref: red(ref), dif: red(dif), preciso: false };
 }
 function puntoEquilibrio(precioAnterior, precioNuevo, costoVariable){
   const margen = precioNuevo - costoVariable;
@@ -529,7 +551,7 @@ function vistaDecision(){
       <div class="enviado">Decisión registrada. Vuelve a esta pantalla cuando se abra la siguiente ronda.</div>`;
   }
 
-  const pan = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, d.comprarWTP);
+  const pan = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, d.comprarWTP, e.nombre+'::'+ronda);
   const precioAct = parseFloat(d.precio) || pan.ref;
   const posMarcador = clamp(((precioAct - pan.piso) / Math.max(1, pan.techo - pan.piso)) * 100, 0, 100);
 
@@ -574,7 +596,7 @@ function vistaDecision(){
         </div>
         <div class="ref-nota">${pan.preciso
           ? 'Cifras calculadas con los datos de mercado que compraste esta ronda.'
-          : 'Estimación sin investigación de mercado. Compra el estudio para afinar estas cifras.'}</div>
+          : 'El techo mostrado puede estar hasta 12% desviado del real, para arriba o para abajo — no tienes cómo saber en qué dirección. Compra el estudio de mercado para ver el número exacto.'}</div>
       </div>
       ${activo('valla',ronda) ? `
       <div class="referencia" style="margin-top:10px;">
@@ -686,7 +708,8 @@ function actualizarPanelesEnVivo(){
   const inMarketing = document.getElementById('dMarketing');
   if(inPrecio){
     const precioAct = parseFloat(inPrecio.value) || 0;
-    const pan = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, APP.decisionActual.comprarWTP);
+    const ronda = APP.config ? APP.config.rondaActual : 1;
+    const pan = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, APP.decisionActual.comprarWTP, e.nombre+'::'+ronda);
     const posMarcador = clamp(((precioAct - pan.piso) / Math.max(1, pan.techo - pan.piso)) * 100, 0, 100);
     const elMercado = document.getElementById('refValorMercado');
     const elPiso = document.getElementById('refValorPiso');
@@ -698,7 +721,6 @@ function actualizarPanelesEnVivo(){
     if(elMarcador) elMarcador.style.left = posMarcador+'%';
 
     // Aviso de punto de equilibrio, sin tocar el campo de precio
-    const ronda = APP.config ? APP.config.rondaActual : 1;
     const cajaAlerta = document.getElementById('cajaAlertaEquilibrio');
     if(cajaAlerta){
       let html = '';
