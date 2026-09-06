@@ -462,10 +462,16 @@ function panelPrecio(perfilKey, puntajeValor, historial, tieneWTP, semilla){
   const techoEstimado = red(techoReal * (1 + ruido));
   return { piso, techo: techoEstimado, ref: red(ref), dif: red(dif), preciso: false };
 }
-function puntoEquilibrio(precioAnterior, precioNuevo, costoVariable){
+function puntoEquilibrio(precioAnterior, precioNuevo, costoVariable, tieneElasticidad, semilla){
   const margen = precioNuevo - costoVariable;
   if(margen <= 0) return null;
-  return red(((precioNuevo - precioAnterior)/margen)*100, 1);
+  const tolReal = ((precioNuevo - precioAnterior)/margen)*100;
+  if(tieneElasticidad) return red(tolReal, 1);
+  // Sin el estudio de elasticidad: el aviso trae un margen de error real (±20%
+  // relativo al propio número), estable para este equipo y esta ronda.
+  const rng = mulberry32(hashStr((semilla||'x')+'::equilibrio'));
+  const ruido = (rng()*2-1)*0.20;
+  return red(tolReal*(1+ruido), 1);
 }
 
 /* ============================================================
@@ -567,7 +573,7 @@ function vistaDecision(){
   let alertaEq = '';
   if(activo('equilibrio', ronda) && e.precioAnterior && d.precio && parseFloat(d.precio) !== e.precioAnterior){
     const cv = p.iocPorPasajero;
-    const tol = puntoEquilibrio(e.precioAnterior, parseFloat(d.precio), cv);
+    const tol = puntoEquilibrio(e.precioAnterior, parseFloat(d.precio), cv, d.comprarElasticidad, e.nombre+'::'+ronda);
     if(tol !== null){
       const sube = parseFloat(d.precio) > e.precioAnterior;
       alertaEq = `<div class="alerta-equilibrio">
@@ -575,6 +581,7 @@ function vistaDecision(){
         ${sube
           ? `Conviene si tus ventas caen menos de <b>${Math.abs(tol)}%</b>.`
           : `Necesitas que tus ventas suban más de <b>${Math.abs(tol)}%</b> para compensar.`}
+        ${!d.comprarElasticidad ? '<div style="margin-top:6px;font-size:12px;opacity:0.8;">Este número puede estar hasta 20% desviado — no compraste el estudio de elasticidad.</div>' : ''}
       </div>`;
     }
   }
@@ -623,9 +630,10 @@ function vistaDecision(){
 
     ${grupo('Investigación de mercado', 'Disposición a pagar (WTP)', `
       <div class="interruptor">
-        <input type="checkbox" id="dWTP" ${d.comprarWTP?'checked':''}>
+        <input type="checkbox" id="dWTP" ${d.comprarWTP?'checked':''} ${d.comprarWTP?'disabled':''}>
         <label for="dWTP">Comprar estudio de mercado — ${money(costoWtpActual)}</label>
       </div>
+      <div class="ref-nota" style="margin:6px 0 0;">Una vez que la marques y veas el dato exacto, no podrás desmarcarla — se cobra igual, aunque cambies de opinión después.</div>
       <div class="referencia">
         <div class="ref-nota"><b>El precio de referencia y tu piso ya los ves gratis, sin comprar nada</b> — son datos que ya existen: lo que cobra la competencia (un hecho público) y tu propio costo (algo que tú ya conoces).</div>
         <div class="ref-nota" style="margin-top:8px;">Lo único que no puedes saber gratis es tu <b>techo</b>: cuánto más que el promedio del mercado tus propios pasajeros están dispuestos a pagar por volar contigo, específicamente. Ese número no vive en lo que cobra BoA o LATAM — vive en la cabeza de tus clientes. Nadie te lo puede decir sin preguntarles, y eso es justo lo que hace este estudio.</div>
@@ -678,9 +686,10 @@ function vistaDecision(){
 
     ${grupo('Estudio de elasticidad', 'Elasticidad controlada', `
       <div class="interruptor">
-        <input type="checkbox" id="dElast" ${d.comprarElasticidad?'checked':''}>
+        <input type="checkbox" id="dElast" ${d.comprarElasticidad?'checked':''} ${d.comprarElasticidad?'disabled':''}>
         <label for="dElast">Comprar estudio de elasticidad — ${money(costoElasticidadActual)}</label>
       </div>
+      <div class="ref-nota" style="margin:6px 0 0;">Una vez que la marques y veas el aviso preciso, no podrás desmarcarla — se cobra igual.</div>
       <div class="referencia">
         <div class="ref-fila"><span>Qué mide</span><b>Qué tanto cae tu venta si subes el precio</b></div>
         <div class="ref-nota">Algunos productos casi no pierden clientes cuando suben de precio (poco elásticos); otros pierden muchos (muy elásticos). Este estudio te dice en cuál de los dos casos estás, con un número real en vez de adivinar.</div>
@@ -750,7 +759,7 @@ function actualizarPanelesEnVivo(){
       let html = '';
       if(activo('equilibrio',ronda) && e.precioAnterior && precioAct && precioAct !== e.precioAnterior){
         const p = PARAMS.perfiles[e.perfil];
-        const tol = puntoEquilibrio(e.precioAnterior, precioAct, p.iocPorPasajero);
+        const tol = puntoEquilibrio(e.precioAnterior, precioAct, p.iocPorPasajero, APP.decisionActual.comprarElasticidad, e.nombre+'::'+ronda);
         if(tol !== null){
           const sube = precioAct > e.precioAnterior;
           html = `<div class="alerta-equilibrio">
@@ -758,6 +767,7 @@ function actualizarPanelesEnVivo(){
             ${sube
               ? `Conviene si tus ventas caen menos de <b>${Math.abs(tol)}%</b>.`
               : `Necesitas que tus ventas suban más de <b>${Math.abs(tol)}%</b> para compensar.`}
+            ${!APP.decisionActual.comprarElasticidad ? '<div style="margin-top:6px;font-size:12px;opacity:0.8;">Este número puede estar hasta 20% desviado — no compraste el estudio de elasticidad.</div>' : ''}
           </div>`;
         }
       }
@@ -1072,6 +1082,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
      sin reconstruir los campos de entrada (así el cursor nunca salta). */
   document.getElementById('contenido').addEventListener('input', e=>{
     if(['dPrecio','dMarketing'].includes(e.target.id)){
+      actualizarPanelesEnVivo();
+    }
+    if(e.target.id === 'dWTP'){
+      if(e.target.checked){
+        APP.decisionActual.comprarWTP = true;
+      } else if(APP.decisionActual.comprarWTP){
+        // Ya viste el dato exacto esta ronda: no se puede "devolver" la compra.
+        e.target.checked = true;
+        alert('Ya viste los datos precisos de esta investigación en esta ronda — no puedes deshacer la compra. Si de verdad no quieres pagarla, recarga la página antes de enviar (perderás el resto de lo que llevas escrito).');
+        return;
+      }
+      actualizarPanelesEnVivo();
+    }
+    if(e.target.id === 'dElast'){
+      if(e.target.checked){
+        APP.decisionActual.comprarElasticidad = true;
+      } else if(APP.decisionActual.comprarElasticidad){
+        e.target.checked = true;
+        alert('Ya viste el aviso preciso de elasticidad en esta ronda — no puedes deshacer la compra. Si de verdad no quieres pagarla, recarga la página antes de enviar (perderás el resto de lo que llevas escrito).');
+        return;
+      }
       actualizarPanelesEnVivo();
     }
   });
