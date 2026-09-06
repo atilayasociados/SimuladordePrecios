@@ -262,10 +262,12 @@ const PARAMS = {
   perfiles: {
     domestica: { nombre:'Doméstica', rutas:['SCZ-LPB','SCZ-CBB'], capacidad:70,
       iocPorPasajero:10, docPorRonda:801.84, precioBase:33.00, noShowPct:0.06,
-      costoWTP:800, costoElasticidad:1000, bots:['BoA'], segmentos:{negocio:0.40, placer:0.60} },
+      costoWTP:800, costoElasticidad:1000, bots:['BoA'], segmentos:{negocio:0.40, placer:0.60},
+      refEquipaje:10, refSeguro:4, refPaseFrecuente:8 },
     internacional: { nombre:'Internacional', rutas:['SCZ-LIM','SCZ-EZE'], capacidad:140,
       iocPorPasajero:22, docPorRonda:16401.89, precioBase:225.75, noShowPct:0.03,
-      costoWTP:1600, costoElasticidad:2000, bots:['LATAM','BoA'], segmentos:{negocio:0.45, placer:0.55} }
+      costoWTP:1600, costoElasticidad:2000, bots:['LATAM','BoA'], segmentos:{negocio:0.45, placer:0.55},
+      refEquipaje:50, refSeguro:15, refPaseFrecuente:20 }
   },
   proporcionAdmin:0.601, proporcionComercial:0.399,
   topeBoost:0.45, marketing:{factor:0.08, divisor:400, tope:0.30},
@@ -621,6 +623,13 @@ function vistaDecision(){
         <div class="ref-nota">Te entrega los precios reales de la competencia y una encuesta de intención de compra, para calcular tu techo con precisión en vez de estimarlo.</div>
         <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como una señal fuerte, no como una certeza.</div>
       </div>
+      ${d.comprarWTP ? `
+      <div class="referencia" style="margin-top:10px;">
+        <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
+        <div class="ref-fila"><span>Seguro de viaje — referencia de mercado (estimado)</span><b>${money2(p.refSeguro)}</b></div>
+        <div class="ref-fila"><span>Suscripción tipo Pase Frecuente — referencia de mercado (estimado)</span><b>${money2(p.refPaseFrecuente)}/mes</b></div>
+        <div class="ref-nota">El dato de equipaje es real y verificado. Ninguna aerolínea boliviana ofrece hoy un Pase Frecuente ni un seguro de viaje exactamente así — las otras dos cifras son una referencia razonada, no un precio publicado.</div>
+      </div>` : ''}
     `, activo('wtp',ronda), 2)}
 
     ${grupo('Ingresos complementarios', 'Producto ancla y complementario', `
