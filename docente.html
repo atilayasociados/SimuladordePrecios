@@ -1092,8 +1092,14 @@ function ejecutarRonda(config) {
 
     const nuevoPuntajeValor = c.esBot ? c.puntajeValor :
       actualizarPuntajeValor(c.puntajeValor, c.precioFinal, panel.techo, params);
+    // El 3C usa el piso y el techo que el equipo VIO al decidir, y el precio que decidió,
+    // para que el estudiante pueda reproducir su cálculo (igual que la calificación del rango).
+    // Rondas anteriores a este cambio, o decisiones neutras, usan los valores del motor.
+    const vistos = c.decision && c.decision.pisoVisto != null && c.decision.techoVisto != null;
     const tresCNuevo = c.esBot ? null : actualizar3C(c.tresC, {
-      precio: c.precioFinal, piso: panel.piso, techo: panel.techo,
+      precio: vistos ? c.decision.precio : c.precioFinal,
+      piso: vistos ? c.decision.pisoVisto : panel.piso,
+      techo: vistos ? c.decision.techoVisto : panel.techo,
       precioMercado, decision: c.decision
     }, params);
 
@@ -1895,6 +1901,7 @@ async function cerrarRonda(){
         const eq = D.equipos.find(x=>x.nombre===res.nombre);
         if(eq){
           eq.caja = res.cajaNueva;
+          const tresCAnterior = eq.tresC || {costo:PARAMS_DEFECTO.benchmarkValor, competencia:PARAMS_DEFECTO.benchmarkValor, valor:PARAMS_DEFECTO.benchmarkValor};
           eq.tresC = res.tresCNuevo || eq.tresC || {costo:PARAMS_DEFECTO.benchmarkValor, competencia:PARAMS_DEFECTO.benchmarkValor, valor:PARAMS_DEFECTO.benchmarkValor};
           eq.precioAnterior = res.precioFinal;
           eq.rondasJugadas = ronda;
@@ -1906,7 +1913,7 @@ async function cerrarRonda(){
             neutra: !!esNeutra, preciosCompetidores, choque: D.choque,
             informe: (equiposMotor.find(x=>x.nombre===res.nombre)?.decision?.informe) || '',
             decision: equiposMotor.find(x=>x.nombre===res.nombre)?.decision || {},
-            piso: res.piso, techo: res.techo,
+            piso: res.piso, techo: res.techo, tresCAnterior,
             precioDecidido: res.precioDecidido, precioFinal: res.precioFinal, participacion: res.participacion,
             pasajerosGanados: res.pasajerosGanados, capacidad: res.capacidad,
             metricas: res.metricas, estadoResultados: res.estadoResultados,

@@ -868,29 +868,162 @@ function renderTabs(){
    VISTA — Diagnóstico 3C (briefing)
    ============================================================ */
 function vistaBriefing(){
-  const e = APP.equipo;
-  const c = e.tresC || {costo:PARAMS.benchmarkValor, competencia:PARAMS.benchmarkValor, valor:PARAMS.benchmarkValor};
-  const items = [
-    {n:'Costo', v:c.costo, d:'Qué tanto fijas precios mirando tus costos'},
-    {n:'Competencia', v:c.competencia, d:'Qué tanto reaccionas a lo que cobran los demás'},
-    {n:'Valor', v:c.valor, d:'Qué tanto cobras por el valor que entregas'}
-  ];
-  const maxV = Math.max(...items.map(i=>i.v));
+  const e = APP.equipo, c = e.tresC || {costo:PARAMS.benchmarkValor, competencia:PARAMS.benchmarkValor, valor:PARAMS.benchmarkValor};
+  const f2 = v => v.toFixed(2).replace('.',',');
+  const BENCH = {costo:6.24, competencia:5.14, valor:5.76};
+  const hist = e.historial || [], h = hist[hist.length-1], primera = !h;
+  const p = PARAMS.perfiles[e.perfil];
+  const pan = panelPrecio(e.perfil, c.valor, hist, false, e.nombre);
+  const lectura = (k) => { const b = c[k]-BENCH[k];
+    if(Math.abs(b) < 0.15) return 'Igual que el promedio de las empresas del estudio.';
+    return (b>0 ? 'Te fijas en esto <b>más</b>' : 'Te fijas en esto <b>menos</b>') + ' que el promedio de las empresas del estudio.'; };
+  const barra = (k) => { const x = v => ((v-1)/6*100).toFixed(1);
+    return `<div class="esc"><div class="esc-pista"></div>
+      <div class="esc-bench" style="left:${x(BENCH[k])}%;" title="Promedio del estudio"></div>
+      <div class="esc-tu" style="left:${x(c[k])}%;"></div></div>
+      <div class="esc-et"><span>1 · nada</span><span>7 · muchísimo</span></div>`; };
+  const tarjetas = [
+    {k:'costo', n:'Costo', q:'¿Cuánto me cuesta?', ej:'Doña Rosa suma harina, carne y gas, y le agrega su ganancia.'},
+    {k:'competencia', n:'Competencia', q:'¿Cuánto cobran los demás?', ej:'Mira cuánto cobra el puesto de al lado y se ubica cerca.'},
+    {k:'valor', n:'Valor', q:'¿Cuánto vale para mi cliente?', ej:'Sus salteñas son las más jugosas del barrio, y sus clientes pagan un poco más por eso.'}];
+  let calculo = '';
+  if(h){
+    const prev = h.tresCAnterior || {costo:5.76, competencia:5.76, valor:5.76};
+    const L = limitesDeRonda(h);   // piso, techo y precio con que el motor calculó el 3C
+    const pos = Math.max(0,Math.min(1,(L.precio-L.piso)/(L.techo-L.piso)));
+    const dist = Math.abs(L.precio-h.precioMercado)/h.precioMercado;
+    const dec = h.decision||{};
+    const inv = (dec.marketing>0?1:0)+((dec.precioEquipaje>0||dec.precioSeguro>0)?1:0)+(dec.cuotaPaseFrecuente>0?1:0)+(dec.gastoMadurez>0?1:0);
+    const prox = L.precio/L.techo;
+    calculo = `<details class="mas"><summary>Ver cómo se calcularon tus puntajes en la Ronda ${h.ronda}</summary>
+      <p style="margin:0 0 6px;font-size:12.5px;color:var(--texto-tenue);">${L.vistos ? 'Se usan tu precio decidido y el piso y el techo que viste en tu hoja de decisión.' : 'Esta ronda es anterior al registro de tus límites: se usan los valores calculados por el motor.'}</p>
+      <table class="tbl3c">
+        <tr><th>C</th><th>Cálculo con tus números</th><th>Puntaje</th></tr>
+        <tr><td><b>Costo</b></td><td class="calc">Dónde quedó tu precio en tu rango (0 = en el piso, 1 = en el techo): (${f2(L.precio)} − ${f2(L.piso)}) ÷ (${f2(L.techo)} − ${f2(L.piso)}) = ${f2(pos)}<br>Ajuste: (0,50 − ${f2(pos)}) × 0,8 = ${f2((0.5-pos)*0.8)}</td><td class="cifra">${f2(prev.costo)} → <b>${f2(c.costo)}</b></td></tr>
+        <tr><td><b>Competencia</b></td><td class="calc">Distancia al promedio del mercado: |${f2(L.precio)} − ${f2(h.precioMercado)}| ÷ ${f2(h.precioMercado)} = ${(dist*100).toFixed(1).replace('.',',')}%<br>Ajuste: (5% − ${(dist*100).toFixed(1).replace('.',',')}%) × 1,6 = ${f2((0.05-dist)*1.6)}</td><td class="cifra">${f2(prev.competencia)} → <b>${f2(c.competencia)}</b></td></tr>
+        <tr><td><b>Valor</b></td><td class="calc">Inversiones en valor: ${inv} × 0,04 = ${f2(inv*0.04)}<br>Cercanía a tu techo: (${f2(prox)} − 0,75) × 0,4 = ${f2((prox-0.75)*0.4)}</td><td class="cifra">${f2(prev.valor)} → <b>${f2(c.valor)}</b></td></tr>
+      </table></details>`;
+  }
+  const pctEn = v => Math.max(0,Math.min(100,(v - pan.piso*0.8)/(pan.techo*1.12 - pan.piso*0.8)*100));
+  const flexUlt = h ? h.precioFinal : null;
   return `
-    <h2 class="titulo">Cómo fija precios tu aerolínea</h2>
-    <p class="sub">Todas las aerolíneas arrancan igual. A partir de la Ronda 1, cada precio que fijes mueve estos tres puntajes: acercarte a tu techo te vuelve más orientado al valor; quedarte pegado a tu costo, más orientado al costo.</p>
-    <div class="tres-c">
-      ${items.map(i=>`
-        <div class="c-item ${i.v===maxV && maxV>PARAMS.benchmarkValor ? 'destacado':''}">
-          <div class="c-nombre">${i.n}</div>
-          <div class="c-valor cifra">${i.v.toFixed(2)}</div>
-          <div class="c-bench">Referencia de industria: ${PARAMS.benchmarkValor.toFixed(2)}</div>
-        </div>`).join('')}
+  <style>
+    .paso{display:flex;align-items:center;gap:10px;margin:30px 0 4px;}
+    .paso .num{width:28px;height:28px;border-radius:50%;background:var(--marca);color:#0B1A0E;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;}
+    .paso h2{margin:0;font-size:19px;}
+    .guia{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px;}
+    .guia span{background:var(--panel);border:1px solid var(--borde);border-radius:20px;padding:6px 12px;font-size:13px;}
+    .c3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;} @media (max-width:760px){.c3{grid-template-columns:1fr;}}
+    .c3 .t{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:16px;}
+    .c3 .q{font-size:16px;font-weight:600;margin:2px 0 8px;} .c3 .n{font-size:12px;color:var(--marca);letter-spacing:.04em;text-transform:uppercase;}
+    .c3 .ej{font-size:12.5px;color:var(--texto-tenue);font-style:italic;margin-bottom:12px;line-height:1.45;}
+    .c3 .v{font-size:28px;font-weight:700;} .c3 .l{font-size:13px;margin-top:6px;line-height:1.45;}
+    .esc{position:relative;height:18px;margin-top:10px;} .esc-pista{position:absolute;top:7px;left:0;right:0;height:4px;border-radius:2px;background:var(--panel-alto);}
+    .esc-bench{position:absolute;top:1px;width:2px;height:16px;background:var(--texto-tenue);}
+    .esc-tu{position:absolute;top:3px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--marca);}
+    .esc-et{display:flex;justify-content:space-between;font-size:11px;color:var(--texto-tenue);}
+    .leyenda{font-size:12px;color:var(--texto-tenue);margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;}
+    .clave{background:var(--marca-tenue);border:1px solid var(--marca);border-radius:12px;padding:14px 16px;margin-top:14px;font-size:14px;line-height:1.55;}
+    details.mas{background:var(--panel);border:1px solid var(--borde);border-radius:10px;padding:10px 14px;margin-top:10px;}
+    details.mas summary{cursor:pointer;font-size:13.5px;color:var(--marca);font-weight:500;}
+    details.mas[open] summary{margin-bottom:8px;}
+    .tbl3c{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0;}
+    .tbl3c th{text-align:left;color:var(--texto-tenue);font-weight:500;font-size:12px;padding:7px 9px;border-bottom:1px solid var(--borde);}
+    .tbl3c td{padding:8px 9px;border-bottom:1px solid var(--borde);vertical-align:top;line-height:1.5;}
+    .tbl3c td.calc{font-size:12.5px;color:var(--texto-tenue);}
+    .lim-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;} @media (max-width:760px){.lim-grid{grid-template-columns:1fr;}}
+    .lim{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:16px;}
+    .lim .n{font-size:12px;color:var(--marca);letter-spacing:.04em;text-transform:uppercase;} .lim .big{font-size:26px;font-weight:700;margin:2px 0 6px;}
+    .lim p{margin:0 0 8px;font-size:13.5px;line-height:1.5;} .lim .f{font-size:12px;color:var(--texto-tenue);}
+    .barra-rango{position:relative;height:50px;margin:16px 4px 4px;}
+    .barra-rango .pista{position:absolute;top:18px;left:0;right:0;height:8px;border-radius:4px;background:var(--panel-alto);}
+    .barra-rango .zona{position:absolute;top:18px;height:8px;border-radius:4px;background:var(--marca);opacity:.55;}
+    .barra-rango .marca{position:absolute;top:8px;width:2px;height:28px;background:var(--texto);}
+    .barra-rango .et{position:absolute;top:38px;transform:translateX(-50%);font-size:11.5px;color:var(--texto-tenue);white-space:nowrap;}
+    .gl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 20px;font-size:13px;line-height:1.5;} @media (max-width:760px){.gl{grid-template-columns:1fr;}}
+  </style>
+
+  <h2 class="titulo">${primera ? 'Antes de fijar tu primer precio' : 'Cómo estás fijando tus precios'}</h2>
+  <p class="sub" style="margin-bottom:4px;">Esta pestaña responde tres preguntas. Léela antes de tu primera decisión y vuelve a ella después de cada ronda.</p>
+  <div class="guia"><span>① ¿En qué te fijas al poner un precio?</span><span>② ¿Con quién te comparas?</span><span>③ ¿Entre qué valores conviene tu Tarifa Flex?</span></div>
+
+  <div class="paso"><div class="num">1</div><h2>¿En qué te fijas al poner un precio?</h2></div>
+  <p class="sub">Piensa en doña Rosa, que vende salteñas. Para decidir su precio puede mirar tres cosas: lo que le cuesta hacerlas, lo que cobran los demás, o lo que sus clientes valoran. Casi todos los negocios miran las tres; la diferencia está en <b>cuál pesa más</b>. A eso se le llama el <b>Diagnóstico 3C</b>: Costo, Competencia y Valor.</p>
+  <div class="c3">
+    ${tarjetas.map(t=>`<div class="t">
+      <div class="n">${t.n}</div><div class="q">${t.q}</div><div class="ej">${t.ej}</div>
+      <div class="v cifra">${f2(c[t.k])} <span style="font-size:13px;font-weight:400;color:var(--texto-tenue);">de 7</span></div>
+      ${barra(t.k)}
+      <div class="l">${lectura(t.k)} <span style="color:var(--texto-tenue);">(promedio: ${f2(BENCH[t.k])})</span></div>
+    </div>`).join('')}
+  </div>
+  <div class="leyenda"><span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--marca);margin-right:6px;"></span>Tu aerolínea</span><span><span style="display:inline-block;width:2px;height:12px;background:var(--texto-tenue);margin-right:6px;vertical-align:middle;"></span>Promedio de las empresas del estudio</span></div>
+  ${primera ? `<p style="font-size:12.5px;line-height:1.5;color:var(--texto-tenue);margin-top:10px;">Hoy todos los equipos arrancan en 5,76 en las tres C: es el mismo punto de partida para todos. Desde que cierre la Ronda 1, cada precio que fijes moverá estos puntajes.</p>` : ''}
+  <div class="clave"><b>Ningún puntaje es bueno o malo por sí solo</b>: describen tu estilo. Pero hay un dato clave: en el estudio de referencia, las empresas que más se fijaban en el <b>Valor</b> fueron las que tenían mejores márgenes de ganancia. Por eso, en el simulador, tu puntaje de Valor hace más atractiva a tu aerolínea y te permite cobrar más.</div>
+
+  <div class="paso"><div class="num">2</div><h2>¿Con quién te comparas?</h2></div>
+  <p class="sub">Para saber si te fijas "mucho" o "poco" en algo, necesitas un punto de comparación. En gestión se le llama <b>benchmark</b>. El nuestro viene de un estudio real: De Toni y sus colegas (2017) preguntaron a los gerentes de 150 empresas industriales de Brasil qué tanto consideraban cada aspecto al fijar precios, del 1 (nada) al 7 (muchísimo). Los promedios fueron: <b>Costo 6,24</b>, <b>Competencia 5,14</b> y <b>Valor 5,76</b>.</p>
+  <details class="mas"><summary>Ver las 12 preguntas del estudio</summary>
+    <table class="tbl3c">
+      <tr><th>C</th><th>Qué tanto considera la empresa…</th><th>Promedio</th></tr>
+      <tr><td><b>Costo</b></td><td>El costo total del producto · Los costos variables · El % de ganancia que agrega al precio</td><td class="cifra">6,24</td></tr>
+      <tr><td><b>Competencia</b></td><td>El precio de la competencia · Cuánta competencia hay · La estrategia de precios de la competencia · Cómo reaccionaría la competencia a sus precios · Las ventajas de los competidores</td><td class="cifra">5,14</td></tr>
+      <tr><td><b>Valor</b></td><td>Las ventajas que el producto da al cliente · El equilibrio entre esas ventajas y el precio · Las ventajas frente a la competencia · El valor que percibe el cliente (lo que recibe vs. lo que paga)</td><td class="cifra">5,76</td></tr>
+    </table>
+    <p style="font-size:12.5px;line-height:1.5;color:var(--texto-tenue);margin:6px 0 0;">Las preguntas originales están en inglés; esta es una traducción adaptada.</p>
+  </details>
+  <details class="mas"><summary>¿Y en el simulador, quién responde estas preguntas?</summary>
+    <p style="margin:0 0 8px;font-size:13.5px;line-height:1.55;">Nadie: el simulador observa lo que decides y lo traduce a las mismas tres C al cerrar cada ronda.</p>
+    <table class="tbl3c">
+      <tr><th>C</th><th>Qué observa el simulador</th></tr>
+      <tr><td><b>Costo</b></td><td>Si cobras cerca de tu piso (lo mínimo). Mientras más pegado al piso, más "orientado al costo".</td></tr>
+      <tr><td><b>Competencia</b></td><td>Si cobras cerca del promedio del mercado (a menos de 5% de diferencia).</td></tr>
+      <tr><td><b>Valor</b></td><td>Si inviertes en darle algo más al cliente (marketing, extras, Pase Frecuente, organización) y cobras cerca de tu techo. Cobrar caro sin dar nada a cambio lo baja.</td></tr>
+    </table>
+  </details>
+  ${calculo}
+  <details class="mas"><summary>Datos técnicos del estudio (para profundizar)</summary>
+    <p style="margin:0 0 6px;font-size:13px;line-height:1.55;">Muestra: 150 empresas de la Serra Gaúcha (Rio Grande do Sul, Brasil): 54,9% metalmecánicas, 23,5% automotrices y 21,6% electrónicas. Encuesta de junio a agosto de 2014 a quienes fijan los precios. Desviación estándar: Costo 0,75 · Competencia 1,13 · Valor 0,96. Confiabilidad (α de Cronbach): Costo 0,59 · Competencia 0,83 · Valor 0,85. Solo el enfoque de Valor se asoció de forma significativa con el margen neto (r = 0,48); Costo (0,12) y Competencia (0,08), no.</p>
+    <p style="margin:0 0 6px;font-size:13px;line-height:1.55;"><b>Cuidado al comparar:</b> son empresas industriales, no aerolíneas. El benchmark es una referencia, no una meta para tu sector.</p>
+    <p style="font-size:12.5px;line-height:1.5;color:var(--texto-tenue);margin:0;">De Toni, D., Milan, G. S., Saciloto, E. B., y Larentis, F. (2017). Pricing strategies and levels and their impact on corporate profitability. <i>Revista de Administração, 52</i>(2), 120–133.</p>
+  </details>
+
+  <div class="paso"><div class="num">3</div><h2>¿Entre qué valores conviene tu Tarifa Flex?</h2></div>
+  <p class="sub">Tu decisión principal de cada ronda es la <b>Tarifa Flex</b>: el pasaje normal, sin letra chica, que el pasajero puede cambiar o devolver. La prefiere sobre todo quien viaja por trabajo. Para elegirla, mira dos límites:</p>
+  <div class="barra-rango">
+    <div class="pista"></div>
+    <div class="zona" style="left:${pctEn(pan.piso)}%;width:${pctEn(pan.techo)-pctEn(pan.piso)}%;"></div>
+    <div class="marca" style="left:${pctEn(pan.piso)}%;"></div><div class="et" style="left:${pctEn(pan.piso)}%;">Piso ${money2(pan.piso)}</div>
+    ${flexUlt!=null ? `<div class="marca" style="left:${pctEn(flexUlt)}%;background:#E8A23C;"></div>`:''}
+    <div class="marca" style="left:${pctEn(pan.techo)}%;"></div><div class="et" style="left:${pctEn(pan.techo)}%;">Techo ${money2(pan.techo)}</div>
+  </div>
+  <p style="font-size:12.5px;line-height:1.5;color:var(--texto-tenue);margin:6px 0 0;">La franja verde es tu zona razonable de precio${flexUlt!=null ? `. La línea naranja es tu Tarifa Flex anterior (${money2(flexUlt)})` : ''}.</p>
+  <div class="lim-grid">
+    <div class="lim"><div class="n">Piso · lo mínimo</div><div class="big cifra">${money2(pan.piso)}</div>
+      <p>Por debajo de este precio pierdes dinero, aunque llenes el avión: es lo que te cuesta cada asiento con el avión lleno.</p>
+      <p class="f">${money2(p.docPorRonda)} que cuesta el vuelo ÷ ${p.capacidad} asientos + ${money2(p.iocPorPasajero)} por pasajero (comida, reservas, equipaje)</p>
+      <details class="mas" style="margin-top:6px;"><summary>Nota si ya leíste la Unidad 1</summary><p style="margin:0;font-size:12.5px;">La Unidad 1 define el piso como el costo variable (${money2(p.iocPorPasajero)}). El simulador usa un piso más prudente, que también reparte el costo del vuelo entre los asientos.</p></details>
     </div>
-    <div class="explica">
-      <h4>Por qué importa el puntaje de Valor</h4>
-      <p style="margin:0;">De los tres enfoques, el único que la investigación asocia con mayor margen es el de valor. Tu puntaje de Valor alimenta directamente el atractivo de tu aerolínea frente a la competencia: mientras más alto, más margen de precio tienes sobre el mercado antes de perder pasajeros.</p>
-    </div>`;
+    <div class="lim"><div class="n">Techo · lo máximo</div><div class="big cifra">${money2(pan.techo)}</div>
+      <p>Por encima de este precio, el cliente prefiere a tu competencia. Parte del precio de referencia del mercado (${money2(pan.ref)}) y sube cuando tu puntaje de Valor supera 5,76.</p>
+      <p class="f">Referencia ${money2(pan.ref)} + lo que vale tu diferencia ${money2(pan.dif)} = ${money2(pan.techo)}</p>
+    </div>
+    <div class="lim"><div class="n">EVC · Valor Económico para el Cliente</div><div class="big cifra">${money2(pan.techo)}</div>
+      <p>Es el nombre técnico de tu techo: lo máximo que pagaría un cliente antes de irse con otra aerolínea. ${Math.abs(pan.dif) < 0.01 ? 'Hoy es igual a la referencia porque todavía no tienes nada que te diferencie.' : ''}</p>
+      <p style="margin:0;"><b>No cobres el EVC completo:</b> al cliente le daría igual elegirte o no. Lo recomendable es quedarte con una parte (entre 20% y 50%) de lo que vale tu diferencia, y dejarle el resto como razón para elegirte.</p>
+    </div>
+  </div>
+
+  <details class="mas" style="margin-top:22px;" open><summary>Palabras clave de esta pestaña</summary>
+    <div class="gl">
+      <div><b>3C:</b> Costo, Competencia y Valor, las tres cosas que puedes mirar al fijar un precio.</div>
+      <div><b>Benchmark:</b> punto de comparación; aquí, el promedio de 150 empresas.</div>
+      <div><b>Tarifa Flex:</b> tu pasaje principal, sin restricciones.</div>
+      <div><b>Piso:</b> el precio mínimo; por debajo pierdes dinero.</div>
+      <div><b>Techo:</b> el precio máximo; por encima, el cliente se va.</div>
+      <div><b>EVC:</b> lo máximo que pagaría el cliente; en el simulador, es tu techo.</div>
+    </div>
+  </details>`;
 }
 
 /* ============================================================
