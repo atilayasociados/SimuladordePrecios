@@ -906,6 +906,7 @@ function vistaBriefing(){
   }
   const pctEn = v => Math.max(0,Math.min(100,(v - pan.piso*0.8)/(pan.techo*1.12 - pan.piso*0.8)*100));
   const flexUlt = h ? h.precioFinal : null;
+  const abordadosUlt = h && h.capacidad && h.capacidad.abordados ? h.capacidad.abordados : null;
   return `
   <style>
     .paso{display:flex;align-items:center;gap:10px;margin:30px 0 4px;}
@@ -1000,17 +1001,37 @@ function vistaBriefing(){
   <p style="font-size:12.5px;line-height:1.5;color:var(--texto-tenue);margin:6px 0 0;">La franja verde es tu zona razonable de precio${flexUlt!=null ? `. La línea naranja es tu Tarifa Flex anterior (${money2(flexUlt)})` : ''}.</p>
   <div class="lim-grid">
     <div class="lim"><div class="n">Piso · lo mínimo</div><div class="big cifra">${money2(pan.piso)}</div>
-      <p>Por debajo de este precio pierdes dinero, aunque llenes el avión: es lo que te cuesta cada asiento con el avión lleno.</p>
-      <p class="f">${money2(p.docPorRonda)} que cuesta el vuelo ÷ ${p.capacidad} asientos + ${money2(p.iocPorPasajero)} por pasajero (comida, reservas, equipaje)</p>
-      <details class="mas" style="margin-top:6px;"><summary>Nota si ya leíste la Unidad 1</summary><p style="margin:0;font-size:12.5px;">La Unidad 1 define el piso como el costo variable (${money2(p.iocPorPasajero)}). El simulador usa un piso más prudente, que también reparte el costo del vuelo entre los asientos.</p></details>
+      <p>Por debajo de este precio pierdes dinero, aunque llenes el avión. Sale de sumar tus dos tipos de costo: el <b>fijo</b> y el <b>variable</b>.</p>
+      <p style="margin:0 0 4px;"><b>① Costo fijo: ${money2(p.docPorRonda)} por vuelo.</b> Es lo que cuesta que el avión despegue: combustible, pilotos y tripulación, mantenimiento y el alquiler del avión. Es <b>fijo</b> porque no cambia: lo pagas igual con 1 o con ${p.capacidad} pasajeros. Por eso conviene repartirlo entre la mayor cantidad de asientos posible.</p>
+      <p style="margin:0 0 8px;"><b>② Costo variable: ${money2(p.iocPorPasajero)} por pasajero.</b> Es lo que gastas solo si alguien sube: su comida a bordo, la comisión de la reserva y el manejo de su equipaje. Es <b>variable</b> porque crece con cada pasajero.</p>
+      <p style="margin:0 0 8px;font-size:12.5px;color:var(--texto-tenue);">En tu Estado de Resultados los verás como Costos Operativos Directos (DOC, el fijo) y Costos Operativos Indirectos (IOC, el variable).</p>
+      <p class="f" style="background:var(--panel-alto);border-radius:8px;padding:8px 10px;margin:0 0 8px;">
+        Costo fijo por asiento, con el avión lleno: ${money2(p.docPorRonda)} ÷ ${p.capacidad} = ${money2(p.docPorRonda/p.capacidad)}<br>
+        + Costo variable por pasajero: ${money2(p.iocPorPasajero)}<br>
+        = Piso: <b style="color:var(--texto);">${money2(pan.piso)}</b></p>
+      ${abordadosUlt ? `<p style="margin:0 0 8px;">En la Ronda ${h.ronda} volaste con <b>${abordadosUlt} pasajeros</b>, no con ${p.capacidad}. Con menos gente, cada uno cargó una parte mayor del vuelo: ${money2(p.docPorRonda)} ÷ ${abordadosUlt} + ${money2(p.iocPorPasajero)} = <b>${money2(p.docPorRonda/abordadosUlt + p.iocPorPasajero)}</b> por pasajero. Por eso llenar el avión importa tanto como el precio.</p>` : `<p style="margin:0 0 8px;">Si vuelas con menos gente, cada pasajero carga una parte mayor del vuelo. Por ejemplo, con 50 pasajeros: ${money2(p.docPorRonda)} ÷ 50 + ${money2(p.iocPorPasajero)} = ${money2(p.docPorRonda/50 + p.iocPorPasajero)} por pasajero.</p>`}
+      <details class="mas" style="margin-top:6px;"><summary>Nota si ya leíste la Unidad 1</summary><p style="margin:0;font-size:12.5px;">La Unidad 1 define el piso como el costo variable (${money2(p.iocPorPasajero)}): por debajo de eso, cada venta pierde dinero. El simulador usa un piso más prudente, que además cubre el costo fijo del vuelo repartido entre los asientos.</p></details>
     </div>
     <div class="lim"><div class="n">Techo · lo máximo</div><div class="big cifra">${money2(pan.techo)}</div>
-      <p>Por encima de este precio, el cliente prefiere a tu competencia. Parte del precio de referencia del mercado (${money2(pan.ref)}) y sube cuando tu puntaje de Valor supera 5,76.</p>
-      <p class="f">Referencia ${money2(pan.ref)} + lo que vale tu diferencia ${money2(pan.dif)} = ${money2(pan.techo)}</p>
+      <p>Por encima de este precio, el cliente prefiere a tu competencia. Se arma en dos pasos:</p>
+      <p style="margin:0 0 4px;"><b>① El precio de referencia: ${money2(pan.ref)}.</b> ${h ? `Es el promedio de lo que cobraron todas las aerolíneas de tu mercado en la Ronda ${h.ronda}, incluida la tuya.` : `Todavía nadie ha jugado, así que se usa el precio publicado de ${Object.keys(PRECIOS_BOT[e.perfil]).join(' y ')}.`} Es lo que el cliente espera pagar.</p>
+      <p style="margin:0 0 8px;"><b>② Lo que vale tu diferencia: ${money2(pan.dif)}.</b> Es el extra que un cliente acepta pagarte por lo que te distingue. Depende de tu puntaje de <b>Valor</b>: por cada punto que superes 5,76, puedes cobrar <b>${(PARAMS.factorValorPct*100).toFixed(1).replace('.',',')}%</b> más que la referencia.</p>
+      <p class="f" style="background:var(--panel-alto);border-radius:8px;padding:8px 10px;margin:0 0 8px;">
+        Cómo se calcula:<br>
+        a) Puntos sobre 5,76: ${c.valor.toFixed(3).replace('.',',')} − 5,76 = ${(c.valor-5.76).toFixed(3).replace('.',',')}<br>
+        b) Extra en %: ${(c.valor-5.76).toFixed(3).replace('.',',')} × ${(PARAMS.factorValorPct*100).toFixed(1).replace('.',',')}% = ${((c.valor-5.76)*PARAMS.factorValorPct*100).toFixed(2).replace('.',',')}%<br>
+        c) Extra en dólares: ${((c.valor-5.76)*PARAMS.factorValorPct*100).toFixed(2).replace('.',',')}% × ${money2(pan.ref)} = ${money2(pan.dif)}<br>
+        Techo: ${money2(pan.ref)} + ${money2(pan.dif)} = <b style="color:var(--texto);">${money2(pan.techo)}</b></p>
+      <p style="margin:0;">${Math.abs(pan.dif) < 0.005 ? 'Hoy tu diferencia vale $0,00 porque todos arrancan con Valor 5,76. Para que crezca, invierte en darle algo más al cliente: marketing, extras, Pase Frecuente u organización.' : (pan.dif > 0 ? 'Tu diferencia creció porque tu puntaje de Valor subió. Para seguir subiéndolo, mantén tus inversiones y cobra cerca de tu techo.' : 'Tu diferencia es negativa: tu puntaje de Valor bajó de 5,76, así que tu techo quedó por debajo de la referencia.')}</p>
     </div>
     <div class="lim"><div class="n">EVC · Valor Económico para el Cliente</div><div class="big cifra">${money2(pan.techo)}</div>
-      <p>Es el nombre técnico de tu techo: lo máximo que pagaría un cliente antes de irse con otra aerolínea. ${Math.abs(pan.dif) < 0.01 ? 'Hoy es igual a la referencia porque todavía no tienes nada que te diferencie.' : ''}</p>
-      <p style="margin:0;"><b>No cobres el EVC completo:</b> al cliente le daría igual elegirte o no. Lo recomendable es quedarte con una parte (entre 20% y 50%) de lo que vale tu diferencia, y dejarle el resto como razón para elegirte.</p>
+      <p>Es el nombre técnico de tu techo: lo máximo que pagaría un cliente antes de irse con otra aerolínea.</p>
+      <p><b>No cobres el EVC completo:</b> al cliente le daría igual elegirte o no. Lo recomendable es quedarte con una parte (entre 20% y 50%) de lo que vale tu diferencia, y dejarle el resto como razón para elegirte.</p>
+      ${pan.dif > 0.005 ? `<p class="f" style="background:var(--panel-alto);border-radius:8px;padding:8px 10px;margin:0;">
+        Con tus números:<br>
+        20% de ${money2(pan.dif)} = ${money2(pan.dif*0.2)} → precio ${money2(pan.ref + pan.dif*0.2)}<br>
+        50% de ${money2(pan.dif)} = ${money2(pan.dif*0.5)} → precio ${money2(pan.ref + pan.dif*0.5)}<br>
+        Zona sugerida: <b style="color:var(--texto);">${money2(pan.ref + pan.dif*0.2)} a ${money2(pan.ref + pan.dif*0.5)}</b></p>` : `<p style="margin:0;">Hoy tu diferencia vale $0,00, así que todavía no hay nada que capturar: tu EVC es igual a la referencia.</p>`}
     </div>
   </div>
 
@@ -1020,6 +1041,8 @@ function vistaBriefing(){
       <div><b>Benchmark:</b> punto de comparación; aquí, el promedio de 150 empresas.</div>
       <div><b>Tarifa Flex:</b> tu pasaje principal, sin restricciones.</div>
       <div><b>Piso:</b> el precio mínimo; por debajo pierdes dinero.</div>
+      <div><b>Costo fijo:</b> lo que pagas aunque no suba nadie (el vuelo).</div>
+      <div><b>Costo variable:</b> lo que pagas por cada pasajero que sube.</div>
       <div><b>Techo:</b> el precio máximo; por encima, el cliente se va.</div>
       <div><b>EVC:</b> lo máximo que pagaría el cliente; en el simulador, es tu techo.</div>
     </div>
