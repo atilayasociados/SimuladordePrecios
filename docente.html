@@ -166,7 +166,8 @@ const HERRAMIENTAS = [
   ['Marketing',              h => h.decision && h.decision.marketing > 0],
   // 'Tarifa Promocional' excluida (Parche N1-1): en esta versión no atrae demanda, así que
   // premiar su uso empujaría a los equipos a perder dinero para sumar puntos.
-  ['Valla',                  h => h.decision && h.decision.fuerzaValla && h.decision.fuerzaValla !== 'sin_valla'],
+  // 'Valla' excluida (Parche N1-2b): sin Tarifa Promocional no tiene ningún efecto en el motor,
+  // así que activarla sumaba puntos sin tomar ninguna decisión real.
   ['Investigación WTP',      h => !!h.comproWTP],
   ['Equipaje',               h => h.decision && h.decision.precioEquipaje > 0],
   ['Seguro',                 h => h.decision && h.decision.precioSeguro > 0],
@@ -197,13 +198,26 @@ function nivelConstancia(hist) {
 /* --- Criterio 2: consistencia con el rango razonable ---
    Mide si el equipo respetó los límites que el simulador le muestra al decidir.
    No verifica que haya calculado el EVC: verifica que no ignoró el panel. --- */
+/* Límites con que se califica una ronda: el piso y el techo que el estudiante
+   VIO al decidir (guardados con su decisión) y el precio que él escribió.
+   Si la ronda es anterior a este cambio, se usan los valores del motor. */
+function limitesDeRonda(h) {
+  const d = h.decision || {};
+  if (d.pisoVisto != null && d.techoVisto != null)
+    return { piso: d.pisoVisto, techo: d.techoVisto, precio: h.precioDecidido ?? h.precioFinal, vistos: true };
+  return { piso: h.piso, techo: h.techo, precio: h.precioFinal, vistos: false };
+}
+
 function nivelRangoPrecio(hist) {
   // El denominador son TODAS las rondas jugadas, no solo las decididas:
   // una ronda con decisión neutra significa que el equipo no fijó precio,
   // así que no puede contar como haber aplicado la herramienta.
   if (!hist.length) return { nivel: 0, detalle: 'sin rondas jugadas' };
-  const dentro = hist.filter(h => !h.neutra && h.piso != null && h.techo != null &&
-                                  h.precioFinal >= h.piso && h.precioFinal <= h.techo).length;
+  const dentro = hist.filter(h => {
+    if (h.neutra) return false;
+    const L = limitesDeRonda(h);
+    return L.piso != null && L.techo != null && L.precio >= L.piso && L.precio <= L.techo;
+  }).length;
   const pct = dentro / hist.length;
   const n = pct >= 0.85 ? 4 : pct >= 0.60 ? 3 : pct >= 0.35 ? 2 : 1;
   return { nivel: n, detalle: `${dentro} de ${hist.length} rondas con precio entre piso y techo` };
@@ -214,7 +228,7 @@ function nivelHerramientas(hist) {
   const usadas = HERRAMIENTAS.filter(([, test]) => hist.filter(test).length >= 2);
   const probadas = HERRAMIENTAS.filter(([, test]) => hist.some(test)).length;
   const c = usadas.length;
-  const n = c >= 10 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;
+  const n = c >= 9 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;   // umbral 4 bajó de 10 a 9 al excluir promocional y valla
   return { nivel: n, detalle: `${c} de ${HERRAMIENTAS.length} herramientas usadas en dos rondas o más` + (probadas > c ? ` (${probadas - c} activada(s) una sola vez, no cuentan)` : ''),
            lista: usadas.map(([nombre]) => nombre) };
 }
@@ -2169,8 +2183,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <p><b>Calificación automática, 40% de la nota del módulo.</b> Se calcula sola con lo que cada equipo hizo en el simulador; ningún criterio depende de si ganó o perdió.</p>
   <table><thead><tr><th>Criterio</th><th>Peso</th><th>Qué mide</th></tr></thead><tbody>
     <tr><td>Constancia en la participación</td><td>20%</td><td>Rondas decididas a tiempo, sin decisión neutra</td></tr>
-    <tr><td>Precio dentro del rango razonable</td><td>15%</td><td>Si respetó el piso y el techo que el simulador le mostró</td></tr>
-    <tr><td>Amplitud de herramientas usadas</td><td>25%</td><td>Cuántas de las 12 herramientas calificables usó en dos rondas o más (activarla una sola vez no cuenta). La Tarifa Promocional no cuenta en esta versión.</td></tr>
+    <tr><td>Precio dentro del rango razonable</td><td>15%</td><td>Si el precio que escribió quedó entre el piso y el techo que el simulador le mostraba en ese momento</td></tr>
+    <tr><td>Amplitud de herramientas usadas</td><td>25%</td><td>Cuántas de las 11 herramientas calificables usó en dos rondas o más (activarla una sola vez no cuenta). Nivel 4 desde 9 herramientas. La Tarifa Promocional y la valla no cuentan en esta versión.</td></tr>
     <tr><td>Uso de la información comprada</td><td>20%</td><td>Si compró estudios de WTP o elasticidad y ajustó su precio después</td></tr>
     <tr><td>Reacción a los resultados</td><td>20%</td><td>Si cambió su estrategia tras una ronda con pérdida</td></tr>
   </tbody></table>
@@ -2188,7 +2202,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <h3 id="m-limites">Limitaciones conocidas de esta versión</h3>
   <p>Una auditoría del simulador contra las Unidades 1 a 5 encontró comportamientos que conviene conocer antes de clase. Los más graves ya tienen un parche; los demás requieren rediseñar el modelo de demanda y quedan para una versión futura.</p>
   <ul>
-    <li><b>Tarifa Promocional.</b> No atrae pasajeros nuevos: solo cambia lo que paga una parte de los que ya vuelan con el equipo, así que usarla reduce la utilidad. Por eso debe ser menor que la Tarifa Flex (el sistema lo exige) y no cuenta en el criterio de herramientas. Sirve para discutir en clase por qué la segmentación necesita demanda nueva para rendir.</li>
+    <li><b>Tarifa Promocional.</b> No atrae pasajeros nuevos: solo cambia lo que paga una parte de los que ya vuelan con el equipo, así que usarla reduce la utilidad. Por eso debe ser menor que la Tarifa Flex (el sistema lo exige), y ni ella ni la valla, que sin promocional no tiene efecto, cuentan en el criterio de herramientas. Sirve para discutir en clase por qué la segmentación necesita demanda nueva para rendir.</li>
     <li><b>Equipaje y seguro.</b> La proporción de pasajeros que compra cada extra es fija y no depende del precio. Para que no haya ingresos ilimitados, cada extra tiene un precio máximo (30% de la Tarifa Flex por defecto, editable en Configuración). Es esperable que los equipos cobren ese máximo.</li>
     <li><b>Encuesta de intención de compra.</b> Es una estimación simulada y puede recomendar un precio más bajo del que realmente conviene en el simulador. La pantalla le pide al estudiante contrastarla con su propio historial; vale la pena comentarlo en clase.</li>
     <li><b>Overbooking.</b> Con la calibración actual, un equipo a precio de mercado casi nunca llena el avión (ni siquiera con ocupación objetivo de 95%), así que el overbooking rara vez tiene efecto. Solo se vuelve relevante si un equipo capta mucha más demanda que sus competidores. El cálculo del fractil crítico de la Unidad 4 conviene trabajarlo con el ejemplo de la unidad.</li>

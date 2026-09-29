@@ -291,7 +291,8 @@ const HERRAMIENTAS = [
   ['Marketing',              h => h.decision && h.decision.marketing > 0],
   // 'Tarifa Promocional' excluida (Parche N1-1): en esta versión no atrae demanda, así que
   // premiar su uso empujaría a los equipos a perder dinero para sumar puntos.
-  ['Valla',                  h => h.decision && h.decision.fuerzaValla && h.decision.fuerzaValla !== 'sin_valla'],
+  // 'Valla' excluida (Parche N1-2b): sin Tarifa Promocional no tiene ningún efecto en el motor,
+  // así que activarla sumaba puntos sin tomar ninguna decisión real.
   ['Investigación WTP',      h => !!h.comproWTP],
   ['Equipaje',               h => h.decision && h.decision.precioEquipaje > 0],
   ['Seguro',                 h => h.decision && h.decision.precioSeguro > 0],
@@ -322,13 +323,26 @@ function nivelConstancia(hist) {
 /* --- Criterio 2: consistencia con el rango razonable ---
    Mide si el equipo respetó los límites que el simulador le muestra al decidir.
    No verifica que haya calculado el EVC: verifica que no ignoró el panel. --- */
+/* Límites con que se califica una ronda: el piso y el techo que el estudiante
+   VIO al decidir (guardados con su decisión) y el precio que él escribió.
+   Si la ronda es anterior a este cambio, se usan los valores del motor. */
+function limitesDeRonda(h) {
+  const d = h.decision || {};
+  if (d.pisoVisto != null && d.techoVisto != null)
+    return { piso: d.pisoVisto, techo: d.techoVisto, precio: h.precioDecidido ?? h.precioFinal, vistos: true };
+  return { piso: h.piso, techo: h.techo, precio: h.precioFinal, vistos: false };
+}
+
 function nivelRangoPrecio(hist) {
   // El denominador son TODAS las rondas jugadas, no solo las decididas:
   // una ronda con decisión neutra significa que el equipo no fijó precio,
   // así que no puede contar como haber aplicado la herramienta.
   if (!hist.length) return { nivel: 0, detalle: 'sin rondas jugadas' };
-  const dentro = hist.filter(h => !h.neutra && h.piso != null && h.techo != null &&
-                                  h.precioFinal >= h.piso && h.precioFinal <= h.techo).length;
+  const dentro = hist.filter(h => {
+    if (h.neutra) return false;
+    const L = limitesDeRonda(h);
+    return L.piso != null && L.techo != null && L.precio >= L.piso && L.precio <= L.techo;
+  }).length;
   const pct = dentro / hist.length;
   const n = pct >= 0.85 ? 4 : pct >= 0.60 ? 3 : pct >= 0.35 ? 2 : 1;
   return { nivel: n, detalle: `${dentro} de ${hist.length} rondas con precio entre piso y techo` };
@@ -339,7 +353,7 @@ function nivelHerramientas(hist) {
   const usadas = HERRAMIENTAS.filter(([, test]) => hist.filter(test).length >= 2);
   const probadas = HERRAMIENTAS.filter(([, test]) => hist.some(test)).length;
   const c = usadas.length;
-  const n = c >= 10 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;
+  const n = c >= 9 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;   // umbral 4 bajó de 10 a 9 al excluir promocional y valla
   return { nivel: n, detalle: `${c} de ${HERRAMIENTAS.length} herramientas usadas en dos rondas o más` + (probadas > c ? ` (${probadas - c} activada(s) una sola vez, no cuentan)` : ''),
            lista: usadas.map(([nombre]) => nombre) };
 }
@@ -512,16 +526,17 @@ function comprobacionRonda(h, costoVariable){
   const c = [];
   const cv = costoVariable != null ? costoVariable : 10;
 
-  if(h.piso != null && h.techo != null){
-    const dentro = h.precioFinal >= h.piso && h.precioFinal <= h.techo;
+  const L = limitesDeRonda(h);
+  if(L.piso != null && L.techo != null){
+    const dentro = L.precio >= L.piso && L.precio <= L.techo;
     c.push({
       titulo: 'Tu rango razonable de esta ronda',
-      calculo: `Piso ${h.piso} · Techo ${h.techo} · Tu precio ${h.precioFinal}`,
+      calculo: `Piso ${L.piso} · Techo ${L.techo} · Tu precio ${L.precio}` + (L.vistos ? ' (los límites que viste al decidir)' : ''),
       veredicto: dentro
         ? 'Tu precio quedó dentro del rango.'
-        : (h.precioFinal < h.piso
-            ? `Quedaste ${(h.piso - h.precioFinal).toFixed(2)} por debajo del piso: cada pasajero te dejó pérdida.`
-            : `Quedaste ${(h.precioFinal - h.techo).toFixed(2)} por encima del techo: cobraste más de lo que tu valor sostiene.`)
+        : (L.precio < L.piso
+            ? `Quedaste ${(L.piso - L.precio).toFixed(2)} por debajo del piso: con ese precio no cubres tu costo total por asiento, ni siquiera con el avión lleno.`
+            : `Quedaste ${(L.precio - L.techo).toFixed(2)} por encima del techo: cobraste más de lo que tu valor sostiene.`)
     });
   }
 
@@ -2121,6 +2136,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(!d.precio || d.precio<=0){ alert('Escribe tu Tarifa Flex antes de enviar.'); return; }
       if(d.tarifaPromocional > 0 && d.tarifaPromocional >= d.precio){
         alert('La Tarifa Promocional debe ser menor que tu Tarifa Flex. Si no quieres ofrecer promoción, deja ese campo vacío.'); return; }
+      // Guarda el piso y el techo que el equipo está viendo: con ellos se califica el rango.
+      { const eq = APP.equipo, r = APP.config ? APP.config.rondaActual : 1;
+        const panVisto = panelPrecio(eq.perfil, eq.tresC ? eq.tresC.valor : PARAMS.benchmarkValor, eq.historial, d.comprarWTP, eq.nombre+'::'+r);
+        d.pisoVisto = panVisto.piso; d.techoVisto = panVisto.techo; }
       const topeAnc = Math.round(d.precio * PARAMS.topeAncillaryPct * 100) / 100;
       if((d.precioEquipaje||0) > topeAnc || (d.precioSeguro||0) > topeAnc){
         alert('El equipaje y el seguro no pueden costar más de $' + topeAnc.toFixed(2) + ' (' + (PARAMS.topeAncillaryPct*100).toFixed(0) + '% de tu Tarifa Flex).'); return; }
