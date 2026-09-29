@@ -88,7 +88,24 @@ table.datos tr.bot td{color:var(--texto-tenue);}
 .nota{font-size:12.5px;color:var(--texto-tenue);line-height:1.6;margin-top:10px;}
 footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 20px 40px;}
 
+.modal-manual{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;}
+.modal-manual.abierto{display:flex;}
+.modal-manual .caja{background:var(--panel);border:1px solid var(--borde);border-radius:14px;max-width:820px;width:100%;padding:26px 30px;line-height:1.6;font-size:14.5px;}
+.modal-manual .cab{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:6px;}
+.modal-manual h2{font-size:21px;margin:0;}
+.modal-manual h3{font-size:16px;margin:26px 0 8px;color:var(--marca);}
+.modal-manual p,.modal-manual li{color:var(--texto);}
+.modal-manual ol,.modal-manual ul{padding-left:22px;margin:8px 0;}
+.modal-manual li{margin-bottom:6px;}
+.modal-manual table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px;}
+.modal-manual th{text-align:left;color:var(--texto-tenue);font-weight:500;font-size:12px;padding:7px 9px;border-bottom:1px solid var(--borde);}
+.modal-manual td{padding:8px 9px;border-bottom:1px solid var(--borde);vertical-align:top;}
+.modal-manual code{background:var(--panel-alto);padding:1px 5px;border-radius:4px;font-size:13px;}
+.modal-manual .indice{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px;}
+.modal-manual .indice a{font-size:12.5px;color:var(--texto-tenue);border:1px solid var(--borde);border-radius:20px;padding:4px 10px;text-decoration:none;}
+.modal-manual .indice a:hover{color:var(--texto);border-color:var(--texto-tenue);}
 @media print {
+  .modal-manual{ display:none !important; }
   .tabs, #tabs, .barra, header, .acciones, .btn, .btn-sec { display:none !important; }
   body { background:#fff !important; color:#000 !important; }
   .grupo, .referencia, table { break-inside: avoid; page-break-inside: avoid; }
@@ -123,9 +140,12 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
     <div class="modulo" style="margin-top:8px;">MKT202 · Panel Docente</div>
     <h1>Simulador de Pricing &amp; Revenue Management Aéreo</h1>
   </div>
-  <div class="estado-ronda">
-    <div class="et">RONDA ACTUAL</div>
-    <div class="val cifra" id="hdRonda">—</div>
+  <div style="display:flex;align-items:center;gap:18px;">
+    <button class="btn-sec" id="btnManual" type="button">📘 Manual del profesor</button>
+    <div class="estado-ronda">
+      <div class="et">RONDA ACTUAL</div>
+      <div class="val cifra" id="hdRonda">—</div>
+    </div>
   </div>
 </div>
 
@@ -144,7 +164,8 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
 const HERRAMIENTAS = [
   ['Tarifa Flex',            h => h.decision && h.decision.precio > 0],
   ['Marketing',              h => h.decision && h.decision.marketing > 0],
-  ['Tarifa Promocional',     h => h.decision && h.decision.tarifaPromocional > 0],
+  // 'Tarifa Promocional' excluida (Parche N1-1): en esta versión no atrae demanda, así que
+  // premiar su uso empujaría a los equipos a perder dinero para sumar puntos.
   ['Valla',                  h => h.decision && h.decision.fuerzaValla && h.decision.fuerzaValla !== 'sin_valla'],
   ['Investigación WTP',      h => !!h.comproWTP],
   ['Equipaje',               h => h.decision && h.decision.precioEquipaje > 0],
@@ -480,6 +501,8 @@ const PARAMS_DEFECTO = {
   // Riesgo-reputación
   probabilidadDeteccion: 0.30,
   penalizacionConfianza: 0.15,
+  sancionDeteccion: 0.10,        // multa si se detecta: % del ingreso por tarifa de esa ronda (antes fija en el código)
+  topeAncillaryPct: 0.30,        // precio máximo de equipaje y seguro, como % de la Tarifa Flex (Parche N1-2)
   algoritmico: { pctPasajeros: 0.20, sobreprecio: 0.25 },
   fugaValla: { sin_valla: 0.80, basica: 0.35, fuerte: 0.08 },
   penalizacionNoDecidir: 0.12,   // pérdida de atractivo del equipo que no decide
@@ -900,16 +923,33 @@ function decisionBot(nombreBot, perfilKey, precioPromedioMercado, ronda) {
 /* ============================================================
    FUNCIÓN PRINCIPAL — EJECUTAR UNA RONDA COMPLETA
    ============================================================ */
+/* Parches de Nivel 1:
+   - Una Tarifa Promocional igual o mayor que la Flex no es promocional: se ignora.
+   - Equipaje y seguro no pueden superar topeAncillaryPct de la Tarifa Flex. */
+function sanearDecision(dec, params = PARAMS_DEFECTO) {
+  if (!dec) return dec;
+  const d = { ...dec };
+  const flex = Number(d.precio) || 0;
+  if ((Number(d.tarifaPromocional) || 0) >= flex) d.tarifaPromocional = 0;
+  const tope = redondear(flex * (params.topeAncillaryPct ?? 0.30));
+  if ((Number(d.precioEquipaje) || 0) > tope) d.precioEquipaje = tope;
+  if ((Number(d.precioSeguro) || 0) > tope) d.precioSeguro = tope;
+  return d;
+}
+
 function ejecutarRonda(config) {
   const {
     perfilKey,
     ronda,
     poolFijo,
     choque = 'sin_choque',
-    equipos,              // [{ nombre, decision, puntajeValor, caja, precioAnterior }]
+    equipos: equiposEntrada,  // [{ nombre, decision, puntajeValor, caja, precioAnterior }]
     params = PARAMS_DEFECTO,
     semilla = 'ronda'
   } = config;
+  // Parches de Nivel 1 (auditoría Unidades 1-5): el motor es la autoridad final,
+  // aunque la vista del estudiante ya valide lo mismo antes de enviar.
+  const equipos = equiposEntrada.map(e => ({ ...e, decision: sanearDecision(e.decision, params) }));
 
   const p = params.perfiles[perfilKey];
   const rng = mulberry32(hashStr(semilla + '::' + perfilKey + '::' + ronda));
@@ -980,7 +1020,7 @@ function ejecutarRonda(config) {
       cap.abordados * ((c.decision.precioEquipaje || 0) * (params.pctEquipaje ?? 0.5) + (c.decision.precioSeguro || 0) * (params.pctSeguro ?? 0.3));
 
     const sancion = (c.cConfianza.detectado)
-      ? redondear(cap.abordados * c.precioFinal * 0.10)
+      ? redondear(cap.abordados * c.precioFinal * (params.sancionDeteccion ?? 0.10))
       : 0;
 
     // Segmentación con valla (Herramienta #5): solo equipos, no bots
@@ -1199,7 +1239,7 @@ function configAFila(c){
       fugaSin:c.fugaSin, fugaBasica:c.fugaBasica, fugaFuerte:c.fugaFuerte,
       pctEquipaje:c.pctEquipaje, pctSeguro:c.pctSeguro,
       costoPuntoMadurez:c.costoPuntoMadurez,
-      probDeteccion:c.probDeteccion, penalConfianza:c.penalConfianza,
+      probDeteccion:c.probDeteccion, penalConfianza:c.penalConfianza, sancionDeteccion:c.sancionDeteccion, topeAncillary:c.topeAncillary,
       paseMultiplicador:c.paseMultiplicador, paseTope:c.paseTope,
       algoPctPasajeros:c.algoPctPasajeros, algoSobreprecio:c.algoSobreprecio,
       penalizacionNoDecidir:c.penalizacionNoDecidir, multiplicadorCompensacion:c.multiplicadorCompensacion
@@ -1464,6 +1504,18 @@ function vistaConfiguracion(){
       </div>
 
       <div class="campo" style="margin-bottom:14px;">
+        <label for="kSancion">Sanción si se detecta (% del ingreso por tarifa)</label>
+        <input type="number" id="kSancion" min="0" max="100" value="${(c.sancionDeteccion ?? 10)}">
+        <div class="nota" style="margin-top:6px;">Multa que paga el equipo en la misma ronda en que se detecta la personalización de precios: este porcentaje de su ingreso por tarifa (pasajeros a bordo × Tarifa Flex). Es calibración pedagógica y se muestra al estudiante para que pueda calcular el valor esperado completo (Unidad 5).</div>
+      </div>
+
+      <div class="campo" style="margin-bottom:14px;">
+        <label for="kTopeAnc">Tope de equipaje y seguro (% de la Tarifa Flex)</label>
+        <input type="number" id="kTopeAnc" min="1" max="100" value="${(c.topeAncillary ?? 30)}">
+        <div class="nota" style="margin-top:6px;">Precio máximo que un equipo puede cobrar por equipaje o por seguro, como porcentaje de su Tarifa Flex. Existe porque en esta versión la proporción de pasajeros que compra cada extra es fija y no depende de su precio: sin tope, cobrar un precio enorme daría ingresos ilimitados. Es calibración pedagógica, no un dato de mercado.</div>
+      </div>
+
+      <div class="campo" style="margin-bottom:14px;">
         <label for="kPaseMult">Pase Frecuente — multiplicador de suscripción</label>
         <input type="number" id="kPaseMult" min="0" max="10" step="0.1" value="${(c.paseMultiplicador ?? 2)}">
         <div class="nota" style="margin-top:6px;">Qué tan sensible es la decisión de suscribirse al ahorro real que ofrece el equipo (Herramienta #7). Un multiplicador más alto significa que un ahorro pequeño ya convence a mucha gente.</div>
@@ -1692,8 +1744,8 @@ function vistaEvaluacion(){
         <span style="font-size:12px;color:var(--texto-tenue);">Nivel 4 = 100% · 3 = 75% · 2 = 50% · 1 = 25%</span></div>
       <table class="tab-pos">
         <thead><tr>
-          <th>Equipo</th><th>Constancia<br>20%</th><th>Rango<br>25%</th><th>Herram.<br>25%</th>
-          <th>Informac.<br>15%</th><th>Reacción<br>15%</th><th>Total</th><th>Puntos</th>
+          <th>Equipo</th><th>Constancia<br>20%</th><th>Rango<br>15%</th><th>Herram.<br>25%</th>
+          <th>Informac.<br>20%</th><th>Reacción<br>20%</th><th>Total</th><th>Puntos</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>
@@ -1777,6 +1829,8 @@ async function cerrarRonda(){
   if(c.costoPuntoMadurez != null) paramsRonda.madurez.costoPorPunto = c.costoPuntoMadurez;
   if(c.probDeteccion != null) paramsRonda.probabilidadDeteccion = pc(c.probDeteccion);
   if(c.penalConfianza != null) paramsRonda.penalizacionConfianza = pc(c.penalConfianza);
+  if(c.sancionDeteccion != null) paramsRonda.sancionDeteccion = pc(c.sancionDeteccion);
+  if(c.topeAncillary != null) paramsRonda.topeAncillaryPct = pc(c.topeAncillary);
   if(c.paseMultiplicador != null) paramsRonda.paseFrecuente.multiplicador = c.paseMultiplicador;
   if(c.paseTope != null) paramsRonda.paseFrecuente.tasaMaxima = pc(c.paseTope);
   if(c.algoPctPasajeros != null) paramsRonda.algoritmico.pctPasajeros = pc(c.algoPctPasajeros);
@@ -1950,7 +2004,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         fugaSin: v('kFugaSin'), fugaBasica: v('kFugaBas'), fugaFuerte: v('kFugaFue'),
         pctEquipaje: v('kEquipaje'), pctSeguro: v('kSeguro'),
         costoPuntoMadurez: v('kMadurez'),
-        probDeteccion: v('kDeteccion'), penalConfianza: v('kPenal'),
+        probDeteccion: v('kDeteccion'), penalConfianza: v('kPenal'), sancionDeteccion: v('kSancion'), topeAncillary: v('kTopeAnc'),
         paseMultiplicador: v('kPaseMult'), paseTope: v('kPaseTope'),
         algoPctPasajeros: v('kAlgoPct'), algoSobreprecio: v('kAlgoSobre'),
         penalizacionNoDecidir: v('kNoDecidir'), multiplicadorCompensacion: v('kCompensa')
@@ -2055,6 +2109,124 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     campoPw.focus();
   }
 });
+</script>
+<div class="modal-manual" id="modalManual" role="dialog" aria-modal="true" aria-labelledby="tituloManual">
+ <div class="caja">
+  <div class="cab">
+    <div>
+      <div class="modulo" style="font-size:12px;color:var(--marca);margin-bottom:3px;">MKT202 · Panel Docente</div>
+      <h2 id="tituloManual">Manual del profesor</h2>
+    </div>
+    <button class="btn-sec" id="btnCerrarManual" type="button">Cerrar ✕</button>
+  </div>
+  <p class="sub" style="margin:6px 0 0;">Cómo usar el Panel Docente del simulador, desde calibrar el mercado antes de la primera clase hasta calificar a los equipos al final del curso.</p>
+  <div class="indice">
+    <a href="#m-acceso">Acceso</a><a href="#m-calibrar">Calibrar el mercado</a><a href="#m-costos">Costos y constantes</a>
+    <a href="#m-ronda">Cada ronda</a><a href="#m-resultados">Resultados</a><a href="#m-eval">Evaluación</a>
+    <a href="#m-equipos">Equipos</a><a href="#m-limites">Limitaciones conocidas</a><a href="#m-problemas">Problemas comunes</a>
+  </div>
+
+  <h3 id="m-acceso">Acceso al panel</h3>
+  <ol>
+    <li>Abre <code>https://atilayasociados.github.io/SimuladordePrecios/docente.html</code></li>
+    <li>Escribe la contraseña del módulo y haz clic en <b>Acceder</b>.</li>
+    <li>La sesión se mantiene mientras la pestaña del navegador siga abierta; si la cierras, tendrás que volver a escribir la contraseña.</li>
+  </ol>
+  <p>Si el sistema responde <b>"Contraseña incorrecta"</b> con la contraseña correcta, puede ser un problema de conexión: revisa tu internet e inténtalo de nuevo. Si persiste, contacta al equipo técnico.</p>
+
+  <h3 id="m-calibrar">Antes de la primera clase: calibrar el mercado</h3>
+  <p>Antes de abrir la Ronda 1 hay que fijar el tamaño del mercado, en la pestaña <b>Configuración</b>.</p>
+  <ol>
+    <li>Espera a que los equipos se registren desde la vista de estudiantes. El conteo de <b>Equipos registrados — Doméstico</b> e <b>Internacional</b> se actualiza solo; no hay que escribirlo a mano.</li>
+    <li>Define la <b>Ocupación objetivo del mercado (%)</b>, 75% por defecto. Una meta alta (85%) hace que casi todos llenen su avión y compitan poco; una baja (65%) endurece la competencia.</li>
+    <li>Haz clic en <b>Calcular y guardar</b> (o <b>Volver a calcular</b> si ya habías calibrado).</li>
+    <li>Puedes recalibrar las veces que quieras mientras no hayas cerrado la Ronda 1. Después, el mercado queda fijo.</li>
+  </ol>
+  <p>Si un equipo se registra después de calibrar, aparece un aviso en rojo indicando que el mercado fue calibrado para otro número de equipos: vuelve a calcular antes de arrancar. Un equipo que se una con la Ronda 1 ya cerrada entra a un mercado calibrado para los demás.</p>
+
+  <h3 id="m-costos">Costos de investigación y constantes de calibración</h3>
+  <p><b>Costos de investigación de mercado.</b> Lo que paga un equipo por comprar cada estudio, por perfil:</p>
+  <table><thead><tr><th>Investigación</th><th>Doméstica</th><th>Internacional</th></tr></thead>
+  <tbody><tr><td>WTP (disposición a pagar)</td><td>$80</td><td>$200</td></tr><tr><td>Elasticidad</td><td>$100</td><td>$250</td></tr></tbody></table>
+  <p>Están calibrados para que un equipo pueda comprar la investigación cada ronda sin arruinar su resultado. Para cambiarlos, edita los valores y haz clic en <b>Guardar costos</b>.</p>
+  <p><b>Constantes de calibración.</b> Parámetros como el porcentaje de viajeros de negocio, los no-shows, la fuga de negocio por tipo de valla, la probabilidad de detección y la sanción de los precios personalizados, el tope de precio de equipaje y seguro o la penalización por no decidir, cada uno con una nota que explica qué controla. Son <b>calibración pedagógica</b>: elegidos para que el simulador enseñe bien, no medidos en el mercado real. Ajústalos solo si tu grupo necesita otro balance; luego haz clic en <b>Guardar constantes</b>.</p>
+
+  <h3 id="m-ronda">Durante cada ronda</h3>
+  <p>En la pestaña <b>Control de ronda</b>:</p>
+  <ul>
+    <li><b>Estado de los equipos:</b> caja y perfil de cada equipo, marcado como <b>Decisión enviada</b> o <b>Pendiente</b>. Usa <b>Actualizar estado</b> para refrescar.</li>
+    <li><b>Condiciones del mercado:</b> <b>Mercado normal</b>, <b>Temporada alta (+10% de demanda)</b> o <b>Temporada baja (−10% de demanda)</b>. Afecta a todas las aerolíneas por igual, así que nadie gana ventaja por él.</li>
+    <li><b>Cerrar ronda y calcular resultados:</b> calcula los resultados de todos los equipos y avanza a la ronda siguiente.</li>
+  </ul>
+  <p>Si quedan equipos pendientes, el sistema lo advierte y pide confirmar: esos equipos reciben una <b>decisión neutra</b> (precio igual al promedio del mercado, sin inversiones y con pérdida de atractivo frente a los que sí decidieron).</p>
+
+  <h3 id="m-resultados">Cómo leer los resultados de una ronda</h3>
+  <p>Tras cerrar la ronda aparece la tabla <b>Resultados de la Ronda N</b>: una fila por aerolínea (equipos y competidores de referencia) con precio, participación, pasajeros a bordo, ocupación y utilidad neta.</p>
+  <p><b>Haz clic en la fila de un equipo</b> para desplegar su Estado de Resultados completo: ingresos por tarifa, equipaje, seguro y Pase Frecuente, costos operativos directos e indirectos, utilidad bruta, gastos administrativos y comerciales, y utilidad neta. Conviene proyectarlo y comentarlo en clase antes de que cada equipo revise su propio reporte.</p>
+
+  <h3 id="m-eval">Evaluación y calificación</h3>
+  <p>La pestaña <b>Evaluación</b> está siempre visible; mientras no haya equipos registrados, solo muestra un aviso.</p>
+  <p><b>Calificación automática, 40% de la nota del módulo.</b> Se calcula sola con lo que cada equipo hizo en el simulador; ningún criterio depende de si ganó o perdió.</p>
+  <table><thead><tr><th>Criterio</th><th>Peso</th><th>Qué mide</th></tr></thead><tbody>
+    <tr><td>Constancia en la participación</td><td>20%</td><td>Rondas decididas a tiempo, sin decisión neutra</td></tr>
+    <tr><td>Precio dentro del rango razonable</td><td>15%</td><td>Si respetó el piso y el techo que el simulador le mostró</td></tr>
+    <tr><td>Amplitud de herramientas usadas</td><td>25%</td><td>Cuántas de las 12 herramientas calificables usó en dos rondas o más (activarla una sola vez no cuenta). La Tarifa Promocional no cuenta en esta versión.</td></tr>
+    <tr><td>Uso de la información comprada</td><td>20%</td><td>Si compró estudios de WTP o elasticidad y ajustó su precio después</td></tr>
+    <tr><td>Reacción a los resultados</td><td>20%</td><td>Si cambió su estrategia tras una ronda con pérdida</td></tr>
+  </tbody></table>
+  <p>Cada criterio recibe un nivel de 1 a 4 (4 = 100%, 3 = 75%, 2 = 50%, 1 = 25%). La tabla resumen muestra el total y los puntos sobre 40; debajo está el detalle por criterio de cada equipo.</p>
+  <p><b>Componente 2, informes por ronda.</b> Cada informe se califica sobre 4 puntos: 2 por aplicar la herramienta con el cálculo visible, 1 por justificar la elección frente a una alternativa y 1 por leer el resultado de la ronda anterior. El panel muestra el informe de cada ronda de cada equipo, o "Sin informe" si no escribieron nada.</p>
+  <p>El botón <b>Imprimir o guardar como PDF</b> exporta toda la vista de evaluación.</p>
+
+  <h3 id="m-equipos">Gestión de equipos</h3>
+  <p>En <b>Configuración</b>, sección <b>Equipos registrados</b>:</p>
+  <ul>
+    <li><b>Resetear contraseña:</b> si un equipo la olvidó, haz clic en el botón junto a su nombre, escribe la nueva y comunícasela. Por seguridad no es posible consultar la contraseña original.</li>
+    <li><b>Quitar:</b> elimina al equipo y todo su progreso (decisiones, historial, caja). Pide confirmación porque no se puede deshacer.</li>
+  </ul>
+
+  <h3 id="m-limites">Limitaciones conocidas de esta versión</h3>
+  <p>Una auditoría del simulador contra las Unidades 1 a 5 encontró comportamientos que conviene conocer antes de clase. Los más graves ya tienen un parche; los demás requieren rediseñar el modelo de demanda y quedan para una versión futura.</p>
+  <ul>
+    <li><b>Tarifa Promocional.</b> No atrae pasajeros nuevos: solo cambia lo que paga una parte de los que ya vuelan con el equipo, así que usarla reduce la utilidad. Por eso debe ser menor que la Tarifa Flex (el sistema lo exige) y no cuenta en el criterio de herramientas. Sirve para discutir en clase por qué la segmentación necesita demanda nueva para rendir.</li>
+    <li><b>Equipaje y seguro.</b> La proporción de pasajeros que compra cada extra es fija y no depende del precio. Para que no haya ingresos ilimitados, cada extra tiene un precio máximo (30% de la Tarifa Flex por defecto, editable en Configuración). Es esperable que los equipos cobren ese máximo.</li>
+    <li><b>Encuesta de intención de compra.</b> Es una estimación simulada y puede recomendar un precio más bajo del que realmente conviene en el simulador. La pantalla le pide al estudiante contrastarla con su propio historial; vale la pena comentarlo en clase.</li>
+    <li><b>Overbooking.</b> Con la calibración actual, un equipo a precio de mercado casi nunca llena el avión (ni siquiera con ocupación objetivo de 95%), así que el overbooking rara vez tiene efecto. Solo se vuelve relevante si un equipo capta mucha más demanda que sus competidores. El cálculo del fractil crítico de la Unidad 4 conviene trabajarlo con el ejemplo de la unidad.</li>
+    <li><b>Sanción por precios personalizados.</b> Si se detecta la práctica, el equipo paga en esa misma ronda una sanción de 10% de su ingreso por tarifa, además de la caída de atractivo en la ronda siguiente. Ambos valores son editables en Configuración y el estudiante los ve en su panel.</li>
+  </ul>
+
+  <h3 id="m-problemas">Solución de problemas comunes</h3>
+  <table><thead><tr><th>Problema</th><th>Qué hacer</th></tr></thead><tbody>
+    <tr><td>"Contraseña incorrecta" al entrar al panel con la contraseña correcta</td><td>Revisa mayúsculas y espacios; si persiste, puede ser la conexión: reintenta o avisa al soporte técnico.</td></tr>
+    <tr><td>Aviso de mercado desalineado en Configuración</td><td>Haz clic en <b>Volver a calcular</b> antes de cerrar la Ronda 1.</td></tr>
+    <tr><td>Un equipo dice haberse registrado pero no aparece</td><td>Confirma que entró por la dirección de estudiantes (<code>.../SimuladordePrecios/</code>, sin <code>docente.html</code>) y que completó el registro; luego usa <b>Actualizar conteo de equipos</b>.</td></tr>
+    <tr><td>Un equipo no logra enviar su decisión</td><td>Si aparece un aviso, revisa que la Tarifa Promocional sea menor que la Flex y que equipaje y seguro no superen su precio máximo. Si no hay aviso, casi siempre es la conexión: que recargue la página y vuelva a entrar con la misma contraseña.</td></tr>
+    <tr><td>Olvidaste tu contraseña de docente</td><td>No hay recuperación desde el panel; contacta al soporte técnico para restablecerla en la base de datos.</td></tr>
+  </tbody></table>
+
+  <div class="acciones" style="justify-content:flex-end;margin-top:22px;">
+    <button class="btn" id="btnCerrarManual2" type="button">Cerrar manual</button>
+  </div>
+ </div>
+</div>
+<script>
+/* Manual del profesor: se abre con el botón de la barra superior y se cierra
+   con los botones Cerrar, con la tecla Esc o haciendo clic fuera del recuadro. */
+(function(){
+  const modal = document.getElementById('modalManual');
+  const abrir = () => { modal.classList.add('abierto'); modal.scrollTop = 0; };
+  const cerrar = () => modal.classList.remove('abierto');
+  document.getElementById('btnManual').addEventListener('click', abrir);
+  document.getElementById('btnCerrarManual').addEventListener('click', cerrar);
+  document.getElementById('btnCerrarManual2').addEventListener('click', cerrar);
+  modal.addEventListener('click', e => { if(e.target === modal) cerrar(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && modal.classList.contains('abierto')) cerrar(); });
+  modal.querySelectorAll('.indice a').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    const destino = modal.querySelector(a.getAttribute('href'));
+    if(destino) destino.scrollIntoView({behavior:'smooth', block:'start'});
+  }));
+})();
 </script>
 </body>
 </html>

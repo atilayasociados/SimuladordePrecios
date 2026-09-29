@@ -289,7 +289,8 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
 const HERRAMIENTAS = [
   ['Tarifa Flex',            h => h.decision && h.decision.precio > 0],
   ['Marketing',              h => h.decision && h.decision.marketing > 0],
-  ['Tarifa Promocional',     h => h.decision && h.decision.tarifaPromocional > 0],
+  // 'Tarifa Promocional' excluida (Parche N1-1): en esta versión no atrae demanda, así que
+  // premiar su uso empujaría a los equipos a perder dinero para sumar puntos.
   ['Valla',                  h => h.decision && h.decision.fuerzaValla && h.decision.fuerzaValla !== 'sin_valla'],
   ['Investigación WTP',      h => !!h.comproWTP],
   ['Equipaje',               h => h.decision && h.decision.precioEquipaje > 0],
@@ -573,7 +574,7 @@ const PARAMS = {
   topeBoost:0.45, marketing:{factor:0.08, divisor:400, tope:0.30},
   topePase:0.05, boostAnclaje:0.03, madurez:{min:-0.08,max:0.08},
   benchmarkValor:5.76, umbralValor:0.75, sensValor:0.4, factorValorPct:0.073,
-  probDeteccion:0.30, penalConfianza:0.15, rondasTotales:12,
+  probDeteccion:0.30, penalConfianza:0.15, sancionDeteccion:0.10, topeAncillaryPct:0.30, rondasTotales:12,
   pctEquipaje:0.50, pctSeguro:0.30, costoPuntoMadurez:60,
   paseMultiplicador:2.0, paseTope:0.80,
   algoPctPasajeros:0.20, algoSobreprecio:0.25,
@@ -655,6 +656,8 @@ function aplicarConstantesDelProfesor(){
   if(c.noShowInt != null) P.internacional.noShowPct = pc(c.noShowInt);
   if(c.probDeteccion != null) PARAMS.probDeteccion = pc(c.probDeteccion);
   if(c.penalConfianza != null) PARAMS.penalConfianza = pc(c.penalConfianza);
+  if(c.sancionDeteccion != null) PARAMS.sancionDeteccion = pc(c.sancionDeteccion);
+  if(c.topeAncillary != null) PARAMS.topeAncillaryPct = pc(c.topeAncillary);
   if(c.pctEquipaje != null) PARAMS.pctEquipaje = pc(c.pctEquipaje);
   if(c.pctSeguro != null) PARAMS.pctSeguro = pc(c.pctSeguro);
   if(c.costoPuntoMadurez != null) PARAMS.costoPuntoMadurez = c.costoPuntoMadurez;
@@ -1005,6 +1008,7 @@ function vistaDecision(){
       </div>
       <div class="referencia">
         <div class="ref-nota">Se cobra aparte de la tarifa, a los pasajeros que ya abordaron — no compite por ganar más pasajeros, es ingreso extra sobre los que ya tienes.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Precio máximo:</b> cada extra puede costar hasta el ${(PARAMS.topeAncillaryPct*100).toFixed(0)}% de tu Tarifa Flex${d.precio ? ' ($' + (d.precio*PARAMS.topeAncillaryPct).toFixed(2) + ' con tu tarifa actual)' : ''}.</div>
         <div class="ref-nota" style="margin-top:8px;">Estimación de cuántos compran: el ${(PARAMS.pctEquipaje*100).toFixed(0)}% de tus pasajeros compra equipaje, y el ${(PARAMS.pctSeguro*100).toFixed(0)}% compra seguro. El ingreso extra sería: (pasajeros × ${PARAMS.pctEquipaje} × precio equipaje) + (pasajeros × ${PARAMS.pctSeguro} × precio seguro).</div>
         <div class="ref-nota" style="margin-top:8px;">Un precio muy alto no reduce cuántos pasajeros vuelan contigo (a diferencia de la Tarifa Flex) — pero tampoco existe un tope: cobrar de más aquí no tiene el mismo freno natural que cobrar de más en el pasaje.</div>
       </div>
@@ -1093,9 +1097,10 @@ function vistaDecision(){
       <div class="referencia">
         <div class="ref-nota"><b>Si nadie lo detecta:</b> el ${(PARAMS.algoPctPasajeros*100).toFixed(0)}% de tus pasajeros paga un ${(PARAMS.algoSobreprecio*100).toFixed(0)}% más que tu Tarifa Flex. Ese ingreso lo cobras siempre, se detecte o no la práctica.</div>
         <div class="ref-fila" style="margin-top:8px;"><span>Probabilidad de que se detecte, cada ronda</span><b>${(PARAMS.probDeteccion*100).toFixed(0)}%</b></div>
-        <div class="ref-fila"><span>Caída de atractivo si se detecta</span><b>${(PARAMS.penalConfianza*100).toFixed(0)}%</b></div>
+        <div class="ref-fila"><span>Caída de atractivo si se detecta (ronda siguiente)</span><b>${(PARAMS.penalConfianza*100).toFixed(0)}%</b></div>
+        <div class="ref-fila"><span>Sanción si se detecta (misma ronda)</span><b>${(PARAMS.sancionDeteccion*100).toFixed(0)}% de tu ingreso por tarifa</b></div>
         <div class="ref-nota" style="margin-top:8px;">Cada ronda es un sorteo independiente: activarlo tres rondas seguidas sin que te detecten no cambia la probabilidad de la cuarta.</div>
-        <div class="ref-nota" style="margin-top:8px;"><b>Cómo decidir:</b> no compares el mejor caso contra el peor. Pondera cada resultado por su probabilidad — ${((1-PARAMS.probDeteccion)*100).toFixed(0)}% de las veces ganas el ingreso extra, ${(PARAMS.probDeteccion*100).toFixed(0)}% de las veces pagas la caída de reputación. Ese promedio ponderado es tu valor esperado.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Cómo decidir:</b> no compares el mejor caso contra el peor. El ingreso extra lo cobras siempre. Lo incierto es el castigo: con ${(PARAMS.probDeteccion*100).toFixed(0)}% de probabilidad te detectan y pagas la sanción y la caída de atractivo. Valor esperado = ingreso extra − (${(PARAMS.probDeteccion*100).toFixed(0)}% × castigo total).</div>
       </div>
     `, activo('algoritmico',ronda), 5)}
 
@@ -1199,6 +1204,7 @@ function contenidoPanelExtrasWTP(comprarWTP, e, p){
       ${filasEncuesta}
     </table>
     <div class="ref-nota" style="margin-top:8px;"><b>Importante: la tercera columna NO es un precio</b> — nadie paga ese número. Es un indicador para comparar las 4 filas entre sí (precio × % de esa fila, contando también a quienes no comprarían). La fila marcada en verde es la que tiene el indicador más alto — si la usas de guía, tu precio final sería <b>${money2(encuesta[mejorIdx].precio)}</b> (el precio de esa fila), nunca el número de la tercera columna.</div>
+    <div class="ref-nota" style="margin-top:8px;"><b>Úsala con criterio:</b> la encuesta es una estimación, no el mercado real. Antes de adoptar su precio, contrástalo con tu propio historial: cómo cambiaron tus pasajeros y tu utilidad cuando moviste la Tarifa Flex en rondas anteriores.</div>
     <div class="ref-nota" style="margin-top:10px;"><b>Otros rubros de referencia</b></div>
     <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
     <div class="ref-fila"><span>Seguro de viaje — referencia de mercado (estimado)</span><b>${money2(p.refSeguro)}</b></div>
@@ -1536,6 +1542,7 @@ function vistaMercado(){
       </table>
       <div class="referencia" style="margin-top:10px;">
         <div class="ref-nota"><b>La tercera columna no es un precio</b> — nadie paga ese número. Es un indicador para comparar las 4 filas entre sí. La fila marcada tiene el indicador más alto: si la usas de guía, tu precio sería ${money2(encuesta[mejorIdx].precio)}, nunca el número de la tercera columna.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Úsala con criterio:</b> la encuesta es una estimación, no el mercado real. Antes de adoptar su precio, contrástalo con tu propio historial: cómo cambiaron tus pasajeros y tu utilidad cuando moviste la Tarifa Flex en rondas anteriores.</div>
         <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como señal fuerte, no como certeza.</div>
         <div class="ref-nota" style="margin-top:8px;"><i>Los 4 precios y porcentajes son un ejercicio simulado para practicar el método — no vienen de una encuesta real, se generan a partir de tu propio piso y techo.</i></div>
       </div>
@@ -1815,7 +1822,7 @@ function vistaExpediente(){
       const NOM = {constancia:'Constancia en la participación', rangoPrecio:'Precio dentro de tu rango razonable',
         herramientas:'Amplitud de herramientas usadas', informacion:'Uso de la información que compraste',
         reaccion:'Reacción a tus resultados'};
-      const PESO = {constancia:'20%', rangoPrecio:'25%', herramientas:'25%', informacion:'15%', reaccion:'15%'};
+      const PESO = {constancia:'20%', rangoPrecio:'15%', herramientas:'25%', informacion:'20%', reaccion:'20%'};
       return `<div class="grupo">
         <div class="grupo-cab"><h3>Tu calificación del simulador</h3>
           <span style="font-size:12px;color:var(--texto-tenue);">Vale 40% de la nota del módulo</span></div>
@@ -2112,6 +2119,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       recolectar();
       const d = APP.decisionActual;
       if(!d.precio || d.precio<=0){ alert('Escribe tu Tarifa Flex antes de enviar.'); return; }
+      if(d.tarifaPromocional > 0 && d.tarifaPromocional >= d.precio){
+        alert('La Tarifa Promocional debe ser menor que tu Tarifa Flex. Si no quieres ofrecer promoción, deja ese campo vacío.'); return; }
+      const topeAnc = Math.round(d.precio * PARAMS.topeAncillaryPct * 100) / 100;
+      if((d.precioEquipaje||0) > topeAnc || (d.precioSeguro||0) > topeAnc){
+        alert('El equipaje y el seguro no pueden costar más de $' + topeAnc.toFixed(2) + ' (' + (PARAMS.topeAncillaryPct*100).toFixed(0) + '% de tu Tarifa Flex).'); return; }
       e.target.disabled = true; e.target.textContent='Enviando…';
       try{
         await rpc('guardar_decision', {
