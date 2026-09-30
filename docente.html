@@ -164,10 +164,10 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
 const HERRAMIENTAS = [
   ['Tarifa Flex',            h => h.decision && h.decision.precio > 0],
   ['Marketing',              h => h.decision && h.decision.marketing > 0],
-  // 'Tarifa Promocional' excluida (Parche N1-1): en esta versión no atrae demanda, así que
-  // premiar su uso empujaría a los equipos a perder dinero para sumar puntos.
-  // 'Valla' excluida (Parche N1-2b): sin Tarifa Promocional no tiene ningún efecto en el motor,
-  // así que activarla sumaba puntos sin tomar ninguna decisión real.
+  // NIVEL 2: la Tarifa Promocional y la valla vuelven al criterio, porque ahora captan demanda
+  // de placer y la valla tiene sus dos riesgos (en el nivel 1 se habían excluido).
+  ['Tarifa Promocional',     h => h.decision && h.decision.tarifaPromocional > 0 && h.decision.tarifaPromocional < h.decision.precio],
+  ['Valla',                  h => h.decision && h.decision.tarifaPromocional > 0 && h.decision.fuerzaValla && h.decision.fuerzaValla !== 'sin_valla'],   // solo cuenta junto a una promocional
   ['Investigación WTP',      h => !!h.comproWTP],
   ['Equipaje',               h => h.decision && h.decision.precioEquipaje > 0],
   ['Seguro',                 h => h.decision && h.decision.precioSeguro > 0],
@@ -228,7 +228,7 @@ function nivelHerramientas(hist) {
   const usadas = HERRAMIENTAS.filter(([, test]) => hist.filter(test).length >= 2);
   const probadas = HERRAMIENTAS.filter(([, test]) => hist.some(test)).length;
   const c = usadas.length;
-  const n = c >= 9 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;   // umbral 4 bajó de 10 a 9 al excluir promocional y valla
+  const n = c >= 10 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;   // NIVEL 2: 13 herramientas calificables, umbral original de 10
   return { nivel: n, detalle: `${c} de ${HERRAMIENTAS.length} herramientas usadas en dos rondas o más` + (probadas > c ? ` (${probadas - c} activada(s) una sola vez, no cuentan)` : ''),
            lista: usadas.map(([nombre]) => nombre) };
 }
@@ -474,6 +474,7 @@ const PARAMS_DEFECTO = {
       costoInvestigacionWTP: 800,
       costoEstudioElasticidad: 1000,
       segmentos: { negocio: 0.40, placer: 0.60 },
+      refEquipaje: 10, refSeguro: 4,     // referencias que ya ve el estudiante (equipaje: dato real BoA)
       bots: ['BoA']
     },
     internacional: {
@@ -488,6 +489,7 @@ const PARAMS_DEFECTO = {
       costoInvestigacionWTP: 1600,
       costoEstudioElasticidad: 2000,
       segmentos: { negocio: 0.45, placer: 0.55 },
+      refEquipaje: 50, refSeguro: 15,
       bots: ['LATAM', 'BoA']
     }
   },
@@ -503,10 +505,15 @@ const PARAMS_DEFECTO = {
   // Motor de atractivo (calibrado: ver nota de calibración al final)
   topeBoostCombinado: 0.45,
   marketing: { factor: 0.08, divisor: 400, tope: 0.30 },
-  topePaseFrecuente: 0.05,
+  topePaseFrecuente: 0,           // NIVEL 2: el Pase ya no sube el atractivo general...
+  topePaseNegocio: 0.15,         // ...sino solo el de los viajeros de negocios (calibración pedagógica)
   paseFrecuente: { multiplicador: 2.0, tasaMaxima: 0.80 },
   boostAnclaje: 0.03,
-  madurez: { min: -0.08, max: 0.08 },
+  // NIVEL 2 (Unidad 5): cada aerolínea arranca con un diagnóstico desigual (como la cadena de
+  // farmacias de la Unidad 5). Los puntos comprados se acumulan y el equipo decide a qué pilar
+  // asignarlos. El efecto depende del pilar más débil: invertir en un pilar fuerte no sirve.
+  madurez: { min: -0.08, max: 0.08, costoPorPunto: 20,   // calibrado: invertir en el pilar débil conviene; en los fuertes, no
+             perfilInicial: { talento: 5, procesos: 4, datos: 6 } },
   benchmarkValor: 5.76,
   umbralNeutroValor: 0.75,
   sensibilidadValor: 0.4,
@@ -515,8 +522,25 @@ const PARAMS_DEFECTO = {
   // Riesgo-reputación
   probabilidadDeteccion: 0.30,
   penalizacionConfianza: 0.15,
-  sancionDeteccion: 0.10,        // multa si se detecta: % del ingreso por tarifa de esa ronda (antes fija en el código)
-  topeAncillaryPct: 0.30,        // precio máximo de equipaje y seguro, como % de la Tarifa Flex (Parche N1-2)
+  sancionDeteccion: 0.10,
+  // NIVEL 2 — Demanda en dos niveles
+  // Referencia: la elasticidad de mercado resultante es la ponderación de las de negocio y placer
+  // (0,40 × −0,8 + 0,60 × −1,8 = −1,4 en el doméstico), en línea con el nivel de ruta de InterVISTAS (2007).
+  sensibilidadPrecio: 2.65,      // β del componente precio; calibrado para elasticidad propia entre −1,86 y −2,12 (Unidad 2: ≈ −2,0)
+  // NIVEL 2, paso 2 — segmentos con mercado propio (calibración pedagógica; dirección:
+  // el viaje de negocios es menos sensible al precio que el de placer)
+  elasticidadNegocio: -0.8,
+  elasticidadPlacer: -1.8,
+  aceptacionValla: { sin_valla: 1.00, basica: 0.85, fuerte: 0.40 },
+  // NIVEL 2, paso 3 (Unidad 3) — calibración pedagógica
+  extras: {
+    sensibilidad: 1.5,   // γ: qué tanto baja la compra de un extra si su precio supera la referencia
+    costoPct: 0.30,      // costo de cada extra vendido, como % de su precio de referencia
+    saliencia: 0.5       // qué fracción del gasto en extras considera el pasajero al elegir aerolínea
+  },                     //  (los cargos adicionales se subestiman: precios fraccionados)
+  tiposSocio: [ { vuelos: 1, peso: 0.4 }, { vuelos: 3, peso: 0.4 }, { vuelos: 6, peso: 0.2 } ],
+  mesesPorRonda: 3,  // riesgo 2: placer que acepta las condiciones       // β del componente precio; calibrado para elasticidad propia ≈ −2,0 (Unidad 2)        // multa si se detecta: % del ingreso por tarifa de esa ronda (antes fija en el código)
+  topeAncillaryPct: 1.00,        // NIVEL 2: con demanda propia de extras ya no hay ingreso ilimitado; el tope queda como resguardo (antes 30%)
   algoritmico: { pctPasajeros: 0.20, sobreprecio: 0.25 },
   fugaValla: { sin_valla: 0.80, basica: 0.35, fuerte: 0.08 },
   penalizacionNoDecidir: 0.12,   // pérdida de atractivo del equipo que no decide
@@ -651,9 +675,12 @@ function componenteProducto(decision, precioMercado, puntajeValor, params = PARA
 }
 
 /* Componente Precio: 2 − (precio propio ÷ precio promedio del mercado) */
-function componentePrecio(precio, precioMercado) {
+function componentePrecio(precio, precioMercado, params = PARAMS_DEFECTO) {
   if (!precioMercado || precioMercado <= 0) return 1;
-  return redondear(Math.max(0.05, 2 - (precio / precioMercado)), 4);
+  // NIVEL 2: forma exponencial (tipo logit). Con β calibrado, la elasticidad
+  // propia de una aerolínea queda cerca de −2,0 (Unidad 2).
+  const beta = params.sensibilidadPrecio ?? 2.65;
+  return redondear(Math.exp(-beta * (precio / precioMercado - 1)), 4);
 }
 
 /* Componente Confianza: baja si se activó pricing algorítmico y fue detectado */
@@ -687,12 +714,16 @@ function aplicarDynamicPricing(precioBase, decision, poolFijo, poolReal, piso, t
 /* ============================================================
    ETAPA 3 — RESTRICCIÓN DE OFERTA
    ============================================================ */
-function aplicarCapacidad(pasajerosGanados, perfil, overbooking, params = PARAMS_DEFECTO) {
+function aplicarCapacidad(pasajerosGanados, perfil, overbooking, params = PARAMS_DEFECTO, rng = null) {
   const p = params.perfiles[perfil];
   const cupoVenta = p.capacidad + (overbooking || 0);
   const reservas = Math.min(Math.round(pasajerosGanados), cupoVenta);
   const spill = Math.max(0, Math.round(pasajerosGanados) - cupoVenta);
-  const noShows = Math.round(reservas * p.noShowPct);
+  // NIVEL 2 (Unidad 4): cada reserva tiene una probabilidad noShowPct de no presentarse.
+  // Sin rng (compatibilidad) se usa el valor esperado redondeado, como antes.
+  let noShows = 0;
+  if (rng) { for (let k = 0; k < reservas; k++) if (rng() < p.noShowPct) noShows++; }
+  else noShows = Math.round(reservas * p.noShowPct);
   const presentados = reservas - noShows;
   // Si se presentan más de los asientos físicos → denegación de embarque
   const denegados = Math.max(0, presentados - p.capacidad);
@@ -735,7 +766,8 @@ function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
   const ingresoAncillaries = datos.ingresoAncillaries || 0;
   const ingresoPaseFrecuente = datos.ingresoPaseFrecuente || 0;
   const ingresoPersonalizado = datos.ingresoPersonalizado || 0;
-  const ingresos = ingresoTarifas + ingresoAncillaries + ingresoPaseFrecuente + ingresoPersonalizado;
+  const ingresoNoShows = datos.ingresoNoShows || 0;   // NIVEL 2: la promocional no se reembolsa
+  const ingresos = ingresoTarifas + ingresoAncillaries + ingresoPaseFrecuente + ingresoPersonalizado + ingresoNoShows;
 
   // --- Costo de Ventas ---
   // IOC: crece con cada pasajero (catering, distribución, equipaje)
@@ -744,7 +776,8 @@ function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
   // lo mismo vuele lleno o medio vacío. Llenar el avión reparte este costo
   // entre más pasajeros: ahí está el incentivo real del revenue management.
   const doc = p.docPorRonda;
-  const costoVentas = doc + ioc;
+  const costoExtras = datos.costoAncillaries || 0;   // NIVEL 2: costo de cada extra vendido
+  const costoVentas = doc + ioc + costoExtras;
   const utilidadBruta = ingresos - costoVentas;
 
   // --- Gastos operativos: decisiones reales del equipo ---
@@ -769,9 +802,11 @@ function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
     ingresoAncillaries: redondear(ingresoAncillaries),
     ingresoPaseFrecuente: redondear(ingresoPaseFrecuente),
     ingresoPersonalizado: redondear(ingresoPersonalizado),
+    ingresoNoShows: redondear(ingresoNoShows),
     ingresos: redondear(ingresos),
     doc: redondear(doc),
     ioc: redondear(ioc),
+    costoExtras: redondear(costoExtras),
     costoVentas: redondear(costoVentas),
     utilidadBruta: redondear(utilidadBruta),
     gastosAdministrativos: redondear(gastosAdministrativos),
@@ -793,8 +828,8 @@ function metricasRM(abordados, capacidad, ingresos, distanciaKm = 1) {
   const rpm = abordados * distanciaKm;
   return {
     loadFactor: capacidad > 0 ? redondear((abordados / capacidad) * 100, 1) : 0,
-    yield: rpm > 0 ? redondear((ingresos / rpm) * 100, 2) : 0,   // centavos
-    rasm: asm > 0 ? redondear((ingresos / asm) * 100, 2) : 0     // centavos
+    yield: rpm > 0 ? redondear(ingresos / rpm, 2) : 0,   // NIVEL 2: dólares por pasajero (Unidad 4, sección 4.3)
+    rasm: asm > 0 ? redondear(ingresos / asm, 2) : 0     // dólares por asiento disponible
   };
 }
 
@@ -925,6 +960,9 @@ function decisionBot(nombreBot, perfilKey, precioPromedioMercado, ronda) {
     esBot: true,
     precio,
     marketing: 0,
+    // NIVEL 2: los competidores reales cobran sus extras al precio de referencia
+    precioEquipaje: PARAMS_DEFECTO.perfiles[perfilKey].refEquipaje || 0,
+    precioSeguro: PARAMS_DEFECTO.perfiles[perfilKey].refSeguro || 0,
     cuotaPaseFrecuente: 0,
     anclaje: false,
     overbooking: 0,
@@ -940,9 +978,23 @@ function decisionBot(nombreBot, perfilKey, precioPromedioMercado, ronda) {
 /* Parches de Nivel 1:
    - Una Tarifa Promocional igual o mayor que la Flex no es promocional: se ignora.
    - Equipaje y seguro no pueden superar topeAncillaryPct de la Tarifa Flex. */
-function sanearDecision(dec, params = PARAMS_DEFECTO) {
+function sanearDecision(dec, params = PARAMS_DEFECTO, puntosPrevios = 0) {
   if (!dec) return dec;
   const d = { ...dec };
+  // NIVEL 2 — Madurez: los pilares parten del perfil inicial y solo suben con puntos comprados
+  // (acumulados en rondas anteriores + los de esta ronda). Si el equipo pide más de lo que
+  // pagó, se recortan los aumentos empezando por el pilar que más subió.
+  const mz = params.madurez || {}, base = mz.perfilInicial || { talento: 4, procesos: 4, datos: 4 };
+  const costoPunto = mz.costoPorPunto || 60;
+  const disponibles = Math.floor(((Number(puntosPrevios) || 0) * costoPunto + (Number(d.gastoMadurez) || 0)) / costoPunto);
+  const pil = ['talento', 'procesos', 'datos'];
+  const obj = {}; pil.forEach(k => obj[k] = Math.max(base[k], Math.min(7, Math.round(Number(d[k] ?? base[k]) || base[k]))));
+  const usados = () => pil.reduce((a, k) => a + (obj[k] - base[k]), 0);
+  while (usados() > disponibles) {
+    const k = pil.reduce((m, x) => (obj[x] - base[x]) > (obj[m] - base[m]) ? x : m, pil[0]);
+    obj[k]--;
+  }
+  pil.forEach(k => d[k] = obj[k]);
   const flex = Number(d.precio) || 0;
   if ((Number(d.tarifaPromocional) || 0) >= flex) d.tarifaPromocional = 0;
   const tope = redondear(flex * (params.topeAncillaryPct ?? 0.30));
@@ -963,16 +1015,27 @@ function ejecutarRonda(config) {
   } = config;
   // Parches de Nivel 1 (auditoría Unidades 1-5): el motor es la autoridad final,
   // aunque la vista del estudiante ya valide lo mismo antes de enviar.
-  const equipos = equiposEntrada.map(e => ({ ...e, decision: sanearDecision(e.decision, params) }));
+  const equipos = equiposEntrada.map(e => ({ ...e, decision: sanearDecision(e.decision, params, e.puntosMadurezPrevios || 0) }));
 
   const p = params.perfiles[perfilKey];
   const rng = mulberry32(hashStr(semilla + '::' + perfilKey + '::' + ronda));
 
-  /* --- ETAPA 1: Pool de la ronda (fijo, salvo choque del profesor) --- */
-  const pool = poolDeRonda(poolFijo, choque, params);
+  /* --- ETAPA 1: Pool de temporada (choque del profesor). El efecto del
+     precio se aplica más abajo, cuando se conoce el precio del mercado. --- */
+  const poolTemporada = poolDeRonda(poolFijo, choque, params);
 
   /* --- Precio promedio provisional (solo equipos) para calibrar a los bots --- */
-  const preciosEquipos = equipos.map(e => e.decision.precio);
+  // NIVEL 2: los bots siguen el precio EFECTIVO de cada equipo (Flex y promocional ponderadas
+  // por quién paga cada una), no solo la Flex. Así una rebaja "disfrazada" de promoción
+  // también provoca la reacción de la competencia.
+  const preciosEquipos = equipos.map(e => {
+    const dd = e.decision, flex = dd.precio;
+    if (!(dd.tarifaPromocional > 0)) return flex;
+    const fuga = (params.fugaValla || FUGA_POR_VALLA)[dd.fuerzaValla || 'sin_valla'] ?? 0.8;
+    const acepta = (params.aceptacionValla || {})[dd.fuerzaValla || 'sin_valla'] ?? 1;
+    const pN = (1 - fuga) * flex + fuga * dd.tarifaPromocional, pP = acepta * dd.tarifaPromocional + (1 - acepta) * flex;
+    return p.segmentos.negocio * pN + p.segmentos.placer * pP;
+  });
   const promedioEquipos = preciosEquipos.reduce((a, b) => a + b, 0) / preciosEquipos.length;
 
   /* --- Los bots entran como competidores reales --- */
@@ -993,6 +1056,9 @@ function ejecutarRonda(config) {
   const precioMercado = redondear(
     todos.reduce((acc, c) => acc + c.decision.precio, 0) / todos.length
   );
+  /* NIVEL 2 — el mercado total responde al precio promedio: si todos cobran más,
+     viaja menos gente (elasticidad de mercado, InterVISTAS 2007). */
+  // (paso 2) el pool se calcula por segmento más abajo, con el precio que ve cada segmento
 
   /* --- ETAPA 2: Atractivo de cada competidor --- */
   const conAtractivo = todos.map(c => {
@@ -1003,52 +1069,101 @@ function ejecutarRonda(config) {
     // acotado por el piso (costo por pasajero) y el techo (EVC) del perfil
     const pisoDin = p.docPorRonda / p.capacidad + p.iocPorPasajero;
     const techoDin = precioMercado + (c.puntajeValor - params.benchmarkValor) * params.factorValorAPorcentaje * precioMercado;
-    const precioFinal = aplicarDynamicPricing(d.precio, d, poolFijo, pool, pisoDin, techoDin);
+    const precioFinal = aplicarDynamicPricing(d.precio, d, poolFijo, poolTemporada, pisoDin, techoDin);
 
-    const cPrecio = componentePrecio(precioFinal, precioMercado);
     const cProducto = componenteProducto(d, precioMercado, c.puntajeValor, params);
     const cConfianza = componenteConfianza(d.pricingAlgoritmico, rng, params);
-    const atractivo = redondear(cPrecio * cProducto.valor * cConfianza.valor, 4);
-
-    return { ...c, precioFinal, cPrecio, cProducto, cConfianza, atractivo };
+    // Precio que ve cada segmento. Placer: la promocional para quien acepta la valla,
+    // la Flex para quien no la acepta (riesgo 2). Negocios: siempre la Flex.
+    const tienePromo = !c.esBot && d.tarifaPromocional > 0;
+    const acepta = tienePromo ? ((params.aceptacionValla || {})[d.fuerzaValla || 'sin_valla'] ?? 1) : 0;
+    const extras = demandaExtras(d, p, params);   // los bots también cobran extras (solo para la elección)
+    const extraPercibido = extras ? extras.percibidoPorPax : 0;
+    const precioPlacer = (tienePromo ? acepta * d.tarifaPromocional + (1 - acepta) * precioFinal : precioFinal) + extraPercibido;
+    // Los viajeros de negocios que pueden cruzar la valla también ven la promocional:
+    // sin valla, casi todos; con valla fuerte, casi ninguno (fuga de la Unidad 2).
+    const fugaN = tienePromo ? ((params.fugaValla || FUGA_POR_VALLA)[d.fuerzaValla || 'sin_valla'] ?? 0.8) : 0;
+    const precioNegocio = (tienePromo ? (1 - fugaN) * precioFinal + fugaN * d.tarifaPromocional : precioFinal) + extraPercibido;
+    return { ...c, precioFinal, precioNegocio, precioPlacer, aceptaValla: acepta, extras, cProducto, cConfianza };
   });
 
-  const sumaAtractivo = conAtractivo.reduce((a, c) => a + c.atractivo, 0);
+  // NIVEL 2 — cada segmento tiene su propio mercado y responde al precio que ve
+  const promedio = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const pmNegocio = promedio(conAtractivo.map(c => c.precioNegocio));
+  const pmPlacer = promedio(conAtractivo.map(c => c.precioPlacer));
+  // El TAMAÑO del mercado depende solo del precio del pasaje (lo que el viajero compara para decidir
+  // si viaja). Los extras pesan en la elección ENTRE aerolíneas, no en cuánta gente viaja: así la
+  // calibración de ocupación objetivo se mantiene aunque la competencia cobre extras.
+  const sinExtra = (c, precio) => precio - (c.extras ? c.extras.percibidoPorPax : 0);
+  const pmNegocioPasaje = promedio(conAtractivo.map(c => sinExtra(c, c.precioNegocio)));
+  const pmPlacerPasaje = promedio(conAtractivo.map(c => sinExtra(c, c.precioPlacer)));
+  const poolNegocio = poolTemporada * p.segmentos.negocio * Math.pow(pmNegocioPasaje / p.precioBase, params.elasticidadNegocio ?? -0.8);
+  const poolPlacer = poolTemporada * p.segmentos.placer * Math.pow(pmPlacerPasaje / p.precioBase, params.elasticidadPlacer ?? -1.8);
+  const pool = Math.round(poolNegocio + poolPlacer);
+  conAtractivo.forEach(c => {
+    const k = c.cProducto.valor * c.cConfianza.valor;
+    const bPaseN = c.esBot ? 0 : Math.min(ofertaPaseFrecuente(c.decision).atractivoOferta * (params.paseFrecuente.multiplicador ?? 2), params.topePaseNegocio ?? 0.15);
+    c.aNegocio = componentePrecio(c.precioNegocio, pmNegocio, params) * k * (1 + bPaseN);
+    c.aPlacer = componentePrecio(c.precioPlacer, pmPlacer, params) * k;
+    c.cPrecio = componentePrecio(c.precioFinal, precioMercado, params);
+    c.atractivo = redondear(c.cPrecio * k, 4);
+  });
+  const sumaN = conAtractivo.reduce((a, c) => a + c.aNegocio, 0);
+  const sumaP = conAtractivo.reduce((a, c) => a + c.aPlacer, 0);
+  const sumaAtractivo = conAtractivo.reduce((a, c) => a + c.atractivo, 0);  // se reporta en el resultado
 
-  /* --- ETAPA 2b: Reparto proporcional del pool --- */
+  /* --- ETAPA 2b: Reparto de cada segmento --- */
   const conDemanda = conAtractivo.map(c => {
-    const participacion = c.atractivo / sumaAtractivo;
+    const gN = Math.round(poolNegocio * c.aNegocio / sumaN);
+    const gP = Math.round(poolPlacer * c.aPlacer / sumaP);
+    const total = gN + gP;
     return {
       ...c,
-      participacion: redondear(participacion * 100, 2),
-      pasajerosGanados: Math.round(pool * participacion)
+      ganadosNegocio: gN, ganadosPlacer: gP,
+      participacion: redondear(pool > 0 ? total / pool * 100 : 0, 2),
+      pasajerosGanados: total
     };
   });
 
   /* --- ETAPA 3: Capacidad, no-shows, overbooking, spill --- */
   const resultados = conDemanda.map(c => {
-    const cap = aplicarCapacidad(c.pasajerosGanados, perfilKey, c.decision.overbooking, params);
+    // Cada aerolínea tiene su propia secuencia de no-shows (reproducible con la semilla de la ronda)
+    const rngNS = mulberry32(hashStr(semilla + '::' + perfilKey + '::' + ronda + '::noshow::' + c.nombre));
+    const cap = aplicarCapacidad(c.pasajerosGanados, perfilKey, c.decision.overbooking, params, rngNS);
 
     // Ingreso por ancillaries (Herramienta 9): solo equipos, no bots
-    const ingresoAncillaries = c.esBot ? 0 :
-      cap.abordados * ((c.decision.precioEquipaje || 0) * (params.pctEquipaje ?? 0.5) + (c.decision.precioSeguro || 0) * (params.pctSeguro ?? 0.3));
+    const ingresoAncillaries = c.esBot ? 0 : redondear(cap.abordados * c.extras.gastoPorPax);
+    const costoAncillaries = c.esBot ? 0 : redondear(cap.abordados * c.extras.costoPorPax);
 
     const sancion = (c.cConfianza.detectado)
       ? redondear(cap.abordados * c.precioFinal * (params.sancionDeteccion ?? 0.10))
       : 0;
 
     // Segmentación con valla (Herramienta #5): solo equipos, no bots
-    const seg = c.esBot ? null : segmentarIngreso(cap.abordados, c.decision, p.segmentos, params);
+    // NIVEL 2: la mezcla de segmentos viene de lo que realmente ganó cada aerolínea
+    let seg = null, negocioAbordo = 0, fugaUsada = 0;
+    if (!c.esBot) {
+      const fracN = c.pasajerosGanados > 0 ? c.ganadosNegocio / c.pasajerosGanados : p.segmentos.negocio;
+      negocioAbordo = Math.round(cap.abordados * fracN);
+      const placerAbordo = cap.abordados - negocioAbordo;
+      if (c.decision.tarifaPromocional > 0) {
+        const tf = params.fugaValla || FUGA_POR_VALLA;
+        fugaUsada = tf[c.decision.fuerzaValla] ?? tf.sin_valla;
+        const promo = Math.round(placerAbordo * c.aceptaValla + negocioAbordo * fugaUsada);
+        seg = { pasajerosFlex: cap.abordados - promo, pasajerosPromocional: promo };
+      } else {
+        seg = { pasajerosFlex: cap.abordados, pasajerosPromocional: 0 };
+      }
+    }
 
     // Pase Frecuente — tarifa de dos partes (Herramienta #7): los suscritos
     // pagan la cuota fija MÁS la tarifa de socio por su vuelo.
     // Los candidatos son quienes quedaron pagando Tarifa Flex tras aplicar la
     // valla — no el segmento de negocio completo (ver auditoría, Hallazgo 1).
-    const candidatosPase = seg ? seg.pasajerosFlex : cap.abordados;
-    const pase = c.esBot ? null : suscriptoresPaseFrecuente(candidatosPase, c.decision, p.segmentos, params);
-    const ingresoPase = pase
-      ? pase.suscritos * ((c.decision.cuotaPaseFrecuente || 0) + (c.decision.tarifaSocio || 0))
-      : 0;
+    const viajesNegocioFlex = c.esBot ? 0 : Math.max(0, negocioAbordo - Math.round(negocioAbordo * fugaUsada));
+    const pase2 = c.esBot ? null : paseFrecuenteDosPartes(viajesNegocioFlex, c.decision, params);
+    const pase = pase2 ? { suscritos: pase2.viajesSocio, socios: pase2.socios, porTipo: pase2.porTipo } : null;
+    const ingresoPase = pase2 ? pase2.ingreso : 0;
 
     // Precios personalizados (Herramienta #15): ingreso extra, se cobre o no detectado
     const algo = c.esBot ? null : ingresoPreciosPersonalizados(cap.abordados, c.decision, params);
@@ -1057,9 +1172,7 @@ function ejecutarRonda(config) {
     // por los pasajeros de negocio que compraron la Tarifa Promocional
     let dilucion = null;
     if (!c.esBot && seg && seg.pasajerosPromocional > 0 && c.decision.tarifaPromocional > 0) {
-      const tf = params.fugaValla || FUGA_POR_VALLA;
-      const fuga = tf[c.decision.fuerzaValla] ?? tf.sin_valla;
-      const negocioDiluido = Math.round(cap.abordados * p.segmentos.negocio * fuga);
+      const negocioDiluido = Math.round(negocioAbordo * fugaUsada);
       const brecha = c.precioFinal - c.decision.tarifaPromocional;
       dilucion = {
         pasajerosNegocioDiluidos: negocioDiluido,
@@ -1076,7 +1189,10 @@ function ejecutarRonda(config) {
       pasajerosPromocional: seg ? seg.pasajerosPromocional : 0,
       precioPromocional: c.decision.tarifaPromocional || 0,
       pasajerosPase: pase ? pase.suscritos : 0,
-      ingresoAncillaries,
+      ingresoAncillaries, costoAncillaries,
+      // NIVEL 2: los no-shows con Tarifa Promocional (no reembolsable) pagan igual
+      ingresoNoShows: (seg && seg.pasajerosPromocional > 0 && cap.abordados > 0)
+        ? Math.round(cap.noShows * seg.pasajerosPromocional / cap.abordados) * (c.decision.tarifaPromocional || 0) : 0,
       ingresoPaseFrecuente: ingresoPase,
       ingresoPersonalizado: algo ? algo.ingresoExtra : 0,
       gastoMarketing: c.decision.marketing || 0,
@@ -1120,6 +1236,8 @@ function ejecutarRonda(config) {
       atractivo: c.atractivo,
       participacion: c.participacion,
       pasajerosGanados: c.pasajerosGanados,
+      ganadosNegocio: c.ganadosNegocio, ganadosPlacer: c.ganadosPlacer,
+      segmentosAbordo: c.esBot ? null : { negocio: negocioAbordo, placer: cap.abordados - negocioAbordo, promocional: seg ? seg.pasajerosPromocional : 0 },
       capacidad: cap,
       metricas: metricasRM(cap.abordados, p.capacidad, er ? er.ingresos : 0),
       estadoResultados: er,
@@ -1138,6 +1256,7 @@ function ejecutarRonda(config) {
     choque,
     poolFijo,
     poolDeRonda: pool,
+    poolTemporada,          // NIVEL 2: el pool que usa el precio dinámico (solo el efecto de la temporada)
     precioMercado,
     sumaAtractivo: redondear(sumaAtractivo, 4),
     resultados
@@ -1195,6 +1314,51 @@ function segmentarIngreso(abordados, decision, segmentosPerfil, params = PARAMS_
    negocio completo. Quien ya se fugó a la Tarifa Promocional por una valla débil
    no puede además suscribirse al Pase — de lo contrario el mismo pasajero se
    descuenta dos veces y la Tarifa Flex queda artificialmente vacía. */
+/* NIVEL 2 (Unidad 3) — Extras con demanda propia: se compran menos si su precio
+   supera la referencia de mercado; cada extra vendido tiene un costo. */
+function demandaExtras(decision, perfil, params = PARAMS_DEFECTO) {
+  const x = params.extras || { sensibilidad: 1.5, costoPct: 0.3, saliencia: 0.5 };
+  const uno = (precio, ref, base) => {
+    if (!precio || precio <= 0 || !ref) return { tasa: 0, precio: 0, costo: 0 };
+    const tasa = clamp(base * Math.exp(-x.sensibilidad * (precio / ref - 1)), 0, 1);
+    return { tasa, precio, costo: x.costoPct * ref };
+  };
+  const eq = uno(decision.precioEquipaje, perfil.refEquipaje, params.pctEquipaje ?? 0.5);
+  const se = uno(decision.precioSeguro, perfil.refSeguro, params.pctSeguro ?? 0.3);
+  const gastoPorPax = eq.tasa * eq.precio + se.tasa * se.precio;
+  // Quien necesita llevar maleta ve la tarifa completa aunque luego no la compre:
+  // la carga percibida pondera por quién NECESITA el extra (la tasa base), no por quién lo compra.
+  const cargaPorPax = (params.pctEquipaje ?? 0.5) * (decision.precioEquipaje || 0) + (params.pctSeguro ?? 0.3) * (decision.precioSeguro || 0);
+  return { equipaje: eq, seguro: se, gastoPorPax,
+           costoPorPax: eq.tasa * eq.costo + se.tasa * se.costo,
+           percibidoPorPax: cargaPorPax * x.saliencia };
+}
+
+/* NIVEL 2 (Unidad 3) — Pase Frecuente como tarifa de dos partes con frecuencia real.
+   Cada tipo de socio vuela un número distinto de veces por trimestre y paga la cuota
+   mensual durante los 3 meses. Solo se suscribe si le conviene con SU propio uso:
+   el socio que vuela poco es el "peor escenario de uso" de la Unidad 3. */
+function paseFrecuenteDosPartes(viajesNegocioFlex, decision, params = PARAMS_DEFECTO) {
+  const cuota = decision.cuotaPaseFrecuente || 0, socio = decision.tarifaSocio || 0, flex = decision.precio || 0;
+  const vacio = { viajesSocio: 0, socios: 0, ingreso: 0, porTipo: [] };
+  if (cuota <= 0 || socio <= 0 || flex <= 0 || viajesNegocioFlex <= 0) return vacio;
+  const tipos = params.tiposSocio || [{ vuelos: 3, peso: 1 }];
+  const meses = params.mesesPorRonda ?? 3;
+  const sumaPesoViajes = tipos.reduce((a, t) => a + t.peso * t.vuelos, 0);
+  let viajesSocio = 0, socios = 0;
+  const porTipo = tipos.map(t => {
+    const viajesTipo = viajesNegocioFlex * (t.peso * t.vuelos) / sumaPesoViajes;
+    const ahorro = t.vuelos * (flex - socio) - cuota * meses;         // ahorro del socio en el trimestre
+    const tasa = ahorro > 0 ? clamp(ahorro / (t.vuelos * flex) * params.paseFrecuente.multiplicador, 0, params.paseFrecuente.tasaMaxima) : 0;
+    const v = viajesTipo * tasa;
+    viajesSocio += v; socios += v / t.vuelos;
+    return { vuelos: t.vuelos, ahorroTrimestre: redondear(ahorro), seSuscribe: ahorro > 0, tasa: redondear(tasa, 3) };
+  });
+  viajesSocio = Math.round(viajesSocio);
+  return { viajesSocio, socios: redondear(socios, 1), porTipo,
+           ingreso: redondear(viajesSocio * socio + socios * cuota * meses) };
+}
+
 function suscriptoresPaseFrecuente(candidatosDisponibles, decision, segmentosPerfil, params = PARAMS_DEFECTO) {
   const oferta = ofertaPaseFrecuente(decision);
   if (oferta.atractivoOferta <= 0) {
@@ -1260,6 +1424,7 @@ function configAFila(c){
       pctEquipaje:c.pctEquipaje, pctSeguro:c.pctSeguro,
       costoPuntoMadurez:c.costoPuntoMadurez,
       probDeteccion:c.probDeteccion, penalConfianza:c.penalConfianza, sancionDeteccion:c.sancionDeteccion, topeAncillary:c.topeAncillary,
+      sensibilidadPrecio:c.sensibilidadPrecio, elasticidadNegocio:c.elasticidadNegocio, elasticidadPlacer:c.elasticidadPlacer, aceptacionBasica:c.aceptacionBasica, aceptacionFuerte:c.aceptacionFuerte, extrasSensibilidad:c.extrasSensibilidad, extrasCostoPct:c.extrasCostoPct, extrasSaliencia:c.extrasSaliencia, topePaseNegocio:c.topePaseNegocio,
       paseMultiplicador:c.paseMultiplicador, paseTope:c.paseTope,
       algoPctPasajeros:c.algoPctPasajeros, algoSobreprecio:c.algoSobreprecio,
       penalizacionNoDecidir:c.penalizacionNoDecidir, multiplicadorCompensacion:c.multiplicadorCompensacion
@@ -1507,7 +1672,7 @@ function vistaConfiguracion(){
 
       <div class="campo" style="margin-bottom:14px;">
         <label for="kMadurez">Inversión por punto de capacidad organizacional ($)</label>
-        <input type="number" id="kMadurez" min="0" value="${(c.costoPuntoMadurez ?? 60)}">
+        <input type="number" id="kMadurez" min="0" value="${(c.costoPuntoMadurez ?? 20)}">
         <div class="nota" style="margin-top:6px;">Costo para subir 1 punto (escala 1-7) el máximo alcanzable de Talento, Procesos o Datos (Herramienta #14). Sin este costo, un equipo podría declarar puntajes altos sin haber invertido nada.</div>
       </div>
 
@@ -1520,7 +1685,7 @@ function vistaConfiguracion(){
       <div class="campo" style="margin-bottom:14px;">
         <label for="kPenal">Penalización si se detecta (%)</label>
         <input type="number" id="kPenal" min="0" max="100" value="${(c.penalConfianza ?? 15)}">
-        <div class="nota" style="margin-top:6px;">Cuánto cae el atractivo del equipo, en la ronda siguiente a la detección. El ingreso ya cobrado por el sobreprecio nunca se devuelve.</div>
+        <div class="nota" style="margin-top:6px;">Cuánto cae el atractivo del equipo en la misma ronda en que se detecta la práctica. El ingreso ya cobrado por el sobreprecio nunca se devuelve.</div>
       </div>
 
       <div class="campo" style="margin-bottom:14px;">
@@ -1531,9 +1696,28 @@ function vistaConfiguracion(){
 
       <div class="campo" style="margin-bottom:14px;">
         <label for="kTopeAnc">Tope de equipaje y seguro (% de la Tarifa Flex)</label>
-        <input type="number" id="kTopeAnc" min="1" max="100" value="${(c.topeAncillary ?? 30)}">
-        <div class="nota" style="margin-top:6px;">Precio máximo que un equipo puede cobrar por equipaje o por seguro, como porcentaje de su Tarifa Flex. Existe porque en esta versión la proporción de pasajeros que compra cada extra es fija y no depende de su precio: sin tope, cobrar un precio enorme daría ingresos ilimitados. Es calibración pedagógica, no un dato de mercado.</div>
+        <input type="number" id="kTopeAnc" min="1" max="100" value="${(c.topeAncillary ?? 100)}">
+        <div class="nota" style="margin-top:6px;">Precio máximo de equipaje o seguro, como % de la Tarifa Flex. En esta versión los extras tienen demanda propia (cobrar de más reduce las compras y espanta pasajeros), así que el tope es solo un resguardo: 100% por defecto.</div>
       </div>
+      <h4 style="margin:22px 0 4px;">Modelo de demanda y herramientas (versión 2)</h4>
+      <div class="nota" style="margin-bottom:12px;">Calibración verificada con 25 criterios de las cinco unidades. Cámbiala solo si tienes una razón pedagógica: todos estos valores interactúan.</div>
+      ${[
+        ['kBeta','Sensibilidad al precio relativo (β)', c.sensibilidadPrecio ?? 2.65, 'min="0.5" max="6" step="0.05"', 'Qué tanto pierde pasajeros una aerolínea al cobrar más que sus competidores. Con 2,65 la elasticidad propia queda entre −1,86 y −2,12, cerca del −2,0 de la Unidad 2.'],
+        ['kElNeg','Elasticidad del mercado de negocios', c.elasticidadNegocio ?? -0.8, 'min="-4" max="0" step="0.1"', 'Cuánto cambia el total de viajeros de negocios si todas las aerolíneas cambian su precio. Menos sensible que placer.'],
+        ['kElPla','Elasticidad del mercado de placer', c.elasticidadPlacer ?? -1.8, 'min="-4" max="0" step="0.1"', 'Ponderadas por la composición del mercado, negocio y placer dan −1,4, el nivel de ruta de InterVISTAS (2007).'],
+        ['kAcepBas','Placer que acepta una valla básica (%)', c.aceptacionBasica ?? 85, 'min="0" max="100"', 'Riesgo 2 de la valla: quien no acepta las condiciones compara por tu Flex.'],
+        ['kAcepFue','Placer que acepta una valla fuerte (%)', c.aceptacionFuerte ?? 40, 'min="0" max="100"', 'Con valla fuerte pocos de negocios se cuelan, pero muchos de placer se espantan.'],
+        ['kExSens','Sensibilidad de los extras a su precio', c.extrasSensibilidad ?? 1.5, 'min="0" max="5" step="0.1"', 'Qué tanto bajan las compras de equipaje o seguro si su precio supera la referencia de mercado.'],
+        ['kExCosto','Costo de cada extra vendido (% de la referencia)', c.extrasCostoPct ?? 30, 'min="0" max="100"', 'Con 30%, cada maleta cuesta $3 en el doméstico: cobrar menos que eso pierde dinero.'],
+        ['kExSal','Peso de los extras en la elección (%)', c.extrasSaliencia ?? 50, 'min="0" max="100"', 'Qué parte del cargo por extras considera el pasajero al elegir aerolínea. Menos de 100% porque los cargos adicionales se subestiman (Morwitz et al., 1998): es lo que hace funcionar la afeitadora y repuestos.'],
+        ['kPaseNeg','Atractivo máximo del Pase Frecuente entre viajeros de negocios (%)', c.topePaseNegocio ?? 15, 'min="0" max="50"', 'Un pase bien diseñado atrae viajeros de negocios de la competencia, hasta este límite.']
+      ].map(([id, et, val, attr, nota]) => `
+      <div class="campo" style="margin-bottom:14px;">
+        <label for="${id}">${et}</label>
+        <input type="number" id="${id}" ${attr} value="${val}">
+        <div class="nota" style="margin-top:6px;">${nota}</div>
+      </div>`).join('')}
+
 
       <div class="campo" style="margin-bottom:14px;">
         <label for="kPaseMult">Pase Frecuente — multiplicador de suscripción</label>
@@ -1851,6 +2035,16 @@ async function cerrarRonda(){
   if(c.penalConfianza != null) paramsRonda.penalizacionConfianza = pc(c.penalConfianza);
   if(c.sancionDeteccion != null) paramsRonda.sancionDeteccion = pc(c.sancionDeteccion);
   if(c.topeAncillary != null) paramsRonda.topeAncillaryPct = pc(c.topeAncillary);
+  // NIVEL 2
+  if(c.sensibilidadPrecio != null) paramsRonda.sensibilidadPrecio = Number(c.sensibilidadPrecio);
+  if(c.elasticidadNegocio != null) paramsRonda.elasticidadNegocio = Number(c.elasticidadNegocio);
+  if(c.elasticidadPlacer != null) paramsRonda.elasticidadPlacer = Number(c.elasticidadPlacer);
+  if(c.aceptacionBasica != null || c.aceptacionFuerte != null) paramsRonda.aceptacionValla = { ...paramsRonda.aceptacionValla,
+    ...(c.aceptacionBasica != null ? { basica: pc(c.aceptacionBasica) } : {}), ...(c.aceptacionFuerte != null ? { fuerte: pc(c.aceptacionFuerte) } : {}) };
+  if(c.extrasSensibilidad != null || c.extrasCostoPct != null || c.extrasSaliencia != null) paramsRonda.extras = { ...paramsRonda.extras,
+    ...(c.extrasSensibilidad != null ? { sensibilidad: Number(c.extrasSensibilidad) } : {}),
+    ...(c.extrasCostoPct != null ? { costoPct: pc(c.extrasCostoPct) } : {}), ...(c.extrasSaliencia != null ? { saliencia: pc(c.extrasSaliencia) } : {}) };
+  if(c.topePaseNegocio != null) paramsRonda.topePaseNegocio = pc(c.topePaseNegocio);
   if(c.paseMultiplicador != null) paramsRonda.paseFrecuente.multiplicador = c.paseMultiplicador;
   if(c.paseTope != null) paramsRonda.paseFrecuente.tasaMaxima = pc(c.paseTope);
   if(c.algoPctPasajeros != null) paramsRonda.algoritmico.pctPasajeros = pc(c.algoPctPasajeros);
@@ -1878,6 +2072,8 @@ async function cerrarRonda(){
         tresC: e.tresC,
         caja: e.caja,
         decision: dec,
+        // NIVEL 2: puntos de madurez comprados en rondas anteriores (se acumulan)
+        puntosMadurezPrevios: Math.floor((e.historial || []).reduce((a, h) => a + ((h.decision && h.decision.gastoMadurez) || 0), 0) / (paramsRonda.madurez.costoPorPunto || 60)),
         _neutra: !guardada
       };
     });
@@ -1909,7 +2105,7 @@ async function cerrarRonda(){
           const preciosCompetidores = {};
           r.resultados.filter(x=>x.esBot).forEach(b=>{ preciosCompetidores[b.nombre] = b.precioFinal; });
           eq.historial.push({
-            ronda, precioMercado: r.precioMercado, poolDeRonda: r.poolDeRonda, poolFijo,
+            ronda, precioMercado: r.precioMercado, poolDeRonda: r.poolDeRonda, poolTemporada: r.poolTemporada, poolFijo,
             neutra: !!esNeutra, preciosCompetidores, choque: D.choque,
             informe: (equiposMotor.find(x=>x.nombre===res.nombre)?.decision?.informe) || '',
             decision: equiposMotor.find(x=>x.nombre===res.nombre)?.decision || {},
@@ -1918,6 +2114,7 @@ async function cerrarRonda(){
             pasajerosGanados: res.pasajerosGanados, capacidad: res.capacidad,
             metricas: res.metricas, estadoResultados: res.estadoResultados,
             dilucion: res.dilucion, personalizado: res.personalizado,
+            ganadosNegocio: res.ganadosNegocio, ganadosPlacer: res.ganadosPlacer, segmentosAbordo: res.segmentosAbordo,
             comproWTP: !!(D.decisiones[res.nombre.toLowerCase()]||{}).comprarWTP,
             comproElasticidad: !!(D.decisiones[res.nombre.toLowerCase()]||{}).comprarElasticidad,
             componentes: res.componentes
@@ -2026,6 +2223,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         pctEquipaje: v('kEquipaje'), pctSeguro: v('kSeguro'),
         costoPuntoMadurez: v('kMadurez'),
         probDeteccion: v('kDeteccion'), penalConfianza: v('kPenal'), sancionDeteccion: v('kSancion'), topeAncillary: v('kTopeAnc'),
+        sensibilidadPrecio: v('kBeta'), elasticidadNegocio: v('kElNeg'), elasticidadPlacer: v('kElPla'), aceptacionBasica: v('kAcepBas'), aceptacionFuerte: v('kAcepFue'),
+        extrasSensibilidad: v('kExSens'), extrasCostoPct: v('kExCosto'), extrasSaliencia: v('kExSal'), topePaseNegocio: v('kPaseNeg'),
         paseMultiplicador: v('kPaseMult'), paseTope: v('kPaseTope'),
         algoPctPasajeros: v('kAlgoPct'), algoSobreprecio: v('kAlgoSobre'),
         penalizacionNoDecidir: v('kNoDecidir'), multiplicadorCompensacion: v('kCompensa')
@@ -2144,7 +2343,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <div class="indice">
     <a href="#m-acceso">Acceso</a><a href="#m-calibrar">Calibrar el mercado</a><a href="#m-costos">Costos y constantes</a>
     <a href="#m-ronda">Cada ronda</a><a href="#m-resultados">Resultados</a><a href="#m-eval">Evaluación</a>
-    <a href="#m-equipos">Equipos</a><a href="#m-limites">Limitaciones conocidas</a><a href="#m-problemas">Problemas comunes</a>
+    <a href="#m-equipos">Equipos</a><a href="#m-guion3">Guion Sesión 3</a><a href="#m-guion4">Guion Sesión 4</a><a href="#m-guion5">Guion Sesión 5</a><a href="#m-mantenimiento">Mantenimiento</a><a href="#m-limites">Qué tener en cuenta</a><a href="#m-problemas">Problemas comunes</a>
   </div>
 
   <h3 id="m-acceso">Acceso al panel</h3>
@@ -2170,7 +2369,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <table><thead><tr><th>Investigación</th><th>Doméstica</th><th>Internacional</th></tr></thead>
   <tbody><tr><td>WTP (disposición a pagar)</td><td>$80</td><td>$200</td></tr><tr><td>Elasticidad</td><td>$100</td><td>$250</td></tr></tbody></table>
   <p>Están calibrados para que un equipo pueda comprar la investigación cada ronda sin arruinar su resultado. Para cambiarlos, edita los valores y haz clic en <b>Guardar costos</b>.</p>
-  <p><b>Constantes de calibración.</b> Parámetros como el porcentaje de viajeros de negocio, los no-shows, la fuga de negocio por tipo de valla, la probabilidad de detección y la sanción de los precios personalizados, el tope de precio de equipaje y seguro o la penalización por no decidir, cada uno con una nota que explica qué controla. Son <b>calibración pedagógica</b>: elegidos para que el simulador enseñe bien, no medidos en el mercado real. Ajústalos solo si tu grupo necesita otro balance; luego haz clic en <b>Guardar constantes</b>.</p>
+  <p><b>Constantes de calibración.</b> Parámetros como el porcentaje de viajeros de negocio, los no-shows, la fuga de negocio por tipo de valla, la probabilidad de detección y la sanción de los precios personalizados, el tope de precio de equipaje y seguro o la penalización por no decidir, cada uno con una nota que explica qué controla. Son <b>calibración pedagógica</b>: elegidos para que el simulador enseñe bien, no medidos en el mercado real. Ajústalos solo si tu grupo necesita otro balance; luego haz clic en <b>Guardar constantes</b>. El bloque <b>Modelo de demanda y herramientas</b> reúne la calibración de esta versión: está verificada, así que conviene no tocarla sin una razón clara.</p>
 
   <h3 id="m-ronda">Durante cada ronda</h3>
   <p>En la pestaña <b>Control de ronda</b>:</p>
@@ -2191,7 +2390,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <table><thead><tr><th>Criterio</th><th>Peso</th><th>Qué mide</th></tr></thead><tbody>
     <tr><td>Constancia en la participación</td><td>20%</td><td>Rondas decididas a tiempo, sin decisión neutra</td></tr>
     <tr><td>Precio dentro del rango razonable</td><td>15%</td><td>Si el precio que escribió quedó entre el piso y el techo que el simulador le mostraba en ese momento</td></tr>
-    <tr><td>Amplitud de herramientas usadas</td><td>25%</td><td>Cuántas de las 11 herramientas calificables usó en dos rondas o más (activarla una sola vez no cuenta). Nivel 4 desde 9 herramientas. La Tarifa Promocional y la valla no cuentan en esta versión.</td></tr>
+    <tr><td>Amplitud de herramientas usadas</td><td>25%</td><td>Cuántas de las 13 herramientas calificables usó en dos rondas o más (activarla una sola vez no cuenta). Nivel 4 desde 10 herramientas. La valla solo cuenta si se usa junto a una Tarifa Promocional.</td></tr>
     <tr><td>Uso de la información comprada</td><td>20%</td><td>Si compró estudios de WTP o elasticidad y ajustó su precio después</td></tr>
     <tr><td>Reacción a los resultados</td><td>20%</td><td>Si cambió su estrategia tras una ronda con pérdida</td></tr>
   </tbody></table>
@@ -2206,14 +2405,51 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <li><b>Quitar:</b> elimina al equipo y todo su progreso (decisiones, historial, caja). Pide confirmación porque no se puede deshacer.</li>
   </ul>
 
-  <h3 id="m-limites">Limitaciones conocidas de esta versión</h3>
-  <p>Una auditoría del simulador contra las Unidades 1 a 5 encontró comportamientos que conviene conocer antes de clase. Los más graves ya tienen un parche; los demás requieren rediseñar el modelo de demanda y quedan para una versión futura.</p>
+  <h3 id="m-guion3">Guion de la Sesión 3: Rondas 7 y 8 (Unidad 3)</h3>
+  <p>La Sesión 3 desbloquea tres herramientas: <b>Pase Frecuente</b>, <b>tarifa tachada</b> y <b>equipaje y seguro</b>. Tiene solo dos rondas, y el criterio de calificación cuenta una herramienta solo si se usa en <b>dos rondas o más</b>. Díselo a los equipos al comenzar: si activan una herramienta recién en la Ronda 8, no les suma en la nota.</p>
+  <table><thead><tr><th>Momento</th><th>Qué hacer</th></tr></thead><tbody>
+    <tr><td><b>Inicio de sesión</b> (30 min)</td><td>Aplica los dos experimentos de clase (anclaje y efecto compromiso) antes de explicar el tema; la guía docente tiene el protocolo. Luego presenta la pestaña <b>Arquitectura de precios</b>, que sigue los cuatro pasos de la Unidad 3.</td></tr>
+    <tr><td><b>Ronda 7 · Diseñar y activar</b></td><td>Cada equipo activa las tres herramientas con un diseño inicial y escribe en su informe qué espera de cada una: cuántos socios, cuánto ingreso por extras, qué efecto de la tarifa tachada. Son sus hipótesis.</td></tr>
+    <tr><td><b>Ronda 8 · Ajustar con evidencia</b></td><td>Antes de decidir, cada equipo hace tres cálculos: <b>(1)</b> el punto de equilibrio de su pase por trimestre, 3 × cuota ÷ (Flex − tarifa de socio), comprobando si le conviene al socio que vuela 1 vez; <b>(2)</b> el margen por unidad y el porcentaje que compra cada extra, que ve en la pestaña; <b>(3)</b> si su participación cambió con la tarifa tachada. Luego compara sus hipótesis de la Ronda 7 con los resultados y ajusta.</td></tr>
+    <tr><td><b>Cierre</b> (10 min)</td><td>Pide a dos equipos que muestren su diseño de pase: uno que convenga a los tres tipos de socio y otro que solo convenga a los grandes viajeros. Compara sus resultados y conecta con la regla del peor escenario de uso. Pregunta quién bajó su Tarifa Flex para ganar con los extras.</td></tr>
+  </tbody></table>
+  <p>En la tabla de resultados de cada ronda, haz clic en un equipo para ver en su Estado de Resultados el ingreso del Pase Frecuente, el ingreso por extras y su costo.</p>
+
+  <h3 id="m-guion4">Guion de la Sesión 4: Rondas 9 y 10 (Unidad 4)</h3>
+  <p>La Sesión 4 desbloquea el <b>overbooking</b>, las <b>métricas de ocupación, yield y RASM</b> (se calculan solas) y el <b>precio dinámico</b>. Igual que en la Sesión 3, el overbooking y el precio dinámico solo cuentan para la nota si se usan en las dos rondas.</p>
+  <table><thead><tr><th>Momento</th><th>Qué hacer</th></tr></thead><tbody>
+    <tr><td><b>Inicio de sesión</b> (15 min)</td><td>Presenta la pestaña <b>Revenue management</b>. Resuelve en pizarra el ejemplo de la Unidad 4 (Cu $23, Co $66, fractil 0,258, sobrevender 3) y muestra que la tabla de la pestaña llega al mismo número con el precio de cada equipo.</td></tr>
+    <tr><td><b>Ronda 9 · Decidir la sobreventa</b></td><td>Cada equipo calcula su fractil, elige su sobreventa con la tabla y activa el precio dinámico con la sensibilidad que prefiera. Recuérdales que sobrevender solo sirve si tienen demanda para llenar el avión: si no, la pestaña se los advierte.</td></tr>
+    <tr><td><b>Ronda 10 · Activa una temporada</b></td><td><b>Paso indispensable:</b> antes de cerrar la Ronda 10, en <b>Control de ronda</b> elige <b>Temporada alta</b> (o baja). El precio dinámico solo reacciona cuando la demanda se aparta de lo esperado; sin temporada, los equipos que lo activaron no verán ningún efecto. No anuncies de antemano qué temporada elegirás.</td></tr>
+    <tr><td><b>Cierre</b> (15 min)</td><td>Compara las tres métricas de dos equipos con el mismo RASM pero distinta ocupación y distinto yield, como en el ejemplo de la unidad. Luego pregunta qué equipo tuvo pasajeros sin asiento: explica que los no-shows son aleatorios y que una mala ronda no prueba una mala decisión. La regla busca el mejor resultado promedio.</td></tr>
+  </tbody></table>
+  <p><b>Sobre el azar:</b> con no-shows aleatorios, dos equipos con la misma decisión pueden obtener utilidades algo distintas (del orden de 4% en las pruebas). Esto no afecta la calificación automática, que no depende de la utilidad, pero sí el ranking de caja acumulada. Conviene decirlo en clase.</p>
+
+  <h3 id="m-guion5">Guion de la Sesión 5: Rondas 11 y 12 (Unidad 5)</h3>
+  <p>La Sesión 5 desbloquea el <b>estudio de elasticidad</b>, la <b>madurez organizacional</b> y los <b>precios personalizados</b>. Cada aerolínea arranca con el mismo diagnóstico de madurez (Talento 5, Procesos 4, Datos 6) y los puntos comprados se acumulan entre las dos rondas.</p>
+  <table><thead><tr><th>Momento</th><th>Qué hacer</th></tr></thead><tbody>
+    <tr><td><b>Antes de la sesión</b></td><td>Si en la Sesión 4 activaste una temporada, los equipos que cambiaron su precio en esa ronda tienen una elasticidad "ingenua" inflada: es el material para la heladería de la Unidad 5. Si no la activaste, hazlo ahora en la Ronda 11.</td></tr>
+    <tr><td><b>Inicio de sesión</b> (15 min)</td><td>Presenta la pestaña <b>Datos y ética</b>. Pide a un equipo que muestre su tabla de elasticidad y pregunta a la clase qué comparaciones son válidas antes de revelar la columna de temporada.</td></tr>
+    <tr><td><b>Ronda 11 · Diagnosticar y decidir</b></td><td>Cada equipo compra el estudio de elasticidad, identifica su pilar más débil e invierte ahí, y calcula el valor esperado de personalizar precios con la tabla de la pestaña. Deben escribir en su informe si personalizan y por qué.</td></tr>
+    <tr><td><b>Ronda 12 · Ajustar y cerrar</b></td><td>Los equipos revisan si su inversión movió el cuello de botella a otro pilar y deciden de nuevo. Para mostrar el efecto de la regulación, puedes subir la probabilidad de detección en <b>Configuración</b> antes de cerrar la ronda y anunciarlo como "nueva ley": el valor esperado de personalizar pasa a ser negativo.</td></tr>
+    <tr><td><b>Cierre del módulo</b> (20 min)</td><td>Discute la pregunta final de la pestaña: aunque el valor esperado fuera positivo, ¿querrían que sus clientes supieran cómo les fijan el precio? Cierra con la idea de la Unidad 5: las catorce herramientas anteriores necesitan datos, personas y procesos que las sostengan.</td></tr>
+  </tbody></table>
+
+  <h3 id="m-mantenimiento">Mantenimiento de la base de datos</h3>
+  <p>La base de datos del simulador está en el plan gratuito de Supabase, que pausa los proyectos con poca actividad durante 7 días. Un flujo automático del repositorio (pestaña <b>Actions</b> en GitHub, "Mantener activa la base del simulador") la consulta cada 3 días para evitarlo. GitHub desactiva los flujos programados si el repositorio pasa 60 días sin cambios: entre una edición del curso y otra, revisa esa pestaña y reactívalo si hace falta.</p>
+
+  <h3 id="m-limites">Qué tener en cuenta en esta versión</h3>
+  <p>Esta versión del simulador fue recalibrada para que cada unidad funcione como la enseña el material. Se verificó con 25 criterios, desde la elasticidad de la Unidad 2 hasta el valor esperado de la Unidad 5. Lo que conviene saber antes de clase:</p>
   <ul>
-    <li><b>Tarifa Promocional.</b> No atrae pasajeros nuevos: solo cambia lo que paga una parte de los que ya vuelan con el equipo, así que usarla reduce la utilidad. Por eso debe ser menor que la Tarifa Flex (el sistema lo exige), y ni ella ni la valla, que sin promocional no tiene efecto, cuentan en el criterio de herramientas. Sirve para discutir en clase por qué la segmentación necesita demanda nueva para rendir.</li>
-    <li><b>Equipaje y seguro.</b> La proporción de pasajeros que compra cada extra es fija y no depende del precio. Para que no haya ingresos ilimitados, cada extra tiene un precio máximo (30% de la Tarifa Flex por defecto, editable en Configuración). Es esperable que los equipos cobren ese máximo.</li>
-    <li><b>Encuesta de intención de compra.</b> Es una estimación simulada y puede recomendar un precio más bajo del que realmente conviene en el simulador. La pantalla le pide al estudiante contrastarla con su propio historial; vale la pena comentarlo en clase.</li>
-    <li><b>Overbooking.</b> Con la calibración actual, un equipo a precio de mercado casi nunca llena el avión (ni siquiera con ocupación objetivo de 95%), así que el overbooking rara vez tiene efecto. Solo se vuelve relevante si un equipo capta mucha más demanda que sus competidores. El cálculo del fractil crítico de la Unidad 4 conviene trabajarlo con el ejemplo de la unidad.</li>
-    <li><b>Sanción por precios personalizados.</b> Si se detecta la práctica, el equipo paga en esa misma ronda una sanción de 10% de su ingreso por tarifa, además de la caída de atractivo en la ronda siguiente. Ambos valores son editables en Configuración y el estudiante los ve en su panel.</li>
+    <li><b>Competir por precio tiene consecuencias.</b> La demanda de cada aerolínea responde a su precio frente a la competencia (elasticidad cercana a −2,0, como en la Unidad 2), y el mercado total se achica si todos suben. Subir precios en conjunto ya no conviene. Cuando los equipos responden entre sí, los precios tienden a estabilizarse algo por debajo del precio de BoA, con aviones casi llenos: copiar a BoA ya no es una estrategia ganadora.</li>
+    <li><b>La Tarifa Promocional capta demanda nueva,</b> pero solo rinde con asientos vacíos. La mejor valla depende del descuento: con un descuento chico conviene una valla suave; con uno grande, una fuerte.</li>
+    <li><b>Los extras tienen su propio precio óptimo.</b> Cobrarlos por debajo de su costo pierde dinero, y cobrarlos muy caro espanta pasajeros. La combinación que mejor funciona es una Flex algo más baja con extras razonables (afeitadora y repuestos).</li>
+    <li><b>Los no-shows son aleatorios,</b> con 6% de probabilidad por pasajero en el doméstico. La regla del fractil crítico coincide con la mejor sobreventa (3 asientos en el ejemplo de la Unidad 4). Dos equipos con la misma decisión pueden obtener utilidades algo distintas; no afecta la calificación, pero sí el ranking de caja.</li>
+    <li><b>El precio dinámico solo reacciona si activas una temporada</b> alta o baja en Control de ronda.</li>
+    <li><b>La encuesta de intención de compra</b> calcula el porcentaje de compra con la misma lógica del motor, pero asume que la competencia no reacciona. Su recomendación rinde entre 85% y 100% del mejor precio posible: es una buena guía, no una respuesta exacta.</li>
+    <li><b>La madurez organizacional</b> parte de Talento 5, Procesos 4 y Datos 6 para todas las aerolíneas. Invertir en el pilar más débil conviene y en los fuertes no, pero el efecto es modesto: enseña la lógica del cuello de botella sin decidir el ranking.</li>
+    <li><b>Los socios del Pase Frecuente deciden sin sesgos:</b> solo se suscriben si realmente les conviene. En la realidad, muchas personas sobreestiman cuánto usarán una membresía (DellaVigna y Malmendier, 2006).</li>
+    <li><b>Los valores de calibración</b> (sensibilidad al precio, elasticidades por segmento, aceptación de la valla, comportamiento de los extras) son pedagógicos: su dirección tiene respaldo en la literatura, pero sus magnitudes fueron elegidas para que el simulador enseñe bien. Todos son editables en Configuración, en el bloque "Modelo de demanda y herramientas".</li>
   </ul>
 
   <h3 id="m-problemas">Solución de problemas comunes</h3>

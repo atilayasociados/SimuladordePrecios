@@ -289,10 +289,10 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
 const HERRAMIENTAS = [
   ['Tarifa Flex',            h => h.decision && h.decision.precio > 0],
   ['Marketing',              h => h.decision && h.decision.marketing > 0],
-  // 'Tarifa Promocional' excluida (Parche N1-1): en esta versión no atrae demanda, así que
-  // premiar su uso empujaría a los equipos a perder dinero para sumar puntos.
-  // 'Valla' excluida (Parche N1-2b): sin Tarifa Promocional no tiene ningún efecto en el motor,
-  // así que activarla sumaba puntos sin tomar ninguna decisión real.
+  // NIVEL 2: la Tarifa Promocional y la valla vuelven al criterio, porque ahora captan demanda
+  // de placer y la valla tiene sus dos riesgos (en el nivel 1 se habían excluido).
+  ['Tarifa Promocional',     h => h.decision && h.decision.tarifaPromocional > 0 && h.decision.tarifaPromocional < h.decision.precio],
+  ['Valla',                  h => h.decision && h.decision.tarifaPromocional > 0 && h.decision.fuerzaValla && h.decision.fuerzaValla !== 'sin_valla'],   // solo cuenta junto a una promocional
   ['Investigación WTP',      h => !!h.comproWTP],
   ['Equipaje',               h => h.decision && h.decision.precioEquipaje > 0],
   ['Seguro',                 h => h.decision && h.decision.precioSeguro > 0],
@@ -353,7 +353,7 @@ function nivelHerramientas(hist) {
   const usadas = HERRAMIENTAS.filter(([, test]) => hist.filter(test).length >= 2);
   const probadas = HERRAMIENTAS.filter(([, test]) => hist.some(test)).length;
   const c = usadas.length;
-  const n = c >= 9 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;   // umbral 4 bajó de 10 a 9 al excluir promocional y valla
+  const n = c >= 10 ? 4 : c >= 7 ? 3 : c >= 4 ? 2 : 1;   // NIVEL 2: 13 herramientas calificables, umbral original de 10
   return { nivel: n, detalle: `${c} de ${HERRAMIENTAS.length} herramientas usadas en dos rondas o más` + (probadas > c ? ` (${probadas - c} activada(s) una sola vez, no cuentan)` : ''),
            lista: usadas.map(([nombre]) => nombre) };
 }
@@ -497,11 +497,11 @@ function tareaDeCalculo(sesion){
          formula:'Caída tolerable = −Δ Precio ÷ Margen nuevo' },
     3: { titulo:'Calcula el punto de equilibrio de tu Pase Frecuente',
          pasos:[
-           'Iguala los dos caminos: cuota fija más tarifa de socio por vuelo, contra la Tarifa Flex sin membresía.',
-           'Despeja cuántos vuelos al año hacen que ambos cuesten lo mismo.',
-           'Por debajo de ese número, al pasajero no le conviene suscribirse. Ajusta la cuota si el número es muy alto.'
+           'Iguala los dos caminos en un trimestre: la cuota mensual por 3 meses más la tarifa de socio por vuelo, contra la Tarifa Flex sin membresía.',
+           'Despeja cuántos vuelos por trimestre hacen que ambos cuesten lo mismo: vuelos = 3 × cuota ÷ (Tarifa Flex − tarifa de socio).',
+           'Por debajo de ese número, al socio no le conviene suscribirse. Revisa el peor escenario: ¿le conviene al que vuela solo 1 vez por trimestre? Si no, baja la cuota o la tarifa de socio.'
          ],
-         formula:'Cuota + (Tarifa socio × vuelos) = Tarifa Flex × vuelos' },
+         formula:'3 × Cuota + (Tarifa socio × vuelos) = Tarifa Flex × vuelos' },
     4: { titulo:'Calcula tu fractil crítico antes de decidir el overbooking',
          pasos:[
            'Cu es lo que pierdes con un asiento vacío: tu precio menos tu costo variable.',
@@ -589,8 +589,13 @@ const PARAMS = {
   topeBoost:0.45, marketing:{factor:0.08, divisor:400, tope:0.30},
   topePase:0.05, boostAnclaje:0.03, madurez:{min:-0.08,max:0.08},
   benchmarkValor:5.76, umbralValor:0.75, sensValor:0.4, factorValorPct:0.073,
-  probDeteccion:0.30, penalConfianza:0.15, sancionDeteccion:0.10, topeAncillaryPct:0.30, rondasTotales:12,
-  pctEquipaje:0.50, pctSeguro:0.30, costoPuntoMadurez:60,
+  probDeteccion:0.30, penalConfianza:0.15, sancionDeteccion:0.10, topeAncillaryPct:1.00, rondasTotales:12,
+  pctEquipaje:0.50, pctSeguro:0.30, costoPuntoMadurez:20,
+  perfilMadurez:{ talento:5, procesos:4, datos:6 },   // NIVEL 2: diagnóstico inicial de cada aerolínea (igual para todas)
+  extras:{ sensibilidad:1.5, costoPct:0.30, saliencia:0.5 },
+  sensibilidadPrecio:2.65,   // NIVEL 2: mismo β que el motor (la encuesta WTP usa la misma función de elección)
+  aceptacionValla:{ sin_valla:1.00, basica:0.85, fuerte:0.40 },   // NIVEL 2: riesgo 2 de la valla (mismos valores que el motor)                 // NIVEL 2 (mismos valores que el motor)
+  tiposSocio:[{vuelos:1,peso:0.4},{vuelos:3,peso:0.4},{vuelos:6,peso:0.2}], mesesPorRonda:3,
   paseMultiplicador:2.0, paseTope:0.80,
   algoPctPasajeros:0.20, algoSobreprecio:0.25,
   fugaValla:{sin_valla:0.80, basica:0.35, fuerte:0.08}
@@ -672,6 +677,13 @@ function aplicarConstantesDelProfesor(){
   if(c.probDeteccion != null) PARAMS.probDeteccion = pc(c.probDeteccion);
   if(c.penalConfianza != null) PARAMS.penalConfianza = pc(c.penalConfianza);
   if(c.sancionDeteccion != null) PARAMS.sancionDeteccion = pc(c.sancionDeteccion);
+  // NIVEL 2: la vista usa las mismas constantes que el motor
+  if(c.sensibilidadPrecio != null) PARAMS.sensibilidadPrecio = Number(c.sensibilidadPrecio);
+  if(c.aceptacionBasica != null) PARAMS.aceptacionValla = { ...PARAMS.aceptacionValla, basica: pc(c.aceptacionBasica) };
+  if(c.aceptacionFuerte != null) PARAMS.aceptacionValla = { ...PARAMS.aceptacionValla, fuerte: pc(c.aceptacionFuerte) };
+  if(c.extrasSensibilidad != null) PARAMS.extras = { ...PARAMS.extras, sensibilidad: Number(c.extrasSensibilidad) };
+  if(c.extrasCostoPct != null) PARAMS.extras = { ...PARAMS.extras, costoPct: pc(c.extrasCostoPct) };
+  if(c.extrasSaliencia != null) PARAMS.extras = { ...PARAMS.extras, saliencia: pc(c.extrasSaliencia) };
   if(c.topeAncillary != null) PARAMS.topeAncillaryPct = pc(c.topeAncillary);
   if(c.pctEquipaje != null) PARAMS.pctEquipaje = pc(c.pctEquipaje);
   if(c.pctSeguro != null) PARAMS.pctSeguro = pc(c.pctSeguro);
@@ -851,6 +863,10 @@ function renderTabs(){
     (e && e.historial || []).some(h => h.comproWTP || h.comproElasticidad);
   const vistas = [
     {id:'briefing', txt:'Diagnóstico 3C'},
+    {id:'unidad2', txt:'Elasticidad y segmentación'},
+    {id:'unidad3', txt:'Arquitectura de precios'},
+    {id:'unidad4', txt:'Revenue management'},
+    {id:'unidad5', txt:'Datos y ética'},
     {id:'decision', txt:'Hoja de decisión'},
     {id:'reporte',  txt:'KPI y Estado de Resultados'},
     ...(compróAlgo ? [{id:'mercado', txt:'Reporte de Mercado'}] : []),
@@ -887,7 +903,8 @@ function vistaBriefing(){
     {k:'competencia', n:'Competencia', q:'¿Cuánto cobran los demás?', ej:'Mira cuánto cobra el puesto de al lado y se ubica cerca.'},
     {k:'valor', n:'Valor', q:'¿Cuánto vale para mi cliente?', ej:'Sus salteñas son las más jugosas del barrio, y sus clientes pagan un poco más por eso.'}];
   let calculo = '';
-  if(h){
+  const Lh = h ? limitesDeRonda(h) : null;
+  if(h && Lh.piso != null && Lh.techo != null && h.precioMercado){
     const prev = h.tresCAnterior || {costo:5.76, competencia:5.76, valor:5.76};
     const L = limitesDeRonda(h);   // piso, techo y precio con que el motor calculó el 3C
     const pos = Math.max(0,Math.min(1,(L.precio-L.piso)/(L.techo-L.piso)));
@@ -1049,6 +1066,497 @@ function vistaBriefing(){
   </details>`;
 }
 
+const ESTILO = `<style>
+    .paso{display:flex;align-items:center;gap:10px;margin:30px 0 4px;}
+    .paso .num{width:28px;height:28px;border-radius:50%;background:var(--marca);color:#0B1A0E;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;}
+    .paso h2{margin:0;font-size:19px;}
+    .guia{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px;}
+    .guia span{background:var(--panel);border:1px solid var(--borde);border-radius:20px;padding:6px 12px;font-size:13px;}
+    .c3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;} @media (max-width:760px){.c3{grid-template-columns:1fr;}}
+    .c3 .t{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:16px;}
+    .c3 .q{font-size:16px;font-weight:600;margin:2px 0 8px;} .c3 .n{font-size:12px;color:var(--marca);letter-spacing:.04em;text-transform:uppercase;}
+    .c3 .ej{font-size:12.5px;color:var(--texto-tenue);font-style:italic;margin-bottom:12px;line-height:1.45;}
+    .c3 .v{font-size:28px;font-weight:700;} .c3 .l{font-size:13px;margin-top:6px;line-height:1.45;}
+    .esc{position:relative;height:18px;margin-top:10px;} .esc-pista{position:absolute;top:7px;left:0;right:0;height:4px;border-radius:2px;background:var(--panel-alto);}
+    .esc-bench{position:absolute;top:1px;width:2px;height:16px;background:var(--texto-tenue);}
+    .esc-tu{position:absolute;top:3px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--marca);}
+    .esc-et{display:flex;justify-content:space-between;font-size:11px;color:var(--texto-tenue);}
+    .leyenda{font-size:12px;color:var(--texto-tenue);margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;}
+    .clave{background:var(--marca-tenue);border:1px solid var(--marca);border-radius:12px;padding:14px 16px;margin-top:14px;font-size:14px;line-height:1.55;}
+    details.mas{background:var(--panel);border:1px solid var(--borde);border-radius:10px;padding:10px 14px;margin-top:10px;}
+    details.mas summary{cursor:pointer;font-size:13.5px;color:var(--marca);font-weight:500;}
+    details.mas[open] summary{margin-bottom:8px;}
+    .tbl3c{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0;}
+    .tbl3c th{text-align:left;color:var(--texto-tenue);font-weight:500;font-size:12px;padding:7px 9px;border-bottom:1px solid var(--borde);}
+    .tbl3c td{padding:8px 9px;border-bottom:1px solid var(--borde);vertical-align:top;line-height:1.5;}
+    .tbl3c td.calc{font-size:12.5px;color:var(--texto-tenue);}
+    .lim-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;} @media (max-width:760px){.lim-grid{grid-template-columns:1fr;}}
+    .lim{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:16px;}
+    .lim .n{font-size:12px;color:var(--marca);letter-spacing:.04em;text-transform:uppercase;} .lim .big{font-size:26px;font-weight:700;margin:2px 0 6px;}
+    .lim p{margin:0 0 8px;font-size:13.5px;line-height:1.5;} .lim .f{font-size:12px;color:var(--texto-tenue);}
+    .barra-rango{position:relative;height:50px;margin:16px 4px 4px;}
+    .barra-rango .pista{position:absolute;top:18px;left:0;right:0;height:8px;border-radius:4px;background:var(--panel-alto);}
+    .barra-rango .zona{position:absolute;top:18px;height:8px;border-radius:4px;background:var(--marca);opacity:.55;}
+    .barra-rango .marca{position:absolute;top:8px;width:2px;height:28px;background:var(--texto);}
+    .barra-rango .et{position:absolute;top:38px;transform:translateX(-50%);font-size:11.5px;color:var(--texto-tenue);white-space:nowrap;}
+    .gl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 20px;font-size:13px;line-height:1.5;} @media (max-width:760px){.gl{grid-template-columns:1fr;}}
+    .tbl3c td.ok{color:var(--marca);font-weight:600;} .tbl3c td.no{color:#E8A23C;font-weight:600;}
+    .calcu{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;} .calcu .t{flex:1 1 200px;background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:14px;}
+    .calcu .t .v{font-size:24px;font-weight:700;margin:4px 0;} .calcu .t .s{font-size:12.5px;color:var(--texto-tenue);line-height:1.45;}
+  </style>`;
+function vistaUnidad2(){
+  const e = APP.equipo, p = PARAMS.perfiles[e.perfil];
+  const hist = (e.historial || []).filter(h => !h.neutra);
+  const cv = p.iocPorPasajero;
+  const f1 = v => (Math.round(v*10)/10).toFixed(1).replace('.',',');
+  const pct = v => (v>0?'+':'') + f1(v) + '%';
+  const segN = p.segmentos.negocio, segP = p.segmentos.placer;
+  const flexHoy = (APP.decisionActual && APP.decisionActual.precio) || (hist.length ? hist[hist.length-1].precioDecidido : p.precioBase);
+  const ultAb = hist.length && hist[hist.length-1].capacidad ? hist[hist.length-1].capacidad.abordados : 50;
+  // Paso 1: calculadora de caída tolerable con el precio actual
+  const escenarios = [0.05, 0.10, -0.10].map(x => {
+    const nuevo = flexHoy*(1+x), margen = nuevo - cv, pe = (nuevo - flexHoy)/margen*100;
+    return {x, nuevo, margen, pe};
+  });
+  // Paso 1 con datos reales: rondas consecutivas donde cambió el precio
+  const cambios = [];
+  for(let i=1;i<hist.length;i++){
+    const a = hist[i-1], b = hist[i];
+    if(Math.abs(b.precioDecidido - a.precioDecidido) < 0.01) continue;
+    const dP = (b.precioDecidido - a.precioDecidido)/a.precioDecidido*100;
+    const dQ = (b.pasajerosGanados - a.pasajerosGanados)/a.pasajerosGanados*100;
+    const tol = (b.precioDecidido - a.precioDecidido)/(b.precioDecidido - cv)*100;
+    const convino = dP > 0 ? (-dQ < tol) : (dQ > -tol);
+    cambios.push({a,b,dP,dQ,tol,convino,el: dQ/dP});
+  }
+  // Paso 3: rondas con promocional
+  const promos = hist.filter(h => h.decision && h.decision.tarifaPromocional > 0);
+  const sinPromo = hist.filter(h => !(h.decision && h.decision.tarifaPromocional > 0) && h.segmentosAbordo);
+  const placerSinPromo = sinPromo.length ? sinPromo[sinPromo.length-1].segmentosAbordo.placer : null;
+  const fugaTbl = PARAMS.fugaValla;
+  const negEj = Math.round(ultAb*segN);
+  return `${ESTILO}
+  <h2 class="titulo">Elasticidad y segmentación · Unidad 2</h2>
+  <p class="sub" style="margin-bottom:4px;">Desde la Sesión 2 tienes herramientas nuevas para mover tu precio con evidencia y cobrar distinto a distintos clientes. Esta pestaña sigue los cuatro pasos de la Unidad 2.</p>
+  <div class="guia"><span>① ¿Cuánto pueden caer tus ventas si subes el precio?</span><span>② ¿A quién le vendes?</span><span>③ ¿Cómo separar a tus clientes?</span><span>④ ¿Cuánto pagarían?</span></div>
+
+  <div class="paso"><div class="num">1</div><h2>¿Cuánto pueden caer tus ventas si subes el precio?</h2></div>
+  <p class="sub">Cuando subes el precio, algunos clientes se van. La pregunta útil no es "¿se irá alguien?", sino "<b>¿cuántos pueden irse antes de que pierda dinero?</b>". A eso se le llama <b>caída tolerable</b>.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>Un ejemplo sencillo (Unidad 2):</b> una panadería vende a $5 un pan que le cuesta $3; gana $2 por pan. Si sube el precio 8%, a $5,40, gana $2,40 por pan. Puede perder hasta <b>16,7%</b> de sus ventas y seguir ganando lo mismo: $0,40 ÷ $2,40 = 16,7%. Si cree que perderá solo 10%, le conviene subir.</p>
+    <p style="margin:0;"><b>La fórmula:</b> Caída tolerable = cuánto sube el precio ÷ lo que ganas por cada venta con el precio nuevo (el <b>margen</b>: precio − costo variable).</p>
+  </div>
+  <p class="sub" style="margin:14px 0 0;">Con tu Tarifa Flex actual (${money2(flexHoy)}) y tu costo variable de ${money2(cv)} por pasajero:</p>
+  <div class="calcu">
+    ${escenarios.map(s => `<div class="t">
+      <div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">${s.x>0?'Si subes':'Si bajas'} ${Math.abs(s.x*100)}%</div>
+      <div class="s">Nuevo precio ${money2(s.nuevo)} · nuevo margen ${money2(s.margen)}</div>
+      <div class="v cifra">${s.x>0 ? f1(s.pe)+'%' : f1(-s.pe)+'%'}</div>
+      <div class="s">${s.x>0 ? `Puedes perder hasta ese porcentaje de pasajeros y seguir ganando lo mismo: ${money2(s.nuevo-flexHoy)} ÷ ${money2(s.margen)}.` : `Necesitas ganar al menos ese porcentaje de pasajeros extra para no perder dinero: ${money2(flexHoy-s.nuevo)} ÷ ${money2(s.margen)}.`}</div>
+    </div>`).join('')}
+  </div>
+  <details class="mas"><summary>¿Y qué es la elasticidad?</summary>
+    <p style="margin:0 0 6px;font-size:13.5px;line-height:1.55;">Es la medida de qué tan sensibles son tus clientes al precio: el porcentaje que cambian tus ventas dividido por el porcentaje que cambió el precio. Si el precio sube 5% y las ventas caen 10%, la elasticidad es −10% ÷ 5% = <b>−2,0</b>.</p>
+    <p style="margin:0;font-size:13.5px;line-height:1.55;">Si el número (sin el signo) es mayor que 1, la demanda es <b>elástica</b>: los clientes reaccionan fuerte. Si es menor que 1, es <b>inelástica</b>: reaccionan poco. En la práctica no necesitas saber tu elasticidad exacta: te basta comparar la caída que esperas con tu caída tolerable.</p>
+  </details>
+  ${cambios.length ? `<details class="mas" open><summary>Lo que pasó cuando cambiaste tu precio</summary>
+    <table class="tbl3c">
+      <tr><th>Rondas</th><th>Tu precio</th><th>Tus pasajeros</th><th>Caída tolerable</th><th>Elasticidad observada</th><th>¿Convino?</th></tr>
+      ${cambios.map(c => `<tr><td>${c.a.ronda} → ${c.b.ronda}</td>
+        <td class="cifra">${money2(c.a.precioDecidido)} → ${money2(c.b.precioDecidido)} (${pct(c.dP)})</td>
+        <td class="cifra">${c.a.pasajerosGanados} → ${c.b.pasajerosGanados} (${pct(c.dQ)})</td>
+        <td class="cifra">${c.dP>0 ? 'perder hasta '+f1(c.tol)+'%' : 'ganar al menos '+f1(-c.tol)+'%'}</td>
+        <td class="cifra">${f1(c.el)}</td>
+        <td class="${c.convino?'ok':'no'}">${c.convino?'Sí':'No'}</td></tr>`).join('')}
+    </table>
+    <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);line-height:1.5;">"¿Convino?" compara lo que cambiaron tus pasajeros con tu caída tolerable. Ojo: entre una ronda y otra también cambian los precios de la competencia, tu marketing y la temporada, así que la elasticidad observada es una aproximación, no una medida exacta.</p>
+  </details>` : `<p style="font-size:12.5px;color:var(--texto-tenue);margin:10px 0 0;">Cuando cambies tu precio de una ronda a otra, aquí verás si la caída de pasajeros quedó dentro de tu caída tolerable.</p>`}
+
+  <div class="paso"><div class="num">2</div><h2>¿A quién le vendes?</h2></div>
+  <p class="sub">No todos tus pasajeros valoran lo mismo. <b>Segmentar</b> es reconocer grupos de clientes distintos para cobrarle a cada uno según lo que valora. En tu mercado hay dos:</p>
+  <div class="calcu">
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">Viajero de negocios · ${Math.round(segN*100)}%</div>
+      <div class="s" style="font-size:13.5px;color:var(--texto);margin-top:6px;">Viaja por trabajo, muchas veces lo paga su empresa y cambia sus planes a último momento. Le importa la flexibilidad más que el precio: es tu cliente de la <b>Tarifa Flex</b>.</div></div>
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">Viajero de placer · ${Math.round(segP*100)}%</div>
+      <div class="s" style="font-size:13.5px;color:var(--texto);margin-top:6px;">Viaja de vacaciones o a ver a su familia, paga de su bolsillo y compara precios. Puede planificar con anticipación: es el cliente de una <b>Tarifa Promocional</b>.</div></div>
+  </div>
+  <details class="mas"><summary>Las tres formas de cobrar distinto a distintos clientes</summary>
+    <p style="margin:0 0 8px;font-size:13.5px;line-height:1.55;">Cobrar distinto a distintos clientes se llama <b>discriminación de precios</b>. La Unidad 2 distingue tres grados, y cada uno aparece en tu simulador:</p>
+    <table class="tbl3c">
+      <tr><th>Grado</th><th>Qué es</th><th>En el simulador</th></tr>
+      <tr><td><b>1er grado</b></td><td>Un precio distinto para cada cliente, según lo que está dispuesto a pagar.</td><td>Precios personalizados (Sesión 5)</td></tr>
+      <tr><td><b>2do grado</b></td><td>El precio depende de cuánto compra el cliente, y él mismo elige. Los programas de fidelidad son de este tipo.</td><td>Pase Frecuente (Sesión 3)</td></tr>
+      <tr><td><b>3er grado</b></td><td>Precios distintos por grupos que se pueden identificar a simple vista (estudiantes, adultos mayores).</td><td>No se usa en este mercado</td></tr>
+    </table>
+    <p style="margin:8px 0 0;font-size:13px;line-height:1.55;">La <b>Tarifa Promocional con valla</b> funciona por <b>autoselección</b>: no le preguntas al cliente quién es; él decide si acepta las condiciones del precio bajo. Es lo que verás en el paso 3.</p>
+  </details>
+
+  <div class="paso"><div class="num">3</div><h2>¿Cómo separar a tus clientes?</h2></div>
+  <p class="sub">Si ofreces un precio más bajo, ¿cómo evitas que tus viajeros de negocios también lo compren? Con una <b>valla</b>: una condición para acceder al precio bajo que el viajero de negocios no puede o no quiere cumplir. Por ejemplo: "no reembolsable y comprada con 21 días de anticipación".</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>Ninguna valla es perfecta.</b> Algunos viajeros de negocios logran colarse y pagan el precio bajo: eso es la <b>fuga</b>. Con ${ultAb} pasajeros, de los cuales ${negEj} son de negocios:</p>
+    <table class="tbl3c">
+      <tr><th>Valla</th><th>Riesgo 1: viajeros de negocios que se cuelan</th><th>En tu caso</th><th>Riesgo 2: viajeros de placer que aceptan las condiciones</th></tr>
+      <tr><td>Sin valla</td><td class="cifra">${Math.round(fugaTbl.sin_valla*100)}%</td><td class="cifra">${Math.round(negEj*fugaTbl.sin_valla)} de ${negEj}</td><td class="cifra">${Math.round(PARAMS.aceptacionValla.sin_valla*100)}%</td></tr>
+      <tr><td>Básica</td><td class="cifra">${Math.round(fugaTbl.basica*100)}%</td><td class="cifra">${Math.round(negEj*fugaTbl.basica)} de ${negEj}</td><td class="cifra">${Math.round(PARAMS.aceptacionValla.basica*100)}%</td></tr>
+      <tr><td>Fuerte</td><td class="cifra">${Math.round(fugaTbl.fuerte*100)}%</td><td class="cifra">${Math.round(negEj*fugaTbl.fuerte)} de ${negEj}</td><td class="cifra">${Math.round(PARAMS.aceptacionValla.fuerte*100)}%</td></tr>
+    </table>
+    <p style="margin:8px 0 0;">Una valla puede fallar de dos formas: <b>muy floja</b>, y los de negocios se cuelan; o <b>muy estricta</b>, y espanta a los de placer que querías atraer, que entonces te comparan por tu Flex y muchos se van con la competencia. <b>No hay una valla mejor para siempre:</b> con un descuento chico, cada viajero que se cuela te cuesta poco y conviene una valla más suave; con un descuento grande, conviene una valla fuerte.</p>
+  </div>
+  ${promos.length ? `<details class="mas" open><summary>Lo que pasó con tu Tarifa Promocional</summary>
+    <table class="tbl3c">
+      <tr><th>Ronda</th><th>Tu Flex / Promocional</th><th>Valla</th><th>Pasajeros de placer a bordo</th><th>Negocios que se colaron</th><th>Ingreso que dejaste de cobrar</th></tr>
+      ${promos.map(h => `<tr><td>${h.ronda}</td><td class="cifra">${money2(h.precioDecidido)} / ${money2(h.decision.tarifaPromocional)}</td>
+        <td>${({sin_valla:'Sin valla',basica:'Básica',fuerte:'Fuerte'})[h.decision.fuerzaValla||'sin_valla']}</td>
+        <td class="cifra">${h.segmentosAbordo ? h.segmentosAbordo.placer + (placerSinPromo != null ? ' (antes ' + placerSinPromo + ')' : '') : '—'}</td>
+        <td class="cifra">${h.dilucion ? h.dilucion.pasajerosNegocioDiluidos : '—'}</td>
+        <td class="cifra">${h.dilucion ? money2(h.dilucion.montoTotal) + ' (' + h.dilucion.pasajerosNegocioDiluidos + ' × ' + money2(h.dilucion.brechaPorBoleto) + ')' : '—'}</td></tr>`).join('')}
+    </table>
+    <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);">La promocional funciona si atrae viajeros de placer nuevos (compara con la última ronda sin promoción) sin que se cuelen demasiados de negocios, que pagan la diferencia entre tu Flex y tu Promocional menos de lo que habrían pagado. Y solo rinde si tienes asientos vacíos: con el avión lleno, cada pasajero de placer nuevo desplaza a uno que pagaba más.</p>
+  </details>` : ''}
+
+  <div class="paso"><div class="num">4</div><h2>¿Cuánto pagarían tus clientes?</h2></div>
+  <p class="sub">Para elegir un precio con evidencia necesitas saber cuánto está dispuesto a pagar cada cliente. Se le llama <b>WTP</b> (del inglés <i>willingness to pay</i>, disposición a pagar).</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>La forma más usada es preguntar a los clientes si comprarían a varios precios</b> (método Gabor-Granger). Luego, para cada precio: ingreso esperado = precio × % que compraría. El mejor precio es el de mayor ingreso esperado, <b>no</b> el que más gente acepta ni el más alto.</p>
+    <p style="margin:0 0 6px;">Ejemplo de la Unidad 2: una escuela de idiomas pregunta a estudiantes independientes.</p>
+    <table class="tbl3c">
+      <tr><th>Precio</th><th>% que compraría</th><th>Ingreso esperado (por cada 100)</th></tr>
+      <tr><td class="cifra">$30</td><td class="cifra">90%</td><td class="cifra">$2.700</td></tr>
+      <tr><td class="cifra"><b>$45</b></td><td class="cifra"><b>65%</b></td><td class="cifra ok">$2.925 ← el mejor</td></tr>
+      <tr><td class="cifra">$60</td><td class="cifra">35%</td><td class="cifra">$2.100</td></tr>
+      <tr><td class="cifra">$75</td><td class="cifra">15%</td><td class="cifra">$1.125</td></tr>
+    </table>
+    <p style="margin:8px 0 0;">En tu simulador, si compras el <b>estudio de WTP</b> (${money2(APP.config && APP.config.costoWtpDomestica!=null ? (e.perfil==='domestica'?APP.config.costoWtpDomestica:APP.config.costoWtpInternacional) : (e.perfil==='domestica'?80:200))}), verás en el Reporte de Mercado una encuesta como esta para tu aerolínea.</p>
+  </div>
+  <details class="mas"><summary>Otras dos formas de medir el WTP</summary>
+    <p style="margin:0 0 6px;font-size:13.5px;line-height:1.55;"><b>Van Westendorp:</b> se pregunta a qué precio el producto parece barato, caro, demasiado barato o demasiado caro. Sirve para encontrar el rango aceptable antes de tener precios definidos.</p>
+    <p style="margin:0;font-size:13.5px;line-height:1.55;"><b>Conjoint:</b> el cliente elige entre combinaciones de atributos y precio. Sirve para saber cuánto vale cada característica, por ejemplo cuánto más pagaría por poder cambiar su pasaje.</p>
+  </details>
+
+  <details class="mas" style="margin-top:22px;" open><summary>Palabras clave de esta pestaña</summary>
+    <div class="gl">
+      <div><b>Margen:</b> lo que ganas por cada venta (precio − costo variable).</div>
+      <div><b>Caída tolerable:</b> cuánto pueden caer tus ventas al subir el precio sin que ganes menos.</div>
+      <div><b>Elasticidad:</b> % que cambian tus ventas ÷ % que cambia el precio.</div>
+      <div><b>Elástica / inelástica:</b> los clientes reaccionan mucho / poco al precio.</div>
+      <div><b>Segmento:</b> grupo de clientes que valora lo mismo.</div>
+      <div><b>Valla:</b> condición para acceder al precio bajo.</div>
+      <div><b>Fuga:</b> clientes de alto valor que se cuelan al precio bajo.</div>
+      <div><b>WTP:</b> lo máximo que un cliente está dispuesto a pagar.</div>
+    </div>
+  </details>`;
+}
+
+/* NIVEL 2 — misma fórmula que demandaExtras() del motor */
+function extrasEstudiante(dec, perfil){
+  const pf = PARAMS.perfiles[perfil], x = PARAMS.extras;
+  const uno = (precio, ref, base) => {
+    if(!precio || precio <= 0) return { tasa:0, precio:0, costo:0, ref };
+    const tasa = Math.max(0, Math.min(1, base * Math.exp(-x.sensibilidad * (precio/ref - 1))));
+    return { tasa, precio, costo: x.costoPct * ref, ref };
+  };
+  const eq = uno(dec.precioEquipaje, pf.refEquipaje, PARAMS.pctEquipaje);
+  const se = uno(dec.precioSeguro, pf.refSeguro, PARAMS.pctSeguro);
+  const carga = (PARAMS.pctEquipaje*(dec.precioEquipaje||0) + PARAMS.pctSeguro*(dec.precioSeguro||0)) * x.saliencia;
+  return { eq, se, carga };
+}
+
+function vistaUnidad3(){
+  const e = APP.equipo, pf = PARAMS.perfiles[e.perfil];
+  const hist = (e.historial || []).filter(h => !h.neutra);
+  const dec = (APP.decisionActual && APP.decisionActual.precio) ? APP.decisionActual : (hist.length ? hist[hist.length-1].decision : {});
+  const flex = dec.precio || pf.precioBase;
+  const f1 = v => (Math.round(v*10)/10).toFixed(1).replace('.',',');
+  const meses = PARAMS.mesesPorRonda;
+  // Paso 1: Pase Frecuente con los tipos de socio del motor
+  const hayPase = (dec.cuotaPaseFrecuente > 0) && (dec.tarifaSocio > 0);
+  const cuota = hayPase ? dec.cuotaPaseFrecuente : 1;
+  const socio = hayPase ? dec.tarifaSocio : Math.round((flex - 4)*100)/100;
+  const tipos = PARAMS.tiposSocio.map(t => {
+    const sin = t.vuelos*flex, con = cuota*meses + t.vuelos*socio;
+    return { ...t, sin, con, ahorro: sin - con };
+  });
+  // Paso 4: extras
+  const x = extrasEstudiante(dec, e.perfil);
+  const filaExtra = (nombre, o, base) => o.precio > 0
+    ? `<tr><td><b>${nombre}</b></td><td class="cifra">${money2(o.precio)}</td><td class="cifra">${money2(o.ref)}</td><td class="cifra">${f1(o.tasa*100)}%</td><td class="cifra">${money2(o.costo)}</td><td class="cifra ${o.precio>o.costo?'ok':'no'}">${money2(o.precio - o.costo)}</td></tr>`
+    : `<tr><td><b>${nombre}</b></td><td colspan="5" style="color:var(--texto-tenue);">No lo estás cobrando (referencia de mercado: ${money2(o.ref)}; lo necesita el ${Math.round(base*100)}% de los pasajeros).</td></tr>`;
+  return `${ESTILO}
+  <h2 class="titulo">Arquitectura de precios · Unidad 3</h2>
+  <p class="sub" style="margin-bottom:4px;">Desde la Sesión 3 dejas de fijar un solo precio: diseñas una <b>estructura</b> de precios. Esta pestaña sigue los cuatro pasos de la Unidad 3.</p>
+  <div class="guia"><span>① ¿Conviene una cuota fija más un cargo por uso?</span><span>② ¿Qué precio ve primero el cliente?</span><span>③ ¿Cómo se ve tu opción en un menú?</span><span>④ ¿Dónde pones el margen?</span></div>
+
+  <div class="paso"><div class="num">1</div><h2>¿Conviene una cuota fija más un cargo por uso?</h2></div>
+  <p class="sub">Una <b>tarifa de dos partes</b> cobra una cuota fija por pertenecer y un precio más bajo cada vez que se usa. La regla de la Unidad 3: <b>evalúala en el peor escenario de uso</b>, no en el promedio, porque el cliente que usa poco es el primero en sentirse estafado.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>El ejemplo del gimnasio (Unidad 3):</b> $15 al mes más $3 por visita, o $8 por visita sin membresía.</p>
+    <table class="tbl3c">
+      <tr><th>Visitas al mes</th><th>Sin membresía</th><th>Con membresía</th><th>¿Conviene la membresía?</th></tr>
+      ${[1,2,3,4,8].map(v => { const s=8*v, c=15+3*v; return `<tr><td class="cifra">${v}</td><td class="cifra">$${s}</td><td class="cifra">$${c}</td><td class="${c<s?'ok':'no'}">${c<s?'Sí, ahorra $'+(s-c):(c===s?'Da igual':'No, pierde $'+(c-s))}</td></tr>`; }).join('')}
+    </table>
+    <p style="margin:8px 0 0;">La membresía conviene desde 4 visitas. Para quien va 1 a 3 veces, es un mal negocio: ese es el peor escenario de uso.</p>
+  </div>
+  <details class="mas"><summary>¿Por qué la gente se suscribe aunque no le convenga?</summary>
+    <p style="margin:0;font-size:13.5px;line-height:1.55;">Porque sobrestima cuánto lo va a usar. DellaVigna y Malmendier (2006) encontraron que los socios de gimnasios pagaban en promedio más por visita que si hubieran pagado cada visita por separado. También existe el sesgo contrario: clientes que eligen la tarifa plana aunque les convenga pagar por uso (Lambrecht y Skiera, 2006). En el simulador los socios deciden sin sesgos: solo se suscriben si realmente les conviene.</p>
+  </details>
+  <p class="sub" style="margin:14px 0 0;">${hayPase ? `Tu Pase Frecuente: cuota de ${money2(cuota)} al mes y tarifa de socio de ${money2(socio)}, con tu Flex de ${money2(flex)}. Así le va a cada tipo de viajero de negocios en un trimestre (${meses} meses):` : `Todavía no ofreces Pase Frecuente. Ejemplo con tu Flex de ${money2(flex)}, una cuota de ${money2(cuota)} al mes y una tarifa de socio de ${money2(socio)}, en un trimestre (${meses} meses):`}</p>
+  <table class="tbl3c">
+    <tr><th>Tipo de socio</th><th>Sin pase</th><th>Con pase</th><th>Resultado para el socio</th></tr>
+    ${tipos.map(t => `<tr><td>Vuela ${t.vuelos} ${t.vuelos===1?'vez':'veces'} por trimestre</td>
+      <td class="cifra">${t.vuelos} × ${money2(flex)} = ${money2(t.sin)}</td>
+      <td class="cifra">${money2(cuota)} × ${meses} + ${t.vuelos} × ${money2(socio)} = ${money2(t.con)}</td>
+      <td class="${t.ahorro>0?'ok':'no'}">${t.ahorro>0 ? 'Ahorra '+money2(t.ahorro)+': se suscribe' : 'Pierde '+money2(-t.ahorro)+': no se suscribe'}</td></tr>`).join('')}
+  </table>
+  <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);line-height:1.5;">Si tu diseño hace perder al que vuela 1 vez, solo atraerás a los grandes viajeros. Un pase que conviene incluso al que menos vuela atrae a los tres tipos y te trae viajeros de negocios que hoy vuelan con la competencia.</p>
+  <details class="mas"><summary>Otras dos formas de precio no lineal: bundling y versioning</summary>
+    <p style="margin:0 0 6px;font-size:13.5px;line-height:1.55;"><b>Bundling (paquete):</b> vender varios productos juntos por un precio menor a la suma, por ejemplo pasaje + maleta + asiento. Funciona porque clientes que valoran distinto cada parte terminan comprando el paquete (Adams y Yellen, 1976). En el estudio de De Toni et al. (2017), ofrecer paquetes con ahorro era una de las prácticas del grupo de empresas con precios altos, asociado a mayor margen.</p>
+    <p style="margin:0;font-size:13.5px;line-height:1.55;"><b>Versioning (versiones):</b> ofrecer el mismo producto en versiones con distintas condiciones y precios, como las familias de tarifa Básica, Clásica y Flex. Cada cliente elige la versión que refleja cuánto valora la flexibilidad (Shapiro y Varian, 1998). Tu Tarifa Flex y tu Tarifa Promocional son una versión simple de esta idea.</p>
+  </details>
+
+  <div class="paso"><div class="num">2</div><h2>¿Qué precio ve primero el cliente?</h2></div>
+  <p class="sub">Cuando no sabemos cuánto vale algo, nos apoyamos en el primer número que vemos y ajustamos poco a partir de él. Es el <b>efecto de anclaje</b> (Tversky y Kahneman, 1974). Por eso un "precio antes" tachado junto al precio actual cambia cómo se percibe el precio real.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>Cómo se mide:</b> se muestran anclas distintas a dos grupos y se comparan sus estimaciones con el <b>Índice de Anclaje</b> (Jacowitz y Kahneman, 1995):</p>
+    <p style="margin:0 0 8px;">AI = (mediana del grupo con ancla alta − mediana del grupo con ancla baja) ÷ (ancla alta − ancla baja)</p>
+    <p style="margin:0 0 8px;">Ejemplo: un grupo ve "antes $66" y estima en mediana $45; otro ve "antes $16" y estima $25. AI = ($45 − $25) ÷ ($66 − $16) = <b>0,40</b>. Un AI de 0 es "sin anclaje" y de 1, "anclaje total". Zong y Guo (2022) obtuvieron 0,48, 0,78 y 0,82 en tres productos.</p>
+    <p style="margin:0;">En tu simulador, la <b>tarifa tachada</b> sube tu atractivo un 3% fijo frente a la competencia. ${dec.anclaje ? 'La tienes activada.' : 'Hoy no la tienes activada.'}</p>
+  </details>
+  <details class="mas"><summary>El anclaje no funciona igual con todos</summary>
+    <p style="margin:0;font-size:13.5px;line-height:1.55;">Zong y Guo (2022) encontraron que el efecto cambia según la persona (su conocimiento del producto y su confianza, entre otros factores) y que se debilita cuando se le advierte al cliente sobre el anclaje. Es un efecto real y medible, pero no una palanca garantizada.</p>
+  </details>
+
+  <div class="paso"><div class="num">3</div><h2>¿Cómo se ve tu opción en un menú?</h2></div>
+  <p class="sub">Las opciones de un menú se juzgan comparándolas entre sí. Ante tres opciones, muchas personas evitan los extremos y eligen la del medio: es la <b>aversión a los extremos</b>, o efecto compromiso (Simonson, 1989; Simonson y Tversky, 1992). Por eso existe el tamaño "Jumbo": hace que el "Grande" parezca sensato.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>Un efecto relacionado, el señuelo:</b> agregar una opción claramente peor que otra puede aumentar las ventas de la opción que la supera (Huber, Payne y Puto, 1982).</p>
+    <p style="margin:0;"><b>Úsalo con cautela.</b> En 2014, dos grupos de investigadores no lograron reproducir el efecto señuelo con productos presentados de forma realista, y abrieron un debate que sigue vigente (Frederick, Lee y Baskin, 2014; Yang y Lynn, 2014). En tu simulador no hay un menú de tarifas: lo probarán en el experimento de clase.</p>
+  </div>
+
+  <div class="paso"><div class="num">4</div><h2>¿Dónde pones el margen?</h2></div>
+  <p class="sub">Cuando un producto tiene complementarios, se puede poner margen bajo en el producto principal (el <b>ancla</b>) y margen alto en los complementarios: el modelo <b>afeitadora y repuestos</b>. En tu aerolínea, el ancla es la Tarifa Flex y los complementarios son el equipaje y el seguro.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>Por qué funciona:</b> el cliente elige mirando sobre todo el precio principal y subestima los cargos que se suman después (Morwitz, Greenleaf y Johnson, 1998). <b>Hasta dónde funciona:</b> quien necesita llevar maleta sí ve la tarifa completa y, si le parece excesiva, se va con otra aerolínea.</p>
+    <p style="margin:0;"><b>Qué dice la investigación:</b> en el estudio de De Toni et al. (2017), esta práctica formaba parte del grupo de estrategias de precios altos que se asoció con un mayor margen de ganancia.</p>
+  </div>
+  <p class="sub" style="margin:14px 0 0;">Tus extras${hist.length ? '' : ' (con la decisión que tienes en tu hoja)'}:</p>
+  <table class="tbl3c">
+    <tr><th>Extra</th><th>Tu precio</th><th>Referencia de mercado</th><th>Pasajeros que lo compran</th><th>Tu costo por unidad</th><th>Tu margen por unidad</th></tr>
+    ${filaExtra('Equipaje', x.eq, PARAMS.pctEquipaje)}
+    ${filaExtra('Seguro de viaje', x.se, PARAMS.pctSeguro)}
+  </table>
+  <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);line-height:1.5;">Mientras más cobras por encima de la referencia, menos pasajeros compran el extra, y los que lo necesitan pueden irse con la competencia. ${x.carga > 0 ? `Tus extras suman ${money2(x.carga)} al precio que percibe el pasajero al elegir aerolínea.` : ''}</p>
+
+  <details class="mas" style="margin-top:22px;" open><summary>Palabras clave de esta pestaña</summary>
+    <div class="gl">
+      <div><b>Tarifa de dos partes:</b> cuota fija + precio por uso.</div>
+      <div><b>Peor escenario de uso:</b> el cliente que menos usa el producto.</div>
+      <div><b>Bundling:</b> vender productos juntos en un paquete.</div>
+      <div><b>Versioning:</b> versiones del mismo producto con distinto precio.</div>
+      <div><b>Anclaje:</b> el primer número que ves guía tu estimación.</div>
+      <div><b>Índice de Anclaje:</b> mide cuánto pesó el ancla (0 a 1).</div>
+      <div><b>Efecto compromiso:</b> preferir la opción del medio.</div>
+      <div><b>Afeitadora y repuestos:</b> margen bajo en el ancla, alto en los complementarios.</div>
+    </div>
+  </details>`;
+}
+
+/* Distribución binomial de no-shows (misma lógica que el motor del nivel 2) */
+function binomAcum(n, p, k){ let s=0, c=1; for(let i=0;i<=k;i++){ if(i>0) c=c*(n-i+1)/i; s+=c*Math.pow(p,i)*Math.pow(1-p,n-i); } return s; }
+
+function vistaUnidad4(){
+  const e = APP.equipo, pf = PARAMS.perfiles[e.perfil];
+  const hist = (e.historial || []).filter(h => !h.neutra);
+  const h = hist[hist.length-1];
+  const dec = (APP.decisionActual && APP.decisionActual.precio) ? APP.decisionActual : (h ? h.decision : {});
+  const flex = dec.precio || pf.precioBase, cv = pf.iocPorPasajero, cap = pf.capacidad, ns = pf.noShowPct;
+  const f2 = v => v.toFixed(2).replace('.',','), f1 = v => v.toFixed(1).replace('.',','), f3 = v => v.toFixed(3).replace('.',',');
+  // Paso 1: fractil crítico
+  const Cu = flex - cv, Co = 2*flex, fr = Cu/(Cu+Co);
+  // Paso 2: tabla de sobreventa según la regla del fractil
+  let kOpt = 0;
+  const filasK = [0,1,2,3,4,5,6].map(k => {
+    const R = cap + k, pMenos = k===0 ? 0 : binomAcum(R, ns, k-1);   // prob. de que falten menos de k → alguien se queda sin volar
+    const conviene = k===0 || pMenos <= fr; if(k>0 && conviene) kOpt = k;
+    return { k, R, esperados: R*ns, pMenos, conviene };
+  });
+  const histNS = hist.filter(x => x.capacidad && x.capacidad.reservas);
+  const noLleno = h && h.pasajerosGanados != null && h.pasajerosGanados < cap;
+  // Paso 3: métricas
+  const m = h && h.metricas, ing = h && h.estadoResultados ? h.estadoResultados.ingresos : null, ab = h && h.capacidad ? h.capacidad.abordados : null;
+  let diag = null;
+  if(m && h.precioMercado){
+    const lfAlto = m.loadFactor >= 85, yAlto = m.yield >= h.precioMercado;
+    diag = lfAlto && !yAlto ? {k:'lfa_yb', t:'Ocupación alta, yield bajo', c:'El precio', q:'¿Estás vendiendo demasiado barato para llenar?'}
+         : !lfAlto && yAlto ? {k:'lfb_ya', t:'Ocupación baja, yield alto', c:'La demanda', q:'¿Tu precio espanta pasajeros que sí podrías captar?'}
+         : lfAlto && yAlto ? {k:'ambos', t:'Ambos altos', c:'Nada: vas bien', q:'Cuida que la competencia no te alcance.'}
+         : {k:'ninguno', t:'Ambos bajos', c:'Precio y demanda a la vez', q:'Revisa primero por qué no llenas el avión, y luego tu precio.'};
+  }
+  // Paso 4: precio dinámico
+  const rondasDP = hist.filter(x => x.decision && x.decision.dynamicPricing);
+  const tabla = (cab, filas) => `<table class="tbl3c"><tr>${cab.map(c=>`<th>${c}</th>`).join('')}</tr>${filas.join('')}</table>`;
+  return `${ESTILO}
+  <h2 class="titulo">Revenue management · Unidad 4</h2>
+  <p class="sub" style="margin-bottom:4px;">Tu avión tiene ${cap} asientos y un asiento vacío al despegar se pierde para siempre. Desde la Sesión 4 decides cuánto vender, a qué precio y cuándo ajustarlo. Esta pestaña sigue los cuatro pasos de la Unidad 4.</p>
+  <div class="guia"><span>① ¿Cuánto cuesta equivocarte?</span><span>② ¿Cuántos asientos sobrevender?</span><span>③ ¿Dónde está tu cuello de botella?</span><span>④ ¿Qué hizo tu precio dinámico?</span></div>
+
+  <div class="paso"><div class="num">1</div><h2>¿Cuánto cuesta equivocarte?</h2></div>
+  <p class="sub">Algunos pasajeros reservan y no se presentan: son los <b>no-shows</b>. Si vendes justo los ${cap} asientos, volarás con asientos vacíos. Si vendes de más (<b>overbooking</b>) y se presentan todos, tendrás que compensar a quien se quede sin volar. Ninguno de los dos errores es gratis, pero no cuestan lo mismo.</p>
+  <div class="calcu">
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">Cu · un asiento vacío</div><div class="v cifra">${money2(Cu)}</div><div class="s">Lo que ese pasajero te habría dejado: tu Flex ${money2(flex)} − tu costo variable ${money2(cv)}.</div></div>
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">Co · un pasajero sin asiento</div><div class="v cifra">${money2(Co)}</div><div class="s">La compensación que pagas: el doble del precio, 2 × ${money2(flex)}.</div></div>
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">Fractil crítico</div><div class="v cifra">${f3(fr)}</div><div class="s">Cu ÷ (Cu + Co) = ${money2(Cu)} ÷ ${money2(Cu+Co)}. Como dejar a alguien sin volar cuesta más que un asiento vacío, el número es bajo: te pide ser prudente.</div></div>
+  </div>
+  <div class="clave"><b>La confusión más común:</b> ${f3(fr)} <b>no</b> significa "sobrevender ${f1(fr*100)}% de los asientos". Es una <b>probabilidad</b>: acepta sobrevender solo mientras la probabilidad de que alguien se quede sin volar no supere ${f1(fr*100)}%.</div>
+
+  <div class="paso"><div class="num">2</div><h2>¿Cuántos asientos sobrevender?</h2></div>
+  <p class="sub">En tu ruta, cada pasajero tiene ${f1(ns*100)}% de probabilidad de no presentarse. Con eso se puede calcular, para cada nivel de sobreventa, la probabilidad de que falten menos no-shows que asientos sobrevendidos, es decir, de que alguien se quede sin volar:</p>
+  ${tabla(['Sobreventa','Reservas','No-shows esperados','Probabilidad de que alguien se quede sin volar','¿Conviene? (≤ '+f1(fr*100)+'%)'],
+    filasK.map(r => `<tr><td class="cifra">${r.k}</td><td class="cifra">${r.R}</td><td class="cifra">${f1(r.esperados)}</td><td class="cifra">${r.k===0?'0%':f1(r.pMenos*100)+'%'}</td><td class="${r.conviene?'ok':'no'}">${r.k===0?'Punto de partida':(r.conviene?'Sí':'No')}</td></tr>`))}
+  <p style="margin:8px 0 0;font-size:13.5px;line-height:1.55;">Con tu precio actual, la regla del fractil indica sobrevender <b>${kOpt} ${kOpt===1?'asiento':'asientos'}</b>: el último nivel en que la probabilidad de dejar a alguien sin volar no supera tu fractil.${dec.overbooking!=null ? ` Tu decisión actual: ${dec.overbooking||0}.` : ''}</p>
+  ${noLleno ? `<div class="clave" style="border-color:#E8A23C;background:rgba(232,162,60,0.10);"><b>Antes de sobrevender, mira tu demanda:</b> en la Ronda ${h.ronda} tuviste ${h.pasajerosGanados} reservas posibles para ${cap} asientos. Si ni siquiera llenas el avión, sobrevender no te sirve: primero necesitas más demanda.</div>` : ''}
+  ${histNS.length ? `<details class="mas"><summary>Tu historial real de no-shows</summary>
+    ${tabla(['Ronda','Reservas','No-shows','Sin asiento','A bordo'], histNS.map(x => `<tr><td>${x.ronda}</td><td class="cifra">${x.capacidad.reservas}</td><td class="cifra">${x.capacidad.noShows}</td><td class="cifra ${x.capacidad.denegados>0?'no':''}">${x.capacidad.denegados}</td><td class="cifra">${x.capacidad.abordados}</td></tr>`))}
+    <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);">Los no-shows cambian de una ronda a otra por azar. Una ronda con pasajeros sin asiento no significa que decidiste mal: la regla busca el mejor resultado en promedio, no en cada vuelo.</p>
+  </details>` : ''}
+
+  <div class="paso"><div class="num">3</div><h2>¿Dónde está tu cuello de botella?</h2></div>
+  <p class="sub">Tres métricas resumen cómo usas tu avión, y <b>ninguna se lee sola</b>: dos aerolíneas pueden tener el mismo ingreso por asiento con modelos de negocio opuestos.</p>
+  ${m ? `<div class="calcu">
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">Factor de ocupación</div><div class="v cifra">${f1(m.loadFactor)}%</div><div class="s">¿Qué tan lleno volaste? ${ab} a bordo ÷ ${cap} asientos.</div></div>
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">Yield</div><div class="v cifra">${money2(m.yield)}</div><div class="s">¿Cuánto pagó en promedio cada pasajero? ${money2(ing)} ÷ ${ab} pasajeros.</div></div>
+    <div class="t"><div style="font-size:12px;color:var(--marca);text-transform:uppercase;letter-spacing:.04em;">RASM</div><div class="v cifra">${money2(m.rasm)}</div><div class="s">¿Cuánto ingresó cada asiento ofrecido, vendido o no? ${money2(ing)} ÷ ${cap} asientos.</div></div>
+  </div>
+  <p style="margin:8px 0 0;font-size:12.5px;color:var(--texto-tenue);">Verificación: RASM = yield × ocupación = ${money2(m.yield)} × ${f3(m.loadFactor/100)} = ${money2(m.yield*m.loadFactor/100)}. Datos de la Ronda ${h.ronda}.</p>
+  ${tabla(['Si tienes…','Tu cuello de botella es','Qué revisar'], [
+    ['lfa_yb','Ocupación alta, yield bajo','El precio','¿Estás vendiendo demasiado barato para llenar?'],
+    ['lfb_ya','Ocupación baja, yield alto','La demanda','¿Tu precio espanta pasajeros que sí podrías captar?'],
+    ['ambos','Ambos altos','Nada: vas bien','Cuida que la competencia no te alcance.'],
+    ['ninguno','Ambos bajos','Precio y demanda a la vez','Revisa primero por qué no llenas el avión, y luego tu precio.']
+  ].map(r => `<tr${diag && diag.k===r[0] ? ' style="background:var(--marca-tenue);"' : ''}><td>${diag && diag.k===r[0] ? '<b>'+r[1]+' ← tú</b>' : r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`))}
+  <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);">Criterio: ocupación alta desde 85%; yield alto si iguala o supera el precio promedio del mercado de esa ronda (${money2(h.precioMercado)}).</p>`
+  : `<p style="font-size:12.5px;color:var(--texto-tenue);">Cuando cierre tu primera ronda, verás aquí tus tres métricas y tu diagnóstico.</p>`}
+
+  <div class="paso"><div class="num">4</div><h2>¿Qué hizo tu precio dinámico?</h2></div>
+  <p class="sub">El <b>precio dinámico</b> ajusta tu Tarifa Flex según cómo viene la demanda frente a lo esperado. No es cambiar el precio cuando se te ocurre: es una regla que defines antes y que el sistema aplica solo.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 6px;">Brecha = (demanda real − demanda esperada) ÷ demanda esperada</p>
+    <p style="margin:0 0 6px;">Precio final = tu Flex × (1 + brecha × sensibilidad), siempre entre tu piso y tu techo.</p>
+    <p style="margin:0;">La <b>sensibilidad</b> (de 0 a 1) decide qué tan fuerte reaccionas: con 0,5, si la demanda viene 10% arriba, tu precio sube 5%. En este simulador, la demanda se aparta de lo esperado cuando tu docente activa una temporada alta o baja.</p>
+  </div>
+  ${rondasDP.length ? tabla(['Ronda','Temporada','Demanda real vs. esperada','Sensibilidad','Tu Flex → precio cobrado'], rondasDP.map(x => {
+      const esp = x.poolFijo, real = x.poolTemporada != null ? x.poolTemporada : x.poolDeRonda, br = esp ? (real-esp)/esp : 0;
+      return `<tr><td>${x.ronda}</td><td>${({alza:'Alta',baja:'Baja'})[x.choque] || 'Normal'}</td><td class="cifra">${real} vs. ${esp} (${br>=0?'+':''}${f1(br*100)}%)</td><td class="cifra">${f1((x.decision.sensibilidadDynamic ?? 0.5)*10/10)}</td><td class="cifra">${money2(x.precioDecidido)} → ${money2(x.precioFinal)}</td></tr>`; }))
+    : `<p style="font-size:12.5px;color:var(--texto-tenue);margin:10px 0 0;">Todavía no has usado el precio dinámico. Ejemplo de la Unidad 4: con una Flex de $30, sensibilidad 0,5 y demanda 10% sobre lo esperado, el precio final es $30 × 1,05 = $31,50.</p>`}
+
+  <details class="mas" style="margin-top:22px;" open><summary>Palabras clave de esta pestaña</summary>
+    <div class="gl">
+      <div><b>No-show:</b> pasajero que reservó y no se presentó.</div>
+      <div><b>Overbooking:</b> vender más reservas que asientos.</div>
+      <div><b>Cu:</b> costo de un asiento vacío (margen perdido).</div>
+      <div><b>Co:</b> costo de dejar a alguien sin volar (compensación).</div>
+      <div><b>Fractil crítico:</b> Cu ÷ (Cu + Co), una probabilidad, no un % de asientos.</div>
+      <div><b>Factor de ocupación:</b> % del avión que voló lleno.</div>
+      <div><b>Yield:</b> ingreso promedio por pasajero.</div>
+      <div><b>RASM:</b> ingreso por asiento ofrecido = yield × ocupación.</div>
+    </div>
+  </details>`;
+}
+
+function vistaUnidad5(){
+  const e = APP.equipo, pf = PARAMS.perfiles[e.perfil];
+  const hist = (e.historial || []).filter(h => !h.neutra);
+  const h = hist[hist.length-1];
+  const dec = (APP.decisionActual && APP.decisionActual.precio) ? APP.decisionActual : (h ? h.decision : {});
+  const f1 = v => (Math.round(v*10)/10).toFixed(1).replace('.',','), f2 = v => v.toFixed(2).replace('.',',');
+  const temp = c => ({alza:'Alta', baja:'Baja'})[c] || 'Normal';
+  const tieneEstudio = hist.some(x => x.comproElasticidad) || !!dec.comprarElasticidad;
+  // Paso 1: pares de rondas consecutivas con cambio de precio
+  const pares = [];
+  for(let i=1;i<hist.length;i++){ const a=hist[i-1], b=hist[i];
+    if(Math.abs(b.precioDecidido-a.precioDecidido) < 0.01 || !a.pasajerosGanados) continue;
+    const dP=(b.precioDecidido-a.precioDecidido)/a.precioDecidido, dQ=(b.pasajerosGanados-a.pasajerosGanados)/a.pasajerosGanados;
+    pares.push({a,b,dP,dQ,el:dQ/dP, mismaTemp:(a.choque||'normal')===(b.choque||'normal')}); }
+  // Paso 2: pilares
+  const pm = PARAMS.perfilMadurez;
+  const pil = { Talento: dec.talento ?? pm.talento, Procesos: dec.procesos ?? pm.procesos, Datos: dec.datos ?? pm.datos };
+  const vals = Object.values(pil), minP = Math.min(...vals), prom = vals.reduce((a,b)=>a+b,0)/3;
+  const debiles = Object.keys(pil).filter(k => pil[k]===minP);
+  // Paso 3: valor esperado con los números del equipo (misma lógica que el motor)
+  const flex = dec.precio || pf.precioBase, ab = h && h.capacidad ? h.capacidad.abordados : Math.round(pf.capacidad*0.9);
+  const s = h && h.participacion ? h.participacion/100 : 0.33, gan = h && h.pasajerosGanados ? h.pasajerosGanados : ab;
+  const R2 = Math.round(ab * 0.20) * flex * 0.25;
+  const sancion = ab * flex * PARAMS.sancionDeteccion;
+  const caidaPct = 1 - (1-PARAMS.penalConfianza)/(1-PARAMS.penalConfianza*s);
+  // Reservas con y sin la caída de atractivo (acotadas por la capacidad), menos los no-shows esperados
+  const paxPerdidos = Math.max(0, Math.round((Math.min(gan, pf.capacidad) - Math.min(gan*(1-caidaPct), pf.capacidad)) * (1 - pf.noShowPct)));
+  const margen = flex - pf.iocPorPasajero, perdidaDemanda = paxPerdidos*margen, castigo = sancion + perdidaDemanda;
+  const ve = a => R2 - a*castigo;
+  const aActual = PARAMS.probDeteccion;
+  const tabla = (cab, filas) => `<table class="tbl3c"><tr>${cab.map(c=>`<th>${c}</th>`).join('')}</tr>${filas.join('')}</table>`;
+  return `${ESTILO}
+  <h2 class="titulo">Datos, organización y ética · Unidad 5</h2>
+  <p class="sub" style="margin-bottom:4px;">Las catorce herramientas anteriores no sirven sin datos que se sepan leer, una organización que las sostenga y un límite ético claro. Esta pestaña sigue los cuatro pasos de la Unidad 5.</p>
+  <div class="guia"><span>① ¿Tu elasticidad es real o es la temporada?</span><span>② ¿Dónde está tu cuello de botella organizacional?</span><span>③ ¿Conviene personalizar precios?</span><span>④ ¿Y frente a operar con integridad?</span></div>
+
+  <div class="paso"><div class="num">1</div><h2>¿Tu elasticidad es real o es la temporada?</h2></div>
+  <p class="sub">Si bajas el precio justo cuando la demanda sube por otra razón, vas a creer que el precio hizo todo el trabajo. <b>Controlar por una variable</b> es comparar solo situaciones equivalentes, para separar el efecto del precio del efecto del contexto.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 8px;"><b>La heladería (Unidad 5):</b> baja el precio 12% y vende 30% más. Parece una elasticidad de +30% ÷ −12% = <b>−2,5</b>. Pero esa semana hubo ola de calor. Comparando días de calor con días de calor, y templados con templados, el precio solo explicó alrededor de 14%: la elasticidad real es +14% ÷ −12% = <b>−1,17</b>. Más de la mitad del aumento vino del clima.</p>
+    <p style="margin:0;">En tu aerolínea, el "clima" es la <b>temporada</b>: tu docente puede activar una temporada alta o baja, y esa ronda la demanda se mueve sin que cambie tu precio.</p>
+  </div>
+  ${pares.length ? tabla(['Rondas','Tu precio','Tus pasajeros','Elasticidad ingenua', tieneEstudio ? 'Temporada' : 'Temporada (requiere el estudio)', '¿Comparación válida?'],
+      pares.map(x => `<tr><td>${x.a.ronda} → ${x.b.ronda}</td><td class="cifra">${money2(x.a.precioDecidido)} → ${money2(x.b.precioDecidido)}</td><td class="cifra">${x.a.pasajerosGanados} → ${x.b.pasajerosGanados}</td><td class="cifra">${f1(x.el)}</td>
+        <td>${tieneEstudio ? temp(x.a.choque)+' → '+temp(x.b.choque) : '<span style="color:var(--texto-tenue);">oculta</span>'}</td>
+        <td class="${tieneEstudio ? (x.mismaTemp?'ok':'no') : ''}">${tieneEstudio ? (x.mismaTemp ? 'Sí: misma temporada' : 'No: la temporada cambió') : '<span style="color:var(--texto-tenue);">no puedes saberlo</span>'}</td></tr>`))
+    + `<p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);line-height:1.5;">${tieneEstudio ? 'Solo las filas con la misma temporada miden el efecto del precio. Las demás mezclan precio y temporada, como la heladería.' : 'Sin el estudio de elasticidad no sabes qué rondas tuvieron temporada especial, así que no puedes distinguir qué filas son comparables. Por eso ese estudio tiene valor.'} Recuerda que entre rondas también cambian los precios de la competencia.</p>`
+    : `<p style="font-size:12.5px;color:var(--texto-tenue);margin:10px 0 0;">Cuando cambies tu precio de una ronda a otra, aquí verás tu elasticidad ingenua y si la comparación es válida.</p>`}
+
+  <div class="paso"><div class="num">2</div><h2>¿Dónde está tu cuello de botella organizacional?</h2></div>
+  <p class="sub">Las herramientas de pricing necesitan una organización que las sostenga, con tres pilares (Nagle et al., 2024): <b>Talento</b> (personas que saben y deciden), <b>Procesos</b> (rutinas claras) y <b>Datos</b> (información confiable). Se puntúan de 1 a 7, y manda el <b>pilar más débil</b>, no el promedio.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0;"><b>Por qué el promedio engaña (Unidad 5):</b> una aerolínea con Talento 6, Procesos 6 y Datos 2 tiene un promedio de 4,67, que parece aceptable. Pero sus analistas y sus rutinas no pueden ejecutar nada sin datos confiables. Su cuello de botella son los Datos, y ahí debe invertir.</p>
+  </div>
+  <div class="calcu">
+    ${Object.keys(pil).map(k => `<div class="t" ${pil[k]===minP ? 'style="border-color:#E8A23C;"' : ''}><div style="font-size:12px;color:${pil[k]===minP?'#E8A23C':'var(--marca)'};text-transform:uppercase;letter-spacing:.04em;">${k}${pil[k]===minP?' · el más débil':''}</div><div class="v cifra">${pil[k]}</div><div class="s">Diagnóstico inicial: ${pm[k.toLowerCase()]}</div></div>`).join('')}
+  </div>
+  <p style="margin:8px 0 0;font-size:13.5px;line-height:1.55;">Tu promedio es ${f2(prom)}, pero lo que decide tu resultado es tu pilar más débil: <b>${minP}</b> (${debiles.join(' y ')}). ${minP >= 7 ? 'Ya estás en el máximo.' : (debiles.length === 1 ? `Tu próximo punto debería ir a <b>${debiles[0]}</b>.` : `Tienes ${debiles.length} pilares empatados como los más débiles: para mejorar necesitas subir <b>${debiles.join(' y ')}</b> a la vez (${debiles.length} puntos). Subir solo uno no cambia nada.`)} Si subes un pilar que ya es fuerte, no mejora nada; y cuando corriges el más débil, el cuello de botella puede pasar a otro.</p>
+
+  <div class="paso"><div class="num">3</div><h2>¿Conviene personalizar precios?</h2></div>
+  <p class="sub">Con datos de tus pasajeros podrías cobrar más a quien está dispuesto a pagar más. Es rentable, pero si te detectan pagas una sanción y pierdes confianza. Para decidir, calcula el <b>valor esperado</b>: el resultado promedio, ponderando cada consecuencia por su probabilidad.</p>
+  <div class="explica" style="margin-top:6px;">
+    <p style="margin:0 0 6px;">Valor esperado de personalizar = ingreso extra − probabilidad de detección × castigo total</p>
+    <p style="margin:0;"><b>Ejemplo de la Unidad 5:</b> ingreso extra de $3.000 sobre la operación íntegra ($11.000 frente a $8.000), castigo de $6.500. Con 25% de detección: $11.000 − 0,25 × $6.500 = $9.375, mejor que $8.000. Con 50%: $7.750, peor. Subir la detección cambia la decisión sin prohibir nada.</p>
+  </div>
+  <p class="sub" style="margin:14px 0 0;">Con tus números${h ? ` de la Ronda ${h.ronda}` : ' (estimados)'}: ${ab} pasajeros a bordo, Tarifa Flex ${money2(flex)}, participación de mercado ${f1(s*100)}%.</p>
+  ${tabla(['Concepto','Cálculo','Monto'], [
+    `<tr><td><b>Ingreso extra</b> (se cobra siempre)</td><td class="calc">20% de tus pasajeros × 25% más que tu Flex: ${Math.round(ab*0.2)} × ${money2(flex*0.25)}</td><td class="cifra">${money2(R2)}</td></tr>`,
+    `<tr><td>Sanción si te detectan</td><td class="calc">${Math.round(PARAMS.sancionDeteccion*100)}% de tu ingreso por tarifa: ${ab} × ${money2(flex)} × ${f2(PARAMS.sancionDeteccion)}</td><td class="cifra">${money2(sancion)}</td></tr>`,
+    `<tr><td>Pasajeros que pierdes si te detectan</td><td class="calc">Tu atractivo cae ${Math.round(PARAMS.penalConfianza*100)}% esa ronda: unos ${paxPerdidos} pasajeros menos × tu margen de ${money2(margen)}</td><td class="cifra">${money2(perdidaDemanda)}</td></tr>`,
+    `<tr><td><b>Castigo total</b></td><td class="calc">Sanción + pasajeros perdidos</td><td class="cifra"><b>${money2(castigo)}</b></td></tr>`
+  ])}
+  ${tabla(['Probabilidad de detección','Valor esperado de personalizar','¿Conviene?'], [0.25, aActual, 0.5].filter((v,i,a)=>a.indexOf(v)===i).sort((x,y)=>x-y).map(a =>
+    `<tr${a===aActual?' style="background:var(--marca-tenue);"':''}><td>${Math.round(a*100)}%${a===aActual?' ← la de este simulador':''}</td><td class="calc">${money2(R2)} − ${f2(a)} × ${money2(castigo)} = <b>${ve(a) < 0 ? '−' + money2(-ve(a)) : money2(ve(a))}</b></td><td class="${ve(a)>0.2*R2?'ok':(ve(a)<-0.2*R2?'no':'')}">${ve(a)>0.2*R2 ? 'Sí' : (ve(a)>=-0.2*R2 ? 'Casi da igual: el riesgo anula la ganancia' : 'No: pierdes en promedio')}</td></tr>`))}
+  <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-tenue);line-height:1.5;">Es una estimación: la pérdida de pasajeros depende también de si tu avión va lleno y de lo que hagan tus competidores esa ronda.</p>
+
+  <div class="paso"><div class="num">4</div><h2>¿Y frente a operar con integridad?</h2></div>
+  <p class="sub">El último paso compara el valor esperado con el resultado seguro de <b>no</b> personalizar. En este simulador, operar con integridad es tu resultado sin la herramienta: personalizar solo conviene si su valor esperado es claramente mayor que cero.</p>
+  <div class="clave"><b>La regulación mueve este cálculo.</b> Como explica la Unidad 5, las leyes de transparencia y las auditorías algorítmicas hacen más probable que la práctica se detecte. Si la probabilidad sube, el valor esperado cae y la integridad pasa a ser también la opción más rentable. Y una pregunta que los números no responden: aunque el valor esperado fuera positivo, ¿querrías que tus clientes supieran cómo les fijas el precio?</div>
+
+  <details class="mas" style="margin-top:22px;" open><summary>Palabras clave de esta pestaña</summary>
+    <div class="gl">
+      <div><b>Pricing data-driven:</b> fijar precios con evidencia medida.</div>
+      <div><b>Controlar por una variable:</b> comparar solo situaciones equivalentes.</div>
+      <div><b>Elasticidad ingenua:</b> la que mezcla el precio con el contexto.</div>
+      <div><b>Madurez de pricing:</b> Talento, Procesos y Datos; manda el más débil.</div>
+      <div><b>Valor esperado:</b> resultado promedio, ponderado por probabilidades.</div>
+      <div><b>Probabilidad de detección (α):</b> qué tan probable es que te descubran.</div>
+      <div><b>Castigo total:</b> sanción más clientes y reputación perdidos.</div>
+      <div><b>Precio por vigilancia:</b> precio individual fijado con datos personales.</div>
+    </div>
+  </details>`;
+}
+
 /* ============================================================
    VISTA — Hoja de decisión
    ============================================================ */
@@ -1071,6 +1579,7 @@ function grupo(titulo, herramienta, contenido, desbloqueado, sesionNecesaria){
 }
 
 function vistaDecision(){
+  const ptsMadPrev = Math.floor(((APP.equipo && APP.equipo.historial) || []).reduce((a, h) => a + ((h.decision && h.decision.gastoMadurez) || 0), 0) / PARAMS.costoPuntoMadurez);
   const e = APP.equipo;
   const ronda = APP.config ? APP.config.rondaActual : 1;
   const ses = sesionDeRonda(ronda);
@@ -1179,7 +1688,7 @@ function vistaDecision(){
       </div>
       <div class="referencia">
         <div class="ref-nota">Se cobra aparte de la tarifa, a los pasajeros que ya abordaron — no compite por ganar más pasajeros, es ingreso extra sobre los que ya tienes.</div>
-        <div class="ref-nota" style="margin-top:8px;"><b>Precio máximo:</b> cada extra puede costar hasta el ${(PARAMS.topeAncillaryPct*100).toFixed(0)}% de tu Tarifa Flex${d.precio ? ' ($' + (d.precio*PARAMS.topeAncillaryPct).toFixed(2) + ' con tu tarifa actual)' : ''}.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Ojo con el precio:</b> mientras más cobras sobre la referencia de mercado, menos pasajeros compran el extra, y quienes lo necesitan pueden irse con otra aerolínea. Cada extra vendido además te cuesta ${money2(p.refEquipaje*PARAMS.extras.costoPct)} (equipaje) y ${money2(p.refSeguro*PARAMS.extras.costoPct)} (seguro). Revisa la pestaña Arquitectura de precios.</div>
         <div class="ref-nota" style="margin-top:8px;">Estimación de cuántos compran: el ${(PARAMS.pctEquipaje*100).toFixed(0)}% de tus pasajeros compra equipaje, y el ${(PARAMS.pctSeguro*100).toFixed(0)}% compra seguro. El ingreso extra sería: (pasajeros × ${PARAMS.pctEquipaje} × precio equipaje) + (pasajeros × ${PARAMS.pctSeguro} × precio seguro).</div>
         <div class="ref-nota" style="margin-top:8px;">Un precio muy alto no reduce cuántos pasajeros vuelan contigo (a diferencia de la Tarifa Flex) — pero tampoco existe un tope: cobrar de más aquí no tiene el mismo freno natural que cobrar de más en el pasaje.</div>
       </div>
@@ -1248,15 +1757,20 @@ function vistaDecision(){
     `, activo('elasticidad',ronda), 5)}
 
     ${grupo('Madurez organizacional', 'Talento, Procesos y Datos', `
+      <div class="referencia" style="margin-bottom:10px;">
+        <div class="ref-fila"><span>Tu diagnóstico inicial</span><b>Talento ${PARAMS.perfilMadurez.talento} · Procesos ${PARAMS.perfilMadurez.procesos} · Datos ${PARAMS.perfilMadurez.datos}</b></div>
+        <div class="ref-fila"><span>Puntos comprados en rondas anteriores</span><b>${ptsMadPrev}</b></div>
+        <div class="ref-fila"><span>Precio de cada punto</span><b>${money(PARAMS.costoPuntoMadurez)}</b></div>
+      </div>
       <div class="campos">
-        ${campoNum('dTalento','Talento (1 a 7)', d.talento ?? 4, 'min="1" max="7"')}
-        ${campoNum('dProcesos','Procesos (1 a 7)', d.procesos ?? 4, 'min="1" max="7"')}
-        ${campoNum('dDatos','Datos (1 a 7)', d.datos ?? 4, 'min="1" max="7"')}
-        ${campoNum('dGastoMad','Inversión ($)', d.gastoMadurez ?? 0)}
+        ${campoNum('dGastoMad','Inversión de esta ronda ($)', d.gastoMadurez ?? 0)}
+        ${campoNum('dTalento','Talento (hasta 7)', d.talento ?? PARAMS.perfilMadurez.talento, 'min="'+PARAMS.perfilMadurez.talento+'" max="7"')}
+        ${campoNum('dProcesos','Procesos (hasta 7)', d.procesos ?? PARAMS.perfilMadurez.procesos, 'min="'+PARAMS.perfilMadurez.procesos+'" max="7"')}
+        ${campoNum('dDatos','Datos (hasta 7)', d.datos ?? PARAMS.perfilMadurez.datos, 'min="'+PARAMS.perfilMadurez.datos+'" max="7"')}
       </div>
       <div class="referencia">
-        <div class="ref-nota">Lo que limita a tu organización es el pilar más bajo, no el promedio — invertir en el pilar que ya es fuerte no sube tu resultado.</div>
-        <div class="ref-nota" style="margin-top:8px;"><b>La inversión define hasta dónde puede llegar cada pilar esta ronda.</b> Cada ${money(PARAMS.costoPuntoMadurez)} invertidos suben en 1 el máximo alcanzable (partiendo de 4, el neutro). Si escribes un número más alto del que tu inversión permite, el sistema usa el máximo que sí pagaste, no el que escribiste — invertir $0 y poner 7/7/7 no funciona.</div>
+        <div class="ref-nota"><b>Cómo funciona:</b> cada punto que compras sube 1 nivel el pilar que tú elijas, y los puntos se acumulan de una ronda a otra. Tus puntos disponibles son los de rondas anteriores más la inversión de esta ronda dividida por ${money(PARAMS.costoPuntoMadurez)}.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Lo que decide tu resultado es el pilar más bajo</b>, no el promedio: subir un pilar que ya es fuerte no mejora nada. Y ojo: cuando corriges el pilar más débil, el cuello de botella puede pasar a otro pilar.</div>
       </div>
     `, activo('madurez',ronda), 5)}
 
@@ -1268,7 +1782,7 @@ function vistaDecision(){
       <div class="referencia">
         <div class="ref-nota"><b>Si nadie lo detecta:</b> el ${(PARAMS.algoPctPasajeros*100).toFixed(0)}% de tus pasajeros paga un ${(PARAMS.algoSobreprecio*100).toFixed(0)}% más que tu Tarifa Flex. Ese ingreso lo cobras siempre, se detecte o no la práctica.</div>
         <div class="ref-fila" style="margin-top:8px;"><span>Probabilidad de que se detecte, cada ronda</span><b>${(PARAMS.probDeteccion*100).toFixed(0)}%</b></div>
-        <div class="ref-fila"><span>Caída de atractivo si se detecta (ronda siguiente)</span><b>${(PARAMS.penalConfianza*100).toFixed(0)}%</b></div>
+        <div class="ref-fila"><span>Caída de atractivo si se detecta (misma ronda)</span><b>${(PARAMS.penalConfianza*100).toFixed(0)}%</b></div>
         <div class="ref-fila"><span>Sanción si se detecta (misma ronda)</span><b>${(PARAMS.sancionDeteccion*100).toFixed(0)}% de tu ingreso por tarifa</b></div>
         <div class="ref-nota" style="margin-top:8px;">Cada ronda es un sorteo independiente: activarlo tres rondas seguidas sin que te detecten no cambia la probabilidad de la cuarta.</div>
         <div class="ref-nota" style="margin-top:8px;"><b>Cómo decidir:</b> no compares el mejor caso contra el peor. El ingreso extra lo cobras siempre. Lo incierto es el castigo: con ${(PARAMS.probDeteccion*100).toFixed(0)}% de probabilidad te detectan y pagas la sanción y la caída de atractivo. Valor esperado = ingreso extra − (${(PARAMS.probDeteccion*100).toFixed(0)}% × castigo total).</div>
@@ -1342,15 +1856,32 @@ function preciosPorCompetidor(perfilKey, historial){
 /* Encuesta de disposición a pagar: 4 precios candidatos alrededor del rango
    piso-techo real del equipo, con % de aceptación decreciente. Estable por
    equipo y ronda (misma semilla = misma encuesta, no cambia si recargas). */
-function tablaEncuestaWTP(piso, techoReal, semilla){
+function tablaEncuestaWTP(piso, techoReal, semilla, equipo){
+  // NIVEL 2: el % de compra sale de la MISMA función de elección del motor, frente a los precios
+  // de la competencia de la ronda anterior (bots) y el precio promedio de los demás equipos.
   const rng = mulberry32(hashStr((semilla||'x')+'::encuesta'));
   const rango = Math.max(1, techoReal - piso);
-  const precios = [piso + rango*0.20, piso + rango*0.50, techoReal, techoReal + rango*0.20];
-  const baseAceptacion = [0.88, 0.65, 0.40, 0.18];
-  return precios.map((precio, i) => {
-    const jitter = (rng()*2 - 1) * 0.06;
-    const aceptacion = clamp(baseAceptacion[i] + jitter, 0.05, 0.98);
-    return { precio: red(precio, 2), aceptacion: Math.round(aceptacion*100) };
+  const precios = [piso + rango*0.35, piso + rango*0.60, piso + rango*0.80, techoReal].map(x => red(x, 2));
+  const e = equipo || APP.equipo, hist = (e && e.historial) || [];
+  const bots = Object.values(preciosPorCompetidor(e ? e.perfil : 'domestica', hist));
+  const ult = hist[hist.length-1];
+  const nEq = (APP.config && (e && e.perfil==='internacional' ? APP.config.eqInternacional : APP.config.eqDomestica)) || 2;
+  const otros = Array(Math.max(0, nEq-1)).fill(ult && ult.precioMercado ? ult.precioMercado : (bots.reduce((a,b)=>a+b,0)/bots.length));
+  const comp = [...bots, ...otros], beta = PARAMS.sensibilidadPrecio || 2.65;
+  const cv = e ? PARAMS.perfiles[e.perfil].iocPorPasajero : 10;
+  return precios.map(precio => {
+    const pm = (precio + comp.reduce((a,b)=>a+b,0)) / (comp.length + 1);
+    const a = x => Math.exp(-beta * (x/pm - 1));
+    const prob = a(precio) / (a(precio) + comp.reduce((s,x)=>s+a(x),0));
+    const jitter = (rng()*2 - 1) * 0.01;                       // es una encuesta, no el mercado exacto
+    const aceptacion = Math.round(clamp(prob + jitter, 0.02, 0.98) * 100);
+    // Pasajeros estimados: % × tamaño del mercado, con tope en la capacidad del avión (Unidad 4)
+    const pfx = PARAMS.perfiles[e ? e.perfil : 'domestica'];
+    // Tamaño real del mercado en la última ronda (o el calibrado, si aún no se jugó)
+    const mercado = (ult && ult.poolDeRonda) || (APP.config && (e && e.perfil==='internacional' ? APP.config.poolInternacional : APP.config.poolDomestica)) || Math.round(pfx.capacidad * 2.25);
+    const reservas = Math.min(pfx.capacidad, mercado * aceptacion / 100);
+    const pasajeros = Math.round(reservas * (1 - pfx.noShowPct));      // descuenta los no-shows esperados
+    return { precio, aceptacion, margen: precio - cv, pasajeros, lleno: mercado * aceptacion / 100 >= pfx.capacidad, margenVuelo: (precio - cv) * pasajeros };
   });
 }
 
@@ -1361,20 +1892,20 @@ function contenidoPanelExtrasWTP(comprarWTP, e, p){
     `<div class="ref-fila"><span>${esc(nombre)}</span><b>${money2(precio)}</b></div>`).join('');
 
   const panReal = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, true, e.nombre);
-  const encuesta = tablaEncuestaWTP(panReal.piso, panReal.techo, e.nombre+'::'+(APP.config?APP.config.rondaActual:1));
-  const mejorIdx = encuesta.reduce((mi,f,i,arr)=> (f.precio*f.aceptacion) > (arr[mi].precio*arr[mi].aceptacion) ? i : mi, 0);
+  const encuesta = tablaEncuestaWTP(panReal.piso, panReal.techo, e.nombre+'::'+(APP.config?APP.config.rondaActual:1), e);
+  const mejorIdx = encuesta.reduce((mi,f,i,arr)=> f.margenVuelo > arr[mi].margenVuelo ? i : mi, 0);
   const filasEncuesta = encuesta.map((f,i) =>
-    `<tr style="${i===mejorIdx?'color:var(--marca);font-weight:600;':''}"><td>${money2(f.precio)}</td><td>${f.aceptacion}%</td><td>${money2(f.precio*f.aceptacion/100)}</td></tr>`).join('');
+    `<tr style="${i===mejorIdx?'color:var(--marca);font-weight:600;':''}"><td>${money2(f.precio)}</td><td>${f.aceptacion}%</td><td>${f.pasajeros}${f.lleno?' (lleno)':''}</td><td>${money(f.margenVuelo)}</td></tr>`).join('');
 
   return `<div class="referencia" style="margin-top:10px;">
     <div class="ref-nota" style="margin-bottom:6px;"><b>Precio real de cada competidor esta ronda</b> — promedio del perfil ${p.nombre} completo (rutas ${p.rutas.join(' y ')}), no de una ruta específica.</div>
     ${filasPrecios}
-    <div class="ref-nota" style="margin-top:10px;"><b>Encuesta de intención de compra (100 clientes)</b> — ejercicio simulado para practicar el método; los 4 precios y porcentajes no vienen de una encuesta real a clientes bolivianos, se generan a partir de tu propio piso y techo.</div>
+    <div class="ref-nota" style="margin-top:10px;"><b>Encuesta de intención de compra</b> — ejercicio simulado: el % indica cuántos pasajeros te elegirían a cada precio frente a los precios de tu competencia en la ronda anterior. No es una encuesta real a clientes bolivianos.</div>
     <table style="width:100%;font-size:13px;margin-top:6px;border-collapse:collapse;">
-      <tr style="color:var(--texto-tenue);"><td>Precio candidato</td><td>% que compraría</td><td>Indicador de comparación</td></tr>
+      <tr style="color:var(--texto-tenue);"><td>Precio candidato</td><td>% que te compraría</td><td>Pasajeros estimados</td><td>Margen del vuelo</td></tr>
       ${filasEncuesta}
     </table>
-    <div class="ref-nota" style="margin-top:8px;"><b>Importante: la tercera columna NO es un precio</b> — nadie paga ese número. Es un indicador para comparar las 4 filas entre sí (precio × % de esa fila, contando también a quienes no comprarían). La fila marcada en verde es la que tiene el indicador más alto — si la usas de guía, tu precio final sería <b>${money2(encuesta[mejorIdx].precio)}</b> (el precio de esa fila), nunca el número de la tercera columna.</div>
+    <div class="ref-nota" style="margin-top:8px;"><b>Cómo leerla:</b> la Unidad 2 enseña a multiplicar precio × % que compraría. Aquí se da un paso más: el % se convierte en pasajeros, que no pueden superar los ${PARAMS.perfiles[e.perfil].capacidad} asientos de tu avión (Unidad 4), y cada pasajero te deja su precio menos tu costo variable de ${money2(PARAMS.perfiles[e.perfil].iocPorPasajero)}. La fila en verde es la de mayor <b>margen del vuelo</b>: si la usas de guía, tu precio sería <b>${money2(encuesta[mejorIdx].precio)}</b>. Si a un precio llenarías el avión, bajarlo más no suma pasajeros: solo resta margen.</div>
     <div class="ref-nota" style="margin-top:8px;"><b>Úsala con criterio:</b> la encuesta es una estimación, no el mercado real. Antes de adoptar su precio, contrástalo con tu propio historial: cómo cambiaron tus pasajeros y tu utilidad cuando moviste la Tarifa Flex en rondas anteriores.</div>
     <div class="ref-nota" style="margin-top:10px;"><b>Otros rubros de referencia</b></div>
     <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
@@ -1679,8 +2210,8 @@ function vistaMercado(){
     `<div class="ref-fila"><span>${esc(nombre)}</span><b>${money2(precio)}</b></div>`).join('');
 
   const panReal = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, hist, true, e.nombre);
-  const encuesta = tablaEncuestaWTP(panReal.piso, panReal.techo, e.nombre+'::'+ronda);
-  const mejorIdx = encuesta.reduce((mi,f,i,arr)=> (f.precio*f.aceptacion) > (arr[mi].precio*arr[mi].aceptacion) ? i : mi, 0);
+  const encuesta = tablaEncuestaWTP(panReal.piso, panReal.techo, e.nombre+'::'+ronda, e);
+  const mejorIdx = encuesta.reduce((mi,f,i,arr)=> f.margenVuelo > arr[mi].margenVuelo ? i : mi, 0);
 
   return `
     <h2 class="titulo">Reporte de Mercado</h2>
@@ -1704,15 +2235,15 @@ function vistaMercado(){
     <div class="grupo" style="margin-top:14px;">
       <div class="grupo-cab"><h3>Encuesta de intención de compra</h3><span class="herramienta">100 clientes</span></div>
       <table class="tab-pos">
-        <thead><tr><th>Precio candidato</th><th>% que compraría</th><th>Indicador de comparación</th></tr></thead>
+        <thead><tr><th>Precio candidato</th><th>% que te compraría</th><th>Pasajeros estimados</th><th>Margen del vuelo</th></tr></thead>
         <tbody>
           ${encuesta.map((f,i)=>`<tr style="${i===mejorIdx?'color:var(--marca);font-weight:600;':''}">
-            <td>${money2(f.precio)}</td><td>${f.aceptacion}%</td><td>${money2(f.precio*f.aceptacion/100)}</td>
+            <td>${money2(f.precio)}</td><td>${f.aceptacion}%</td><td>${f.pasajeros}${f.lleno?' (lleno)':''}</td><td>${money(f.margenVuelo)}</td>
           </tr>`).join('')}
         </tbody>
       </table>
       <div class="referencia" style="margin-top:10px;">
-        <div class="ref-nota"><b>La tercera columna no es un precio</b> — nadie paga ese número. Es un indicador para comparar las 4 filas entre sí. La fila marcada tiene el indicador más alto: si la usas de guía, tu precio sería ${money2(encuesta[mejorIdx].precio)}, nunca el número de la tercera columna.</div>
+        <div class="ref-nota"><b>Cómo leerla:</b> el % se convierte en pasajeros (como máximo los ${PARAMS.perfiles[e.perfil].capacidad} asientos de tu avión) y cada pasajero te deja su precio menos tu costo variable. La fila marcada es la de mayor margen del vuelo: si la usas de guía, tu precio sería ${money2(encuesta[mejorIdx].precio)}. Si a un precio ya llenarías el avión, bajarlo más solo resta margen.</div>
         <div class="ref-nota" style="margin-top:8px;"><b>Úsala con criterio:</b> la encuesta es una estimación, no el mercado real. Antes de adoptar su precio, contrástalo con tu propio historial: cómo cambiaron tus pasajeros y tu utilidad cuando moviste la Tarifa Flex en rondas anteriores.</div>
         <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como señal fuerte, no como certeza.</div>
         <div class="ref-nota" style="margin-top:8px;"><i>Los 4 precios y porcentajes son un ejercicio simulado para practicar el método — no vienen de una encuesta real, se generan a partir de tu propio piso y techo.</i></div>
@@ -1817,9 +2348,11 @@ function contenidoManual(){
       <div class="grupo-cab"><h3>4 · Las pantallas del simulador</h3></div>
       <div class="referencia">
         <div class="ref-fila"><span><b>Diagnóstico 3C</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Muestra qué tanto tu aerolínea fija precios mirando sus costos, a la competencia, o el valor que entrega. Arranca igual para todos y se mueve solo, según los precios que vayas fijando. No lo llenas tú.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Muestra qué tanto tu aerolínea fija precios mirando sus costos, a la competencia, o el valor que entrega. Arranca igual para todos y se mueve solo, según los precios que vayas fijando. No lo llenas tú. También explica tu piso, tu techo y tu Tarifa Flex (Unidad 1).</div>
+        <div class="ref-fila"><span><b>Elasticidad y segmentación · Arquitectura de precios · Revenue management · Datos y ética</b></span></div>
+        <div class="ref-nota" style="margin:0 0 10px;">Una pestaña de aprendizaje por cada unidad, de la 2 a la 5. Explican cada herramienta con ejemplos sencillos y la calculan con los números de tu aerolínea. Léelas antes de usar la herramienta y vuelve a ellas después de cada ronda.</div>
         <div class="ref-fila"><span><b>Hoja de decisión</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Donde decides cada trimestre. Las opciones se van habilitando conforme avanzas en el curso: en la Sesión 1 solo decides precio y marketing; para la Sesión 5 tienes las once decisiones disponibles.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Donde decides cada trimestre. Las opciones se van habilitando conforme avanzas en el curso: en la Sesión 1 solo decides precio y marketing; para la Sesión 5 tienes todas las decisiones disponibles.</div>
         <div class="ref-fila"><span><b>KPI y Estado de Resultados</b></span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Cuántos pasajeros ganaste, tu estado de resultados completo, tus métricas de operación, y una explicación de por qué te fue así.</div>
         <div class="ref-fila"><span><b>Reporte de Mercado</b></span></div>
@@ -1827,7 +2360,9 @@ function contenidoManual(){
         <div class="ref-fila"><span><b>Historial</b></span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Todas tus rondas jugadas: precio, pasajeros, ocupación, yield y RASM de cada trimestre.</div>
         <div class="ref-fila"><span><b>Saldo de Caja</b></span></div>
-        <div class="ref-nota" style="margin:0;">Tu flujo de efectivo ronda por ronda: qué entró, qué salió, y cómo llegaste a tu caja actual.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Tu flujo de efectivo ronda por ronda: qué entró, qué salió, y cómo llegaste a tu caja actual.</div>
+        <div class="ref-fila"><span><b>Mi expediente</b></span></div>
+        <div class="ref-nota" style="margin:0;">Todas tus decisiones, resultados e informes, en formato imprimible como comprobante, con tu calificación del simulador.</div>
       </div>
     </div>
 
@@ -1838,7 +2373,7 @@ function contenidoManual(){
         <div class="ref-fila"><span><b>Precio de referencia</b></span></div>
         <div class="ref-nota" style="margin:0 0 8px;">Lo que cobra el mercado. En la primera ronda son los precios reales de BoA y LATAM; después, el promedio de lo que cobraron todas las aerolíneas la ronda anterior.</div>
         <div class="ref-fila"><span><b>Piso</b></span></div>
-        <div class="ref-nota" style="margin:0 0 8px;">El costo de llevar un pasajero más. Por debajo de esta cifra, cada pasajero te hace perder dinero.</div>
+        <div class="ref-nota" style="margin:0 0 8px;">Tu costo total por asiento con el avión lleno: el costo fijo del vuelo repartido entre los asientos, más el costo variable de cada pasajero. Por debajo de esta cifra no cubres tus costos, ni siquiera llenando el avión.</div>
         <div class="ref-fila"><span><b>Techo (EVC)</b></span></div>
         <div class="ref-nota" style="margin:0;">El máximo que puedes cobrar según el valor que entregas. Sube conforme tu puntaje de Valor mejora.</div>
       </div>
@@ -1858,23 +2393,23 @@ function contenidoManual(){
         <div class="ref-fila"><span><b>Tarifa Promocional y valla</b></span><span>Sesión 2</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Un segundo precio, más bajo, con restricciones que impiden que el viajero de negocios lo aproveche. Ver la sección 8 para entender por qué la valla no resuelve todo.</div>
         <div class="ref-fila"><span><b>Investigación de mercado (WTP)</b></span><span>Sesión 2</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Te da el precio real de cada competidor por separado y una encuesta de intención de compra con 4 precios candidatos. Cuesta dinero, y una vez comprada esa ronda no puede deshacerse.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Te da el precio real de cada competidor por separado y una encuesta de intención de compra con 4 precios candidatos: cuántos te comprarían a cada uno, cuántos pasajeros cabrían en tu avión y cuánto margen dejaría el vuelo. Es una estimación que supone que la competencia no reacciona. Cuesta dinero, y una vez comprada esa ronda no puede deshacerse.</div>
         <div class="ref-fila"><span><b>Precio de equipaje y seguro</b></span><span>Sesión 3</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Ingresos adicionales sobre los pasajeros que ya volaron contigo.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Ingresos adicionales sobre los pasajeros que vuelan contigo. Cada extra vendido tiene un costo, y si lo cobras por encima del precio de referencia del mercado, menos pasajeros lo compran y algunos de los que lo necesitan se van con la competencia. Tiene un precio que conviene más que los demás.</div>
         <div class="ref-fila"><span><b>Pase Frecuente</b></span><span>Sesión 3</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Defines dos números: una cuota fija mensual y una tarifa reducida por vuelo para quienes se suscriban. El ahorro real que ofrezcas determina cuántos viajeros de negocio se hacen socios.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Defines dos números: una cuota fija mensual y una tarifa reducida por vuelo para quienes se suscriban. Hay socios que vuelan 1, 3 o 6 veces por trimestre, y cada uno se suscribe solo si le conviene con su propio uso. Un pase que no conviene al que vuela poco solo atrae a los grandes viajeros.</div>
         <div class="ref-fila"><span><b>Tarifa tachada</b></span><span>Sesión 3</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Mostrar un precio más alto tachado junto al tuyo. Sube la percepción de valor.</div>
         <div class="ref-fila"><span><b>Overbooking</b></span><span>Sesión 4</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Vender más asientos de los que tiene el avión, apostando a que algunos pasajeros no se presenten. Si se presentan todos, pagas compensación.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Vender más asientos de los que tiene el avión, apostando a que algunos pasajeros no se presenten. La cantidad de no-shows varía por azar de una ronda a otra: si se presentan más de los que caben, pagas compensación. Solo sirve si tienes demanda para llenar el avión.</div>
         <div class="ref-fila"><span><b>Precio dinámico</b></span><span>Sesión 4</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Deja que el precio se ajuste solo según qué tan rápido se esté vendiendo el vuelo frente a lo esperado.</div>
         <div class="ref-fila"><span><b>Estudio de elasticidad</b></span><span>Sesión 5</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Revela qué condiciones de mercado tuvo cada ronda. Sin ese dato no sabes qué rondas son comparables entre sí. Cuesta dinero.</div>
         <div class="ref-fila"><span><b>Talento, Procesos y Datos</b></span><span>Sesión 5</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Mejora la capacidad de tu organización. Lo que te limita es tu pilar más bajo, no el promedio.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Mejora la capacidad de tu organización. Todas las aerolíneas arrancan con Talento 5, Procesos 4 y Datos 6. Compras puntos y decides a qué pilar asignarlos; los puntos se acumulan de una ronda a otra. Lo que te limita es tu pilar más bajo, no el promedio.</div>
         <div class="ref-fila"><span><b>Precios personalizados</b></span><span>Sesión 5</span></div>
-        <div class="ref-nota" style="margin:0;">Una parte de tus pasajeros paga más que tu Tarifa Flex — ese ingreso lo cobras siempre, se detecte o no. Si te detectan, tu atractivo cae en la ronda siguiente; lo ya cobrado nunca se devuelve.</div>
+        <div class="ref-nota" style="margin:0;">Una parte de tus pasajeros paga más que tu Tarifa Flex — ese ingreso lo cobras siempre, se detecte o no. Si te detectan, tu atractivo cae en esa misma ronda; lo ya cobrado nunca se devuelve.</div>
       </div>
     </div>
 
@@ -1897,7 +2432,7 @@ function contenidoManual(){
         <div class="ref-nota" style="margin:0;">Vacaciones o visitas familiares; planea con tiempo y cuida el bolsillo.</div>
       </div>
       <div class="referencia" style="margin-top:12px;">
-        <div class="ref-nota"><b>Por qué ninguna valla elimina la dilución por completo:</b> la valla solo puede proteger contra la fuga del segmento de negocio — impedirle que use tu Tarifa Promocional. El segmento de placer va a preferir la tarifa barata sin importar qué tan fuerte pongas la valla, porque ya planea con anticipación de todos modos y cumple cualquier restricción sin esfuerzo. Por eso, incluso con la valla más fuerte, una parte importante de tus pasajeros va a terminar comprando la tarifa promocional.</div>
+        <div class="ref-nota"><b>Por qué no hay una valla perfecta:</b> una valla puede fallar de dos maneras. Si es floja, muchos viajeros de negocio se cuelan a tu Tarifa Promocional y pagan menos de lo que pagarían. Si es estricta, protege mejor a tu segmento de negocio, pero muchos viajeros de placer no aceptan sus condiciones: te comparan por tu Tarifa Flex y varios se van con la competencia. Por eso la mejor valla depende de tu descuento: con un descuento chico conviene una valla suave; con uno grande, una fuerte.</div>
       </div>
     </div>
 
@@ -1905,9 +2440,9 @@ function contenidoManual(){
       <div class="grupo-cab"><h3>9 · Cómo se calcula tu resultado</h3></div>
       <p style="margin:0 0 10px;">El motor sigue tres pasos en cada ronda, y conviene que los entiendas para interpretar tu reporte:</p>
       <div class="referencia">
-        <div class="ref-fila"><span>1 · Existe un número fijo de pasajeros que quieren volar esa ruta ese trimestre. Ese número no cambia por lo que hagan las aerolíneas — igual que en la vida real, nadie hace que más gente quiera viajar</span></div>
+        <div class="ref-fila"><span>1 · Se calcula cuántos pasajeros quieren volar la ruta ese trimestre, por separado para viajeros de negocio y de placer. Ese número depende de la temporada y del precio promedio del mercado: si todas las aerolíneas suben el precio, viaja menos gente, sobre todo de placer, que es más sensible al precio</span></div>
         <div class="ref-fila" style="margin-top:8px;"><span>2 · Esos pasajeros se reparten entre todas las aerolíneas según qué tan atractiva sea cada una. Tu atractivo combina tu precio frente al del mercado, tus inversiones y tu reputación</span></div>
-        <div class="ref-fila" style="margin-top:8px;"><span>3 · Si ganaste más pasajeros de los que caben en tu avión, los que sobran se van con la competencia. Si hiciste overbooking y se presentan todos, pagas compensación por los que no pueden abordar</span></div>
+        <div class="ref-fila" style="margin-top:8px;"><span>3 · Si ganaste más pasajeros de los que caben en tu avión, los que sobran no vuelan contigo. Algunos pasajeros no se presentan, en una cantidad que varía por azar; si hiciste overbooking y se presentan más de los que caben, pagas compensación por los que no pueden abordar</span></div>
       </div>
       <p style="margin:12px 0 0;">Después de eso, el simulador arma tu estado de resultados: ingresos menos costos de operación, menos gastos, igual utilidad neta. Esa utilidad se suma a tu caja, y la caja acumulada es lo que define el ranking.</p>
       <div class="referencia" style="margin-top:12px;">
@@ -1920,10 +2455,10 @@ function contenidoManual(){
       <h4>10 · Preguntas frecuentes</h4>
       <p style="margin:0 0 8px;"><b>¿Qué pasa si no alcanzamos a decidir antes de que cierre la ronda?</b> Reciben una decisión neutra automática: precio igual al promedio del mercado, sin ninguna inversión. Además, su aerolínea pierde atractivo frente a las que sí decidieron — igual que en la realidad, donde una aerolínea que no gestiona activamente su pricing va perdiendo posición. No pierden la ronda, pero salen debilitados de ella.</p>
       <p style="margin:0 0 8px;"><b>¿Podemos cambiar nuestra decisión después de enviarla?</b> No dentro de la misma ronda. Revisen bien antes de enviar.</p>
-      <p style="margin:0 0 8px;"><b>¿Por qué nuestros números son distintos a los de otro equipo del mismo perfil?</b> Porque tomaron decisiones distintas. Todos arrancan exactamente iguales: cualquier diferencia viene de lo que decidieron.</p>
-      <p style="margin:0 0 8px;"><b>¿Bajar mucho el precio garantiza ganar?</b> No. Ganas más pasajeros, pero cada uno deja menos margen, y por debajo del piso pierdes dinero con cada pasaje que vendes.</p>
+      <p style="margin:0 0 8px;"><b>¿Por qué nuestros números son distintos a los de otro equipo del mismo perfil?</b> Porque tomaron decisiones distintas. Todos arrancan exactamente iguales, así que casi toda la diferencia viene de lo que decidieron. Una parte pequeña viene del azar: la cantidad de pasajeros que no se presentan varía de una ronda a otra.</p>
+      <p style="margin:0 0 8px;"><b>¿Bajar mucho el precio garantiza ganar?</b> No. Ganas más pasajeros, pero cada uno deja menos margen, el avión tiene un límite de asientos y la competencia reacciona bajando también. Por debajo del piso no cubres tus costos totales.</p>
       <p style="margin:0 0 8px;"><b>¿Conviene gastar todo el presupuesto en marketing?</b> Tampoco. El marketing rinde cada vez menos por dólar adicional, así que pasado cierto punto estás gastando más de lo que recuperas.</p>
-      <p style="margin:0;"><b>¿Los competidores reales (BoA y LATAM) también pueden ganar?</b> Aparecen como referencia de mercado, pero no compiten por la evaluación: son parte del entorno, no equipos.</p>
+      <p style="margin:0;"><b>¿Los competidores reales (BoA y LATAM) también pueden ganar?</b> No compiten por la evaluación, pero sí por los pasajeros: reaccionan a los precios de los equipos y cobran sus propios extras. Son parte del mercado, no equipos del curso.</p>
     </div>`;
 }
 
@@ -2132,6 +2667,10 @@ function render(){
   renderBarra(); renderTabs();
   const c = document.getElementById('contenido');
   if(APP.vista==='briefing') c.innerHTML = vistaBriefing();
+  else if(APP.vista==='unidad2') c.innerHTML = vistaUnidad2();
+  else if(APP.vista==='unidad3') c.innerHTML = vistaUnidad3();
+  else if(APP.vista==='unidad4') c.innerHTML = vistaUnidad4();
+  else if(APP.vista==='unidad5') c.innerHTML = vistaUnidad5();
   else if(APP.vista==='decision') c.innerHTML = vistaDecision();
   else if(APP.vista==='reporte') c.innerHTML = vistaReporte();
   else if(APP.vista==='historial') c.innerHTML = vistaHistorial();
@@ -2296,6 +2835,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
       { const eq = APP.equipo, r = APP.config ? APP.config.rondaActual : 1;
         const panVisto = panelPrecio(eq.perfil, eq.tresC ? eq.tresC.valor : PARAMS.benchmarkValor, eq.historial, d.comprarWTP, eq.nombre+'::'+r);
         d.pisoVisto = panVisto.piso; d.techoVisto = panVisto.techo; }
+      if(d.talento != null){
+        const pm = PARAMS.perfilMadurez, prev = Math.floor((APP.equipo.historial || []).reduce((a, h) => a + ((h.decision && h.decision.gastoMadurez) || 0), 0) / PARAMS.costoPuntoMadurez);
+        const disp = Math.floor((prev * PARAMS.costoPuntoMadurez + (d.gastoMadurez || 0)) / PARAMS.costoPuntoMadurez);
+        const usados = ['talento','procesos','datos'].reduce((a, k) => a + Math.max(0, (d[k] || pm[k]) - pm[k]), 0);
+        if(usados > disp){ alert('Tus pilares suben ' + usados + ' nivel(es) sobre tu diagnóstico inicial, pero solo tienes ' + disp + ' punto(s) disponibles. Invierte más o baja algún pilar.'); return; }
+      }
       const topeAnc = Math.round(d.precio * PARAMS.topeAncillaryPct * 100) / 100;
       if((d.precioEquipaje||0) > topeAnc || (d.precioSeguro||0) > topeAnc){
         alert('El equipaje y el seguro no pueden costar más de $' + topeAnc.toFixed(2) + ' (' + (PARAMS.topeAncillaryPct*100).toFixed(0) + '% de tu Tarifa Flex).'); return; }

@@ -1,0 +1,33 @@
+# Mantiene activa la base de datos del Simulador de Precios (Supabase, plan gratuito).
+# Supabase pausa los proyectos gratuitos que muestran poca actividad durante 7 días.
+# Este flujo consulta la base cada 3 días, con margen de sobra frente a ese límite.
+# Usa la misma clave pública (de solo lectura) que ya está en index.html.
+name: Mantener activa la base del simulador
+
+on:
+  schedule:
+    - cron: '0 12 */3 * *'   # cada 3 días, a las 12:00 UTC (08:00 en Bolivia)
+  workflow_dispatch:          # permite ejecutarlo a mano desde la pestaña Actions
+
+jobs:
+  consultar-base:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar la base de datos (lectura)
+        env:
+          SUPA_URL: https://hvwdubczgtfshiwtgmnk.supabase.co
+          SUPA_KEY: sb_publishable_K2ZXIPwBmvos69eaZb_FWw_Y7gKqr94
+        run: |
+          for intento in 1 2 3 4 5; do
+            codigo=$(curl -s -o respuesta.txt -w "%{http_code}" \
+              "$SUPA_URL/rest/v1/config?select=id&limit=1" \
+              -H "apikey: $SUPA_KEY" -H "Authorization: Bearer $SUPA_KEY")
+            if [ "$codigo" = "200" ]; then
+              echo "Base activa (intento $intento): respuesta $(cat respuesta.txt)"
+              exit 0
+            fi
+            echo "Intento $intento falló con código $codigo; reintentando en $((intento * 20)) segundos"
+            sleep $((intento * 20))
+          done
+          echo "::error::La base no respondió después de 5 intentos. Revisa si el proyecto de Supabase está pausado."
+          exit 1
