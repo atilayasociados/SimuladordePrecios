@@ -2467,6 +2467,16 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if(bChoque){ D.choque = bChoque.dataset.choque; render(); return; }
     if(e.target.id === 'btnRefrescar'){ await cargarDatos(); render(); return; }
     if(e.target.id === 'btnCerrar'){
+      // Antes de cerrar se vuelve a leer TODO desde la base: equipos, ronda y decisiones de este instante.
+      // (Sin esto, una decisión enviada después de la última actualización de la pantalla se perdía.)
+      const rondaMostrada = D.config ? D.config.rondaActual : null;
+      e.target.disabled = true; e.target.textContent = 'Verificando decisiones…';
+      try{ await cargarDatos(); }catch(_){}
+      if(D.config.rondaActual !== rondaMostrada){
+        alert(`La Ronda ${rondaMostrada} ya fue cerrada (quizás desde otra pestaña o computadora). El panel se actualizó a la Ronda ${D.config.rondaActual}.`);
+        render(); return;
+      }
+      render();
       const sinDecidir = D.equipos.filter(eq => !D.decisiones[eq.nombre.toLowerCase()]);
       if(sinDecidir.length){
         const nombres = sinDecidir.map(x => x.nombre).join(', ');
