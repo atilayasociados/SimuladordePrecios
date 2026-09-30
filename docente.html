@@ -114,6 +114,20 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
   th { background:#333 !important; color:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .grupo, table, .referencia { border:1px solid #999 !important; }
 }
+
+.sel-sim{display:flex;flex-direction:column;gap:3px;}
+.sel-sim label{font-size:11px;color:var(--texto-tenue);text-transform:uppercase;letter-spacing:.06em;}
+.sel-sim select{background:var(--panel);color:var(--texto);border:1px solid var(--borde);border-radius:8px;padding:7px 10px;font:inherit;font-size:14px;max-width:280px;}
+.tabla-sim{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px;}
+.tabla-sim th,.tabla-sim td{padding:9px 8px;border-bottom:1px solid var(--borde);text-align:left;vertical-align:middle;}
+.tabla-sim th{font-size:11.5px;color:var(--texto-tenue);text-transform:uppercase;letter-spacing:.05em;font-weight:600;}
+.tabla-sim tr.activa-sel td{background:rgba(55,213,56,.07);}
+.tabla-sim .acc{display:flex;gap:6px;flex-wrap:wrap;}
+.tabla-sim .acc button{padding:4px 9px;font-size:12px;}
+.etq{display:inline-block;font-size:11px;border-radius:10px;padding:2px 8px;border:1px solid var(--borde);}
+.etq.prueba{border-color:#E8A23C;color:#E8A23C;} .etq.real{border-color:var(--marca);color:var(--marca);} .etq.arch{color:var(--texto-tenue);}
+.form-sim{display:grid;grid-template-columns:2fr 1.3fr 1fr 1.3fr auto;gap:10px;align-items:end;margin-top:14px;}
+@media (max-width:900px){ .form-sim{grid-template-columns:1fr 1fr;} }
 </style>
 <style>.logo-marca{height:32px;width:auto;display:block;}.logo-marca-grande{height:32px;width:auto;display:block;margin-bottom:14px;}</style>
 </head>
@@ -141,6 +155,7 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
     <h1>Simulador de Pricing &amp; Revenue Management Aéreo</h1>
   </div>
   <div style="display:flex;align-items:center;gap:18px;">
+    <div class="sel-sim"><label for="selPartida">Simulación</label><select id="selPartida"></select></div>
     <button class="btn-sec" id="btnManual" type="button">📘 Manual del profesor</button>
     <div class="estado-ronda">
       <div class="et">RONDA ACTUAL</div>
@@ -1382,6 +1397,25 @@ const SUPA_URL = 'https://hvwdubczgtfshiwtgmnk.supabase.co';
 const SUPA_KEY = 'sb_publishable_K2ZXIPwBmvos69eaZb_FWw_Y7gKqr94';
 const SUPA_HEAD = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY, 'Content-Type':'application/json' };
 
+/* ===== Simulaciones (partidas) =====
+   Todo el panel trabaja sobre la simulación elegida en el selector de la cabecera. */
+let PARTIDAS = [], PARTIDA_DOC = null;
+const PID = () => PARTIDA_DOC ? PARTIDA_DOC.id : -1;
+async function cargarPartidas(){
+  PARTIDAS = await rpc('docente_listar_partidas', { p_password: PASS_DOCENTE_ACTUAL }) || [];
+  const guardada = Number(localStorage.getItem('docentePartida'));
+  PARTIDA_DOC = PARTIDAS.find(x => x.id === (PARTIDA_DOC ? PARTIDA_DOC.id : guardada))
+    || PARTIDAS.find(x => x.estado === 'activa' && x.tipo === 'real') || PARTIDAS.find(x => x.estado === 'activa') || PARTIDAS[0] || null;
+  if(PARTIDA_DOC) localStorage.setItem('docentePartida', PARTIDA_DOC.id);
+}
+function enlaceEstudiantes(codigo){
+  return location.origin + location.pathname.replace(/docente\.html$/, '') + '?p=' + encodeURIComponent(codigo);
+}
+function sugerirCodigo(nombre){
+  return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+}
+
 function filaAEquipo(f){
   return {
     nombre: f.nombre_display || f.nombre, perfil: f.perfil, integrantes: f.integrantes,
@@ -1435,7 +1469,7 @@ function configAFila(c){
 async function leer(clave){
   try{
     if(clave === 'config'){
-      const r = await fetch(`${SUPA_URL}/rest/v1/config?id=eq.1&select=*`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/config?partida_id=eq.${PID()}&select=*`, {headers:SUPA_HEAD});
       if(!r.ok) return null;
       const j = await r.json();
       return j.length ? filaAConfig(j[0]) : null;
@@ -1443,14 +1477,14 @@ async function leer(clave){
     if(clave.startsWith('equipo:')){
       const nombre = clave.slice(7);
       const campos = 'nombre,nombre_display,perfil,integrantes,caja,tres_c,historial,rondas_jugadas,precio_anterior,actualizado_en';
-      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?nombre=eq.${encodeURIComponent(nombre)}&select=${campos}`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?partida_id=eq.${PID()}&nombre=eq.${encodeURIComponent(nombre)}&select=${campos}`, {headers:SUPA_HEAD});
       if(!r.ok) return null;
       const j = await r.json();
       return j.length ? filaAEquipo(j[0]) : null;
     }
     if(clave.startsWith('decision:')){
       const p = clave.split(':'); const ronda = p[1], nombre = p.slice(2).join(':');
-      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?ronda=eq.${ronda}&equipo=eq.${encodeURIComponent(nombre)}&select=decision`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?partida_id=eq.${PID()}&ronda=eq.${ronda}&equipo=eq.${encodeURIComponent(nombre)}&select=decision`, {headers:SUPA_HEAD});
       if(!r.ok) return null;
       const j = await r.json();
       return j.length ? j[0].decision : null;
@@ -1488,7 +1522,7 @@ async function escribir(clave, valor){
 async function listar(prefijo){
   try{
     if(prefijo === 'equipo:'){
-      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?select=nombre`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?partida_id=eq.${PID()}&select=nombre`, {headers:SUPA_HEAD});
       if(!r.ok) return [];
       const j = await r.json();
       return j.map(x => 'equipo:'+x.nombre);
@@ -1500,7 +1534,7 @@ async function borrar(clave){
   try{
     if(clave.startsWith('equipo:')){
       const nombre = clave.slice(7);
-      await fetch(`${SUPA_URL}/rest/v1/equipos?nombre=eq.${encodeURIComponent(nombre)}`, {method:'DELETE', headers:SUPA_HEAD});
+      await fetch(`${SUPA_URL}/rest/v1/equipos?partida_id=eq.${PID()}&nombre=eq.${encodeURIComponent(nombre)}`, {method:'DELETE', headers:SUPA_HEAD});
       return true;
     }
     return false;
@@ -1541,6 +1575,32 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 /* ============================================================
    VISTA 1 — CONFIGURACIÓN INICIAL
    ============================================================ */
+function htmlSimulaciones(){
+  const filas = PARTIDAS.map(x => `<tr class="${PARTIDA_DOC && x.id===PARTIDA_DOC.id ? 'activa-sel' : ''}">
+      <td><b>${x.nombre}</b><div style="font-size:12px;color:var(--texto-tenue);">${x.codigo}</div></td>
+      <td><span class="etq ${x.tipo}">${x.tipo === 'prueba' ? 'Prueba' : 'Real'}</span> ${x.estado === 'archivada' ? '<span class="etq arch">Archivada</span>' : ''}</td>
+      <td class="cifra">${x.equipos}</td><td class="cifra">${x.ronda_actual || 1}</td>
+      <td><div class="acc">
+        ${PARTIDA_DOC && x.id===PARTIDA_DOC.id ? '<span style="font-size:12px;color:var(--marca);">En uso</span>' : `<button class="btn-sec" data-simsel="${x.id}">Usar</button>`}
+        <button class="btn-sec" data-simlink="${x.codigo}">Copiar enlace</button>
+        ${x.tipo === 'prueba' ? `<button class="btn-sec" data-simreset="${x.id}">Reiniciar</button>` : ''}
+        <button class="btn-sec" data-simarch="${x.id}" data-archivar="${x.estado === 'activa'}">${x.estado === 'activa' ? 'Archivar' : 'Reactivar'}</button>
+      </div></td></tr>`).join('');
+  return `<div class="panel" style="margin-bottom:26px;">
+    <h3 style="margin-top:0;">Simulaciones</h3>
+    <p class="nota" style="margin-top:0;">Cada simulación tiene su propio mercado, sus rondas y sus equipos. Comparte con tus estudiantes el enlace de su simulación: ya incluye el código. Las simulaciones de prueba se pueden reiniciar; las reales solo se archivan al terminar el curso.</p>
+    <div style="overflow-x:auto;"><table class="tabla-sim"><thead><tr><th>Simulación</th><th>Tipo</th><th>Equipos</th><th>Ronda</th><th>Acciones</th></tr></thead><tbody>${filas || '<tr><td colspan="5">Todavía no hay simulaciones.</td></tr>'}</tbody></table></div>
+    <div class="form-sim">
+      <div class="campo" style="margin:0;"><label for="simNombre">Nombre de la nueva simulación</label><input type="text" id="simNombre" maxlength="60" placeholder="Diplomado NUR · 2026-1"></div>
+      <div class="campo" style="margin:0;"><label for="simCodigoNuevo">Código</label><input type="text" id="simCodigoNuevo" maxlength="24" placeholder="NUR-2026-1" style="text-transform:uppercase;"></div>
+      <div class="campo" style="margin:0;"><label for="simTipo">Tipo</label><select id="simTipo"><option value="real">Real (un curso)</option><option value="prueba">Prueba</option></select></div>
+      <div class="campo" style="margin:0;"><label for="simCopiar">Copiar costos y constantes de</label><select id="simCopiar"><option value="">(valores por defecto)</option>${PARTIDAS.map(x => `<option value="${x.id}">${x.nombre}</option>`).join('')}</select></div>
+      <button class="btn" id="btnCrearSim" style="width:auto;padding:10px 18px;">Crear simulación</button>
+    </div>
+    <div id="avisoSim" class="nota" style="display:none;margin-top:10px;color:#E8A23C;"></div>
+  </div>`;
+}
+
 function vistaConfiguracion(){
   const c = D.config || {};
   const yaArrancado = c.rondaActual > 1;
@@ -1555,7 +1615,8 @@ function vistaConfiguracion(){
   const desalineado = calDom && calInt && (calibradoParaDom !== nDom || calibradoParaInt !== nInt);
 
   return `
-    <h2 class="titulo">Configuración del módulo</h2>
+    ${htmlSimulaciones()}
+    <h2 class="titulo">Configuración del módulo${PARTIDA_DOC ? ' · ' + PARTIDA_DOC.nombre : ''}</h2>
     <p class="sub">El tamaño del mercado se calcula con los equipos que ya se registraron — puede recalcularse tantas veces como quiera mientras no haya cerrado la Ronda 1.</p>
 
     <div class="bloque">
@@ -2119,7 +2180,7 @@ async function cerrarRonda(){
             comproElasticidad: !!(D.decisiones[res.nombre.toLowerCase()]||{}).comprarElasticidad,
             componentes: res.componentes
           });
-          await rpc('docente_actualizar_equipo', {
+          await rpc('docente_actualizar_equipo_v2', { p_partida_id: PID(),
             p_password: PASS_DOCENTE_ACTUAL, p_nombre: eq.nombre,
             p_caja: eq.caja, p_tres_c: eq.tresC, p_historial: eq.historial,
             p_rondas_jugadas: eq.rondasJugadas, p_precio_anterior: eq.precioAnterior
@@ -2136,7 +2197,7 @@ async function cerrarRonda(){
   D.previa = { ronda, poolTotal: (c.poolDomestica||0)+(c.poolInternacional||0), filas };
 
   c.rondaActual = Math.min(ronda+1, PARAMS_DEFECTO.rondasTotales);
-  await rpc('docente_guardar_config', { p_password: PASS_DOCENTE_ACTUAL, p_config: configAFila(c) });
+  await rpc('docente_guardar_config_v2', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: PID(), p_config: configAFila(c) });
   D.decisiones = {}; D.choque = 'sin_choque'; D.calculando = false;
   await cargarDatos();
   render();
@@ -2159,6 +2220,8 @@ async function cargarDatos(){
 }
 function render(){
   document.getElementById('hdRonda').textContent = D.config ? D.config.rondaActual + ' / 12' : '—';
+  const sel = document.getElementById('selPartida');
+  if(sel) sel.innerHTML = PARTIDAS.map(x => `<option value="${x.id}" ${PARTIDA_DOC && x.id===PARTIDA_DOC.id ? 'selected' : ''}>${x.nombre}${x.tipo==='prueba' ? ' (prueba)' : ''}${x.estado==='archivada' ? ' · archivada' : ''}</option>`).join('');
   const vistas = [
     {id:'configuracion', txt:'Configuración'},
     {id:'ronda', txt:'Control de ronda'},
@@ -2174,10 +2237,23 @@ function render(){
   else c.innerHTML = vistaTablero();
 }
 
-document.addEventListener('DOMContentLoaded', async ()=>{
+async function arrancarPanel(){
+  try{ await cargarPartidas(); }catch(_){ PARTIDAS = []; PARTIDA_DOC = null; }
   await cargarDatos();
   D.vista = (D.config && D.config.poolDomestica) ? 'ronda' : 'configuracion';
   render();
+}
+async function cambiarPartida(id){
+  PARTIDA_DOC = PARTIDAS.find(x => x.id === Number(id)) || PARTIDA_DOC;
+  if(PARTIDA_DOC) localStorage.setItem('docentePartida', PARTIDA_DOC.id);
+  D.decisiones = {}; D.choque = 'sin_choque';
+  await cargarDatos();
+  D.vista = (D.config && D.config.poolDomestica) ? 'ronda' : 'configuracion';
+  render();
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  document.getElementById('selPartida').addEventListener('change', e => cambiarPartida(e.target.value));
 
   document.getElementById('tabs').addEventListener('click', async e=>{
     const b = e.target.closest('[data-vista]');
@@ -2186,7 +2262,52 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     await cargarDatos(); render();
   });
 
+  document.getElementById('contenido').addEventListener('input', e=>{
+    if(e.target.id === 'simNombre'){ const c = document.getElementById('simCodigoNuevo'); if(!c.dataset.editado) c.value = sugerirCodigo(e.target.value); }
+    if(e.target.id === 'simCodigoNuevo') e.target.dataset.editado = '1';
+  });
   document.getElementById('contenido').addEventListener('click', async e=>{
+    const bSel = e.target.closest('[data-simsel]');
+    if(bSel){ await cambiarPartida(bSel.dataset.simsel); return; }
+    const bLink = e.target.closest('[data-simlink]');
+    if(bLink){
+      const url = enlaceEstudiantes(bLink.dataset.simlink);
+      try{ await navigator.clipboard.writeText(url); alert('Enlace copiado. Publícalo en Moodle para tus estudiantes:\n\n' + url); }
+      catch(_){ prompt('Copia este enlace para tus estudiantes:', url); }
+      return;
+    }
+    const bReset = e.target.closest('[data-simreset]');
+    if(bReset){
+      const x = PARTIDAS.find(y => y.id === Number(bReset.dataset.simreset));
+      if(!x || !confirm(`Vas a reiniciar "${x.nombre}": se borran sus ${x.equipos} equipos y sus decisiones, y vuelve a la Ronda 1. Se conservan sus costos y constantes.\n\n¿Confirmas?`)) return;
+      try{ await rpc('docente_reiniciar_partida', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: x.id }); }
+      catch(err){ alert('No se pudo reiniciar: ' + err.message); return; }
+      await cargarPartidas(); await cargarDatos(); render(); return;
+    }
+    const bArch = e.target.closest('[data-simarch]');
+    if(bArch){
+      const x = PARTIDAS.find(y => y.id === Number(bArch.dataset.simarch)), archivar = bArch.dataset.archivar === 'true';
+      if(!x || !confirm(archivar ? `Vas a archivar "${x.nombre}". Sus datos se conservan, pero sus equipos ya no podrán entrar ni enviar decisiones. ¿Confirmas?` : `¿Reactivar "${x.nombre}"?`)) return;
+      try{ await rpc('docente_archivar_partida', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: x.id, p_archivar: archivar }); }
+      catch(err){ alert('No se pudo cambiar el estado: ' + err.message); return; }
+      await cargarPartidas(); render(); return;
+    }
+    if(e.target.id === 'btnCrearSim'){
+      const nombre = document.getElementById('simNombre').value.trim();
+      const codigo = sugerirCodigo(document.getElementById('simCodigoNuevo').value);
+      const tipo = document.getElementById('simTipo').value, copiar = document.getElementById('simCopiar').value;
+      const av = document.getElementById('avisoSim');
+      if(!nombre || codigo.length < 3){ av.textContent = 'Escribe un nombre y un código de al menos 3 letras o números.'; av.style.display = 'block'; return; }
+      try{
+        const nueva = await rpc('docente_crear_partida', { p_password: PASS_DOCENTE_ACTUAL, p_codigo: codigo, p_nombre: nombre, p_tipo: tipo, p_copiar_de: copiar ? Number(copiar) : null });
+        await cargarPartidas(); await cambiarPartida(nueva.id);
+        alert(`Simulación "${nombre}" creada y seleccionada.\n\nEnlace para tus estudiantes:\n${enlaceEstudiantes(codigo)}`);
+      }catch(err){
+        av.textContent = String(err.message).includes('CODIGO_EN_USO') ? 'Ese código ya existe. Elige otro.' : 'No se pudo crear la simulación: ' + err.message;
+        av.style.display = 'block';
+      }
+      return;
+    }
     const filaEquipo = e.target.closest('[data-fila-equipo]');
     if(filaEquipo){
       const nom = filaEquipo.dataset.filaEquipo;
@@ -2210,7 +2331,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         eqDomestica:nD, eqInternacional:nI, numEquipos:nD+nI, metaOcupacion:oc,
         poolDomestica: cd.poolFijo, pctDomestica: cd.pctPenetracion,
         poolInternacional: ci.poolFijo, pctInternacional: ci.pctPenetracion };
-      await rpc('docente_guardar_config', { p_password: PASS_DOCENTE_ACTUAL, p_config: configAFila(D.config) });
+      await rpc('docente_guardar_config_v2', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: PID(), p_config: configAFila(D.config) });
       await cargarDatos();
       render(); return;
     }
@@ -2229,7 +2350,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         algoPctPasajeros: v('kAlgoPct'), algoSobreprecio: v('kAlgoSobre'),
         penalizacionNoDecidir: v('kNoDecidir'), multiplicadorCompensacion: v('kCompensa')
       };
-      await rpc('docente_guardar_config', { p_password: PASS_DOCENTE_ACTUAL, p_config: configAFila(D.config) });
+      await rpc('docente_guardar_config_v2', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: PID(), p_config: configAFila(D.config) });
       render(); return;
     }
     if(e.target.id === 'btnGuardarCostos'){
@@ -2239,7 +2360,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         costoElasticidadDomestica: parseFloat(document.getElementById('cElastDom').value) || 0,
         costoElasticidadInternacional: parseFloat(document.getElementById('cElastInt').value) || 0
       };
-      await rpc('docente_guardar_config', { p_password: PASS_DOCENTE_ACTUAL, p_config: configAFila(D.config) });
+      await rpc('docente_guardar_config_v2', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: PID(), p_config: configAFila(D.config) });
       render(); return;
     }
     const bChoque = e.target.closest('[data-choque]');
@@ -2266,7 +2387,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       const nueva = prompt('Nueva contraseña para "' + nom + '":');
       if(nueva && nueva.trim()){
         try{
-          await rpc('docente_resetear_password_equipo', {
+          await rpc('docente_resetear_password_equipo_v2', { p_partida_id: PID(),
             p_password: PASS_DOCENTE_ACTUAL, p_nombre: nom, p_password_nueva: nueva.trim()
           });
           alert('Contraseña actualizada. Comunícasela al equipo.');
@@ -2280,7 +2401,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if(bBorrar){
       const nom = bBorrar.dataset.borrar;
       if(confirm('¿Quitar a "'+nom+'" del simulador? Se perderá su progreso.')){
-        try{ await rpc('docente_borrar_equipo', { p_password: PASS_DOCENTE_ACTUAL, p_nombre: nom }); }catch(_){}
+        try{ await rpc('docente_borrar_equipo_v2', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: PID(), p_nombre: nom }); }catch(_){}
         await cargarDatos(); render();
       }
     }
@@ -2302,6 +2423,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       PASS_DOCENTE_ACTUAL = campoPw.value;
       sessionStorage.setItem('docentePw', campoPw.value);
       acceso.style.display = 'none';
+      await arrancarPanel();
     } else {
       avisoPw.textContent = 'Contraseña incorrecta.';
       avisoPw.style.display = 'block';
@@ -2321,6 +2443,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if(ok){
       PASS_DOCENTE_ACTUAL = pwGuardada;
       acceso.style.display = 'none';
+      await arrancarPanel();
     } else {
       sessionStorage.removeItem('docentePw');
       campoPw.focus();
@@ -2341,7 +2464,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   </div>
   <p class="sub" style="margin:6px 0 0;">Cómo usar el Panel Docente del simulador, desde calibrar el mercado antes de la primera clase hasta calificar a los equipos al final del curso.</p>
   <div class="indice">
-    <a href="#m-acceso">Acceso</a><a href="#m-calibrar">Calibrar el mercado</a><a href="#m-costos">Costos y constantes</a>
+    <a href="#m-acceso">Acceso</a><a href="#m-simulaciones">Simulaciones</a><a href="#m-calibrar">Calibrar el mercado</a><a href="#m-costos">Costos y constantes</a>
     <a href="#m-ronda">Cada ronda</a><a href="#m-resultados">Resultados</a><a href="#m-eval">Evaluación</a>
     <a href="#m-equipos">Equipos</a><a href="#m-guion3">Guion Sesión 3</a><a href="#m-guion4">Guion Sesión 4</a><a href="#m-guion5">Guion Sesión 5</a><a href="#m-mantenimiento">Mantenimiento</a><a href="#m-limites">Qué tener en cuenta</a><a href="#m-problemas">Problemas comunes</a>
   </div>
@@ -2353,6 +2476,16 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <li>La sesión se mantiene mientras la pestaña del navegador siga abierta; si la cierras, tendrás que volver a escribir la contraseña.</li>
   </ol>
   <p>Si el sistema responde <b>"Contraseña incorrecta"</b> con la contraseña correcta, puede ser un problema de conexión: revisa tu internet e inténtalo de nuevo. Si persiste, contacta al equipo técnico.</p>
+
+  <h3 id="m-simulaciones">Simulaciones: cursos y pruebas por separado</h3>
+  <p>Cada <b>simulación</b> tiene su propio mercado, sus rondas y sus equipos. Todo lo que haces en el panel (calibrar, cerrar rondas, evaluar) se aplica solo a la simulación elegida en el selector de la cabecera.</p>
+  <ul>
+    <li><b>Crear:</b> en Configuración → Simulaciones, escribe un nombre (por ejemplo "Diplomado NUR · 2026-1"); el código se sugiere solo. Elige <b>Real</b> para un curso o <b>Prueba</b> para ensayar. Puedes copiar los costos y constantes de otra simulación.</li>
+    <li><b>Compartir:</b> el botón <b>Copiar enlace</b> copia la dirección con el código incluido. Publícala en Moodle: los estudiantes entran directo a su simulación. Si alguien entra sin el enlace, la pantalla le pide el código.</li>
+    <li><b>Reiniciar:</b> solo en simulaciones de prueba. Borra sus equipos y decisiones y vuelve a la Ronda 1, conservando costos y constantes.</li>
+    <li><b>Archivar:</b> al terminar un curso real. Sus datos se conservan, pero nadie puede entrar ni enviar decisiones. Se puede reactivar.</li>
+  </ul>
+  <p>Antes de un curso, crea su simulación real y calibra su mercado cuando se hayan registrado todos los equipos. Usa la simulación de prueba para ensayar sin afectar a tus estudiantes.</p>
 
   <h3 id="m-calibrar">Antes de la primera clase: calibrar el mercado</h3>
   <p>Antes de abrir la Ronda 1 hay que fijar el tamaño del mercado, en la pestaña <b>Configuración</b>.</p>

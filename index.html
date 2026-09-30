@@ -280,6 +280,13 @@ details.grupo:not([open]) .grupo-cab{margin-bottom:0;}
     <h1>Tu aerolínea despega aquí</h1>
     <p class="intro">Registra tu equipo y compite durante 12 trimestres contra las demás aerolíneas del curso y contra dos operadores reales del mercado boliviano.</p>
 
+    <div class="campo" id="bloqueSimulacion">
+      <div id="simInfo" style="display:none;background:var(--panel);border:1px solid var(--borde);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;"></div>
+      <div id="simCodigo" style="display:none;">
+        <label for="inCodigo">Código de la simulación</label>
+        <input type="text" id="inCodigo" maxlength="24" placeholder="Te lo da tu docente, por ejemplo NUR-2026-1" style="text-transform:uppercase;">
+      </div>
+    </div>
     <div class="campo">
       <label for="inNombre">Nombre de la aerolínea</label>
       <input type="text" id="inNombre" maxlength="40" placeholder="Andes Wings">
@@ -705,6 +712,17 @@ const SUPA_URL = 'https://hvwdubczgtfshiwtgmnk.supabase.co';
 const SUPA_KEY = 'sb_publishable_K2ZXIPwBmvos69eaZb_FWw_Y7gKqr94';
 const SUPA_HEAD = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY, 'Content-Type':'application/json' };
 
+/* ===== Simulación (partida) =====
+   El estudiante entra con el enlace ?p=CÓDIGO que publica su docente. El código se recuerda
+   en este navegador para las próximas visitas. Todas las lecturas se filtran por simulación. */
+let PARTIDA = null;
+const PID = () => PARTIDA ? PARTIDA.id : -1;
+async function buscarPartida(codigo){
+  codigo = String(codigo || '').trim().toUpperCase();
+  if(!codigo) return null;
+  try{ return await rpc('partida_info', { p_codigo: codigo }) || null; }catch(_){ return null; }
+}
+
 function filaAEquipo(f){
   return {
     nombre: f.nombre_display || f.nombre, perfil: f.perfil, integrantes: f.integrantes,
@@ -783,7 +801,7 @@ function configAFila(c){
 async function leer(clave){
   try{
     if(clave === 'config'){
-      const r = await fetch(`${SUPA_URL}/rest/v1/config?id=eq.1&select=*`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/config?partida_id=eq.${PID()}&select=*`, {headers:SUPA_HEAD});
       if(!r.ok) return null;
       const j = await r.json();
       return j.length ? filaAConfig(j[0]) : null;
@@ -791,14 +809,14 @@ async function leer(clave){
     if(clave.startsWith('equipo:')){
       const nombre = clave.slice(7);
       const campos = 'nombre,nombre_display,perfil,integrantes,caja,tres_c,historial,rondas_jugadas,precio_anterior,actualizado_en';
-      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?nombre=eq.${encodeURIComponent(nombre)}&select=${campos}`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?partida_id=eq.${PID()}&nombre=eq.${encodeURIComponent(nombre)}&select=${campos}`, {headers:SUPA_HEAD});
       if(!r.ok) return null;
       const j = await r.json();
       return j.length ? filaAEquipo(j[0]) : null;
     }
     if(clave.startsWith('decision:')){
       const p = clave.split(':'); const ronda = p[1], nombre = p.slice(2).join(':');
-      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?ronda=eq.${ronda}&equipo=eq.${encodeURIComponent(nombre)}&select=decision`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/decisiones?partida_id=eq.${PID()}&ronda=eq.${ronda}&equipo=eq.${encodeURIComponent(nombre)}&select=decision`, {headers:SUPA_HEAD});
       if(!r.ok) return null;
       const j = await r.json();
       return j.length ? j[0].decision : null;
@@ -836,7 +854,7 @@ async function escribir(clave, valor){
 async function listar(prefijo){
   try{
     if(prefijo === 'equipo:'){
-      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?select=nombre`, {headers:SUPA_HEAD});
+      const r = await fetch(`${SUPA_URL}/rest/v1/equipos?partida_id=eq.${PID()}&select=nombre`, {headers:SUPA_HEAD});
       if(!r.ok) return [];
       const j = await r.json();
       return j.map(x => 'equipo:'+x.nombre);
@@ -2859,7 +2877,30 @@ async function cargarTablero(){
 /* ============================================================
    INICIO
    ============================================================ */
+function mostrarSimulacion(aviso){
+  const info = document.getElementById('simInfo'), campo = document.getElementById('simCodigo');
+  if(PARTIDA && PARTIDA.estado === 'activa'){
+    info.innerHTML = `Simulación: <b>${PARTIDA.nombre}</b> <span style="color:var(--texto-tenue);">(${PARTIDA.codigo})</span> · <a href="#" id="lnkCambiarSim" style="color:var(--marca);">¿No es la tuya?</a>`;
+    info.style.display = ''; campo.style.display = 'none';
+  } else {
+    info.innerHTML = aviso || '';
+    info.style.display = aviso ? '' : 'none'; campo.style.display = '';
+  }
+}
+async function prepararSimulacion(){
+  const url = new URLSearchParams(location.search).get('p');
+  let codigo = url || localStorage.getItem('simuladorCodigo');
+  PARTIDA = await buscarPartida(codigo);
+  if(PARTIDA && PARTIDA.estado === 'activa'){ localStorage.setItem('simuladorCodigo', PARTIDA.codigo); mostrarSimulacion(); }
+  else if(PARTIDA){ const n = PARTIDA.nombre; PARTIDA = null; mostrarSimulacion(`La simulación <b>${n}</b> ya fue cerrada por tu docente. Si estás en otro curso, escribe su código.`); }
+  else mostrarSimulacion(codigo ? 'No encontramos esa simulación. Revisa el enlace o escribe el código que te dio tu docente.' : '');
+}
+
 document.addEventListener('DOMContentLoaded', ()=>{
+  prepararSimulacion();
+  document.getElementById('bloqueSimulacion').addEventListener('click', e=>{
+    if(e.target.id === 'lnkCambiarSim'){ e.preventDefault(); PARTIDA = null; localStorage.removeItem('simuladorCodigo'); mostrarSimulacion(); document.getElementById('inCodigo').focus(); }
+  });
   /* ---------- Manual consultable desde la pantalla de registro ---------- */
   const cardRegistro = document.querySelector('.registro-caja');
   function mostrarManualPrevio(mostrar){
@@ -2893,15 +2934,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const perfil = document.getElementById('inPerfil').value;
     const integrantes = document.getElementById('inIntegrantes').value.trim();
 
+    if(!PARTIDA || PARTIDA.estado !== 'activa'){
+      const cod = document.getElementById('inCodigo').value;
+      const encontrada = await buscarPartida(cod);
+      const falla = !cod.trim() ? 'Escribe el código de la simulación que te dio tu docente.'
+        : !encontrada ? 'No encontramos una simulación con ese código. Revísalo con tu docente.'
+        : encontrada.estado !== 'activa' ? 'Esa simulación ya fue cerrada por tu docente.' : null;
+      if(falla){ av.textContent = falla; av.style.display = 'block'; btn.disabled = false; btn.textContent = 'Entrar al simulador'; return; }
+      PARTIDA = encontrada; localStorage.setItem('simuladorCodigo', PARTIDA.codigo); mostrarSimulacion();
+    }
+    history.replaceState(null, '', location.pathname + '?p=' + encodeURIComponent(PARTIDA.codigo));
+
     let eq;
     try{
-      const fila = await rpc('registrar_o_ingresar_equipo', {
-        p_nombre: nombre, p_password: password, p_perfil: perfil, p_integrantes: integrantes
+      const fila = await rpc('registrar_o_ingresar_equipo_v2', {
+        p_codigo: PARTIDA.codigo, p_nombre: nombre, p_password: password, p_perfil: perfil, p_integrantes: integrantes
       });
       eq = filaAEquipo(fila);
     }catch(err){
       if(String(err.message).includes('CONTRASENA_INCORRECTA')){
         av.textContent = 'Contraseña incorrecta para esta aerolínea. Si la olvidaron, pídansela a su docente.';
+      } else if(String(err.message).includes('SIMULACION_')){
+        av.textContent = 'Esa simulación ya no está activa. Revisa el enlace con tu docente.';
       } else {
         av.textContent = 'No se pudo entrar. Verifica tu conexión e intenta de nuevo.';
       }
@@ -2991,13 +3045,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(!confirm('Vas a enviar esta decisión. Después no se puede cambiar en esta ronda:\n\n• ' + L.join('\n• ') + '\n\n¿Confirmas?')) return; }
       e.target.disabled = true; e.target.textContent='Enviando…';
       try{
-        await rpc('guardar_decision', {
-          p_nombre: APP.equipo.nombre, p_password: APP.equipo.password,
+        await rpc('guardar_decision_v2', {
+          p_codigo: PARTIDA.codigo, p_nombre: APP.equipo.nombre, p_password: APP.equipo.password,
           p_ronda: APP.config.rondaActual, p_decision: d
         });
         APP.enviada = true;
       }catch(err){
-        alert('No se pudo enviar la decisión. Intenta de nuevo.');
+        alert(String(err.message).includes('SIMULACION_ARCHIVADA')
+          ? 'Tu docente ya cerró esta simulación: no se pueden enviar más decisiones.'
+          : 'No se pudo enviar la decisión. Intenta de nuevo.');
       }
       render();
     }
