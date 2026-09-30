@@ -2089,7 +2089,7 @@ function diagnosticos(rep){
     d.push(`Tu precio quedó ${money2(piso-rep.precioFinal)} por debajo de tu piso de ${money2(piso)}. ¿Qué le pasó a tu resultado con cada pasajero que subió al avión?`);
   }
   // Dilución alta hacia la Tarifa Promocional
-  if(er.desglosePrecio && cap.abordados > 0){
+  if(er.desglosePrecio && er.desglosePrecio.promo && cap.abordados > 0){   // con Pase y sin promocional, el desglose no trae 'promo'
     const pctPromo = er.desglosePrecio.promo.pax / cap.abordados;
     if(pctPromo > 0.70){
       d.push(`El ${(pctPromo*100).toFixed(0)}% de tus pasajeros compró con la Tarifa Promocional, no con la Flex. ¿Tu valla fue lo bastante fuerte para proteger al viajero de negocios?`);
