@@ -2269,8 +2269,8 @@ function calcularAntecedente(c){
   const params = paramsDesdeConfig(c), out = {};
   for(const perfilKey of ['domestica','internacional']){
     const poolFijo = perfilKey === 'domestica' ? c.poolDomestica : c.poolInternacional;
-    const n = Math.max(1, perfilKey === 'domestica' ? (c.eqDomestica || 0) : (c.eqInternacional || 0));
-    if(!poolFijo){ out[perfilKey] = null; continue; }
+    const n = perfilKey === 'domestica' ? (c.eqDomestica || 0) : (c.eqInternacional || 0);
+    if(!poolFijo || n < 1){ out[perfilKey] = null; continue; }   // sin equipos en el perfil, no hay trimestre anterior
     const pf = params.perfiles[perfilKey];
     const dec = { precio: pf.precioBase, marketing: MARKETING_TRIMESTRE_ANTERIOR, fuerzaValla: 'sin_valla', overbooking: 0 };
     const equipos = Array.from({length: n}, (_, i) => ({ nombre: i === 0 ? 'Tu aerolínea' : 'Aerolínea ' + (i+1),
