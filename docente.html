@@ -1458,7 +1458,7 @@ function configAFila(c){
       pctEquipaje:c.pctEquipaje, pctSeguro:c.pctSeguro,
       costoPuntoMadurez:c.costoPuntoMadurez,
       probDeteccion:c.probDeteccion, penalConfianza:c.penalConfianza, sancionDeteccion:c.sancionDeteccion, topeAncillary:c.topeAncillary,
-      antecedente:c.antecedente,
+      antecedente:c.antecedente, minPalabrasInforme:c.minPalabrasInforme,
       sensibilidadPrecio:c.sensibilidadPrecio, elasticidadNegocio:c.elasticidadNegocio, elasticidadPlacer:c.elasticidadPlacer, aceptacionBasica:c.aceptacionBasica, aceptacionFuerte:c.aceptacionFuerte, extrasSensibilidad:c.extrasSensibilidad, extrasCostoPct:c.extrasCostoPct, extrasSaliencia:c.extrasSaliencia, topePaseNegocio:c.topePaseNegocio,
       paseMultiplicador:c.paseMultiplicador, paseTope:c.paseTope,
       algoPctPasajeros:c.algoPctPasajeros, algoSobreprecio:c.algoSobreprecio,
@@ -1760,6 +1760,11 @@ function vistaConfiguracion(){
         <label for="kTopeAnc">Tope de equipaje y seguro (% de la Tarifa Flex)</label>
         <input type="number" id="kTopeAnc" min="1" max="100" value="${(c.topeAncillary ?? 100)}">
         <div class="nota" style="margin-top:6px;">Precio máximo de equipaje o seguro, como % de la Tarifa Flex. En esta versión los extras tienen demanda propia (cobrar de más reduce las compras y espanta pasajeros), así que el tope es solo un resguardo: 100% por defecto.</div>
+      </div>
+      <div class="campo" style="margin:18px 0 14px;">
+        <label for="kMinPalabras">Mínimo de palabras del informe de cada ronda</label>
+        <input type="number" id="kMinPalabras" min="5" max="300" value="${c.minPalabrasInforme ?? 20}">
+        <div class="nota" style="margin-top:6px;">Los equipos no pueden enviar su decisión sin un informe de al menos este largo. 20 palabras equivalen a dos frases cortas.</div>
       </div>
       <h4 style="margin:22px 0 4px;">Modelo de demanda y herramientas (versión 2)</h4>
       <div class="nota" style="margin-bottom:12px;">Calibración verificada con 25 criterios de las cinco unidades. Cámbiala solo si tienes una razón pedagógica: todos estos valores interactúan.</div>
@@ -2388,6 +2393,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         probDeteccion: v('kDeteccion'), penalConfianza: v('kPenal'), sancionDeteccion: v('kSancion'), topeAncillary: v('kTopeAnc'),
         sensibilidadPrecio: v('kBeta'), elasticidadNegocio: v('kElNeg'), elasticidadPlacer: v('kElPla'), aceptacionBasica: v('kAcepBas'), aceptacionFuerte: v('kAcepFue'),
         extrasSensibilidad: v('kExSens'), extrasCostoPct: v('kExCosto'), extrasSaliencia: v('kExSal'), topePaseNegocio: v('kPaseNeg'),
+        minPalabrasInforme: v('kMinPalabras'),
         paseMultiplicador: v('kPaseMult'), paseTope: v('kPaseTope'),
         algoPctPasajeros: v('kAlgoPct'), algoSobreprecio: v('kAlgoSobre'),
         penalizacionNoDecidir: v('kNoDecidir'), multiplicadorCompensacion: v('kCompensa')
@@ -2577,6 +2583,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <h3 id="m-equipos">Gestión de equipos</h3>
   <p>En <b>Configuración</b>, sección <b>Equipos registrados</b>:</p>
   <ul>
+    <li><b>Informe de cada ronda:</b> es obligatorio para enviar la decisión, con un mínimo de palabras que defines en Configuración (20 por defecto). No suma puntos en la calificación automática: sirve para tu revisión y para el análisis final, y queda en el expediente de cada equipo.</li>
     <li><b>Resetear contraseña:</b> si un equipo la olvidó, haz clic en el botón junto a su nombre, escribe la nueva y comunícasela. Por seguridad no es posible consultar la contraseña original.</li>
     <li><b>Quitar:</b> elimina al equipo y todo su progreso (decisiones, historial, caja). Pide confirmación porque no se puede deshacer.</li>
   </ul>

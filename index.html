@@ -753,6 +753,7 @@ function aplicarConstantesDelProfesor(){
   if(c.probDeteccion != null) PARAMS.probDeteccion = pc(c.probDeteccion);
   if(c.penalConfianza != null) PARAMS.penalConfianza = pc(c.penalConfianza);
   if(c.sancionDeteccion != null) PARAMS.sancionDeteccion = pc(c.sancionDeteccion);
+  if(c.minPalabrasInforme != null) PARAMS.minPalabrasInforme = Number(c.minPalabrasInforme);
   // NIVEL 2: la vista usa las mismas constantes que el motor
   if(c.sensibilidadPrecio != null) PARAMS.sensibilidadPrecio = Number(c.sensibilidadPrecio);
   if(c.aceptacionBasica != null) PARAMS.aceptacionValla = { ...PARAMS.aceptacionValla, basica: pc(c.aceptacionBasica) };
@@ -1713,12 +1714,17 @@ function estimarVuelo(precio, e){
   const f = tablaEncuestaWTP(precio, precio, 'previa', e);   // fila de ese precio
   return f && f.length ? f[f.length-1] : null;
 }
-const MIN_INFORME = 30;
+const minPalabrasInforme = () => PARAMS.minPalabrasInforme || 20;
+const contarPalabras = t => (String(t || '').match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9$%]+/g) || []).length;
 function htmlEstadoInforme(){
-  const t = ((document.getElementById('dInforme') || {}).value ?? (APP.decisionActual || {}).informe ?? '').trim();
-  return t.length >= MIN_INFORME
-    ? `<span style="color:var(--marca);">✓ Informe listo</span>`
-    : `<span style="color:#E8A23C;">⚠ Falta el informe de la ronda</span> · <a href="#" id="irInforme" style="color:var(--marca);">escribirlo</a>`;
+  const n = contarPalabras((document.getElementById('dInforme') || {}).value ?? (APP.decisionActual || {}).informe ?? ''), min = minPalabrasInforme();
+  return n >= min
+    ? `<span style="color:var(--marca);">✓ Informe listo (${n} palabras)</span>`
+    : `<span style="color:#E8A23C;">⚠ No puedes enviar sin informe: llevas ${n} de ${min} palabras</span> · <a href="#" id="irInforme" style="color:var(--marca);">escribirlo</a>`;
+}
+function htmlContadorInforme(){
+  const n = contarPalabras((document.getElementById('dInforme') || {}).value ?? (APP.decisionActual || {}).informe ?? ''), min = minPalabrasInforme();
+  return `<span style="color:${n >= min ? 'var(--marca)' : 'var(--texto-tenue)'};">${n} de ${min} palabras mínimas${n >= min ? ' ✓' : ''}</span>`;
 }
 function irAlInforme(){
   const t = document.getElementById('dInforme'); if(!t) return;
@@ -1975,11 +1981,12 @@ function vistaDecision(){
     ${grupo('Informe de la ronda', 'Anota aquí tu cálculo — te servirá para el análisis final', `
       <div class="referencia" style="margin-bottom:12px;">
         <div class="ref-nota"><b>Qué escribir:</b> el cálculo que hiciste arriba, con tus números, y por qué elegiste ese valor y no otro.</div>
-        <div class="ref-nota" style="margin-top:8px;"><b>Es obligatorio:</b> tu decisión no se envía sin informe (una o dos frases bastan). No suma puntos en la calificación automática, pero es tu registro de trabajo: tu docente lo revisa, lo necesitarás para el análisis final y queda en tu expediente como comprobante.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Obligatorio, mínimo ${minPalabrasInforme()} palabras:</b> tu decisión no se puede enviar sin informe. No suma puntos en la calificación automática, pero es tu registro de trabajo: tu docente lo revisa, lo necesitarás para el análisis final y queda en tu expediente como comprobante.</div>
       </div>
       <div class="campo">
         <label for="dInforme">Tu informe de esta ronda</label>
         <textarea id="dInforme" rows="7" style="width:100%;font-family:inherit;font-size:14px;padding:10px;border:1px solid var(--borde);border-radius:8px;background:var(--panel);color:var(--texto);resize:vertical;" placeholder="1. Qué decidí y con qué cálculo…&#10;2. Por qué ese valor y no otro…&#10;3. Qué pasó la ronda anterior y cómo influyó…">${(d.informe||'').replace(/</g,'&lt;')}</textarea>
+        <div id="contadorInforme" style="font-size:12.5px;margin-top:6px;">${htmlContadorInforme()}</div>
       </div>
     `, true, 1)}
 
@@ -3042,8 +3049,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
       recolectar();
       const d = APP.decisionActual;
       if(!d.precio || d.precio<=0){ alert('Escribe tu Tarifa Flex antes de enviar.'); return; }
-      if((d.informe || '').trim().length < MIN_INFORME){
-        alert('Falta el informe de la ronda.\n\nAntes de enviar, escribe en una o dos frases qué decidieron y por qué (con qué datos o cálculo). Es tu registro de trabajo: tu docente lo revisa y lo necesitarás para el análisis final.');
+      const nPal = contarPalabras(d.informe), minPal = minPalabrasInforme();
+      if(nPal < minPal){
+        alert(`No puedes enviar tu decisión sin el informe de la ronda.\n\nEscribe al menos ${minPal} palabras (llevas ${nPal}): qué decidieron, con qué datos o cálculo, y por qué ese valor y no otro.`);
         irAlInforme(); return;
       }
       if(d.tarifaPromocional > 0 && d.tarifaPromocional >= d.precio){
@@ -3072,7 +3080,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(d.comprarWTP) L.push('Compra estudio WTP'); if(d.comprarElasticidad) L.push('Compra estudio de elasticidad');
         if(d.gastoMadurez > 0) L.push('Madurez: $' + d.gastoMadurez + ' → ' + d.talento + '/' + d.procesos + '/' + d.datos);
         if(d.pricingAlgoritmico) L.push('Precios personalizados: sí');
-        L.push('Informe: ' + d.informe.trim().split(/\s+/).length + ' palabras');
+        L.push('Informe: ' + contarPalabras(d.informe) + ' palabras');
         if(!confirm('Vas a enviar esta decisión. Después no se puede cambiar en esta ronda:\n\n• ' + L.join('\n• ') + '\n\n¿Confirmas?')) return; }
       e.target.disabled = true; e.target.textContent='Enviando…';
       try{
@@ -3093,7 +3101,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   /* Al escribir en el precio o el marketing, las referencias se actualizan solas,
      sin reconstruir los campos de entrada (así el cursor nunca salta). */
   document.getElementById('contenido').addEventListener('input', e=>{
-    if(e.target.id === 'dInforme'){ const ei = document.getElementById('estadoInforme'); if(ei) ei.innerHTML = htmlEstadoInforme(); }
+    if(e.target.id === 'dInforme'){ const ei = document.getElementById('estadoInforme'); if(ei) ei.innerHTML = htmlEstadoInforme();
+      const ci = document.getElementById('contadorInforme'); if(ci) ci.innerHTML = htmlContadorInforme(); }
     if(['dPrecio','dMarketing'].includes(e.target.id)){
       actualizarPanelesEnVivo();
       if(e.target.id === 'dPrecio'){ const pv = document.getElementById('previaVuelo'); if(pv){ APP.decisionActual.precio = parseFloat(String(e.target.value).replace(',', '.')) || 0; pv.innerHTML = htmlPrevia(); } }
