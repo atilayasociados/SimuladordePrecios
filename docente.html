@@ -1899,7 +1899,7 @@ function vistaPrevia(){
   // Cada perfil es un mercado distinto: se muestra una tabla por perfil, con su mercado real de la ronda
   const P = D.previa, NOM = { domestica: 'Doméstico', internacional: 'Internacional' };
   const perfiles = Object.keys(P.mercados || {}).length ? Object.keys(P.mercados) : [...new Set(P.filas.map(f => f.perfil || 'domestica'))];
-  return perfiles.map(pk => vistaPreviaPerfil({ ...P, filas: P.filas.filter(f => (f.perfil || 'domestica') === pk),
+  return perfiles.map(pk => vistaPreviaPerfil({ ...P, mercado: (P.mercados || {})[pk], nombrePerfil: perfiles.length > 1 ? NOM[pk] : '', filas: P.filas.filter(f => (f.perfil || 'domestica') === pk),
     titulo: (perfiles.length > 1 ? NOM[pk] + ' · ' : '') + 'mercado de ' + ((P.mercados || {})[pk] ?? '—') + ' pasajeros en esta ronda.' })).join('');
 }
 function desgloseMercado(filas){
@@ -1916,7 +1916,7 @@ function vistaPreviaPerfil(p){
     <h3>Resultados de la Ronda ${p.ronda}</h3>
     ${(() => { const m = desgloseMercado(p.filas); const pref = p.titulo.includes(' · ') ? p.titulo.split(' · ')[0] + ' · ' : '';
       return m ? `<p class="sub" style="margin-bottom:6px;">${pref}<b>Quisieron viajar ${m.quisieron} pasajeros</b> en esta ronda (el mercado). <b>Volaron ${m.volaron}</b>, sumando todas las aerolíneas.${m.quisieron > m.volaron ? ` No volaron ${m.quisieron - m.volaron}: ${m.noShows} reservaron y no se presentaron${m.sinAsiento ? `, y ${m.sinAsiento} no encontraron asiento en la aerolínea que eligieron` : ''}.` : ''}</p>`
-               : `<p class="sub" style="margin-bottom:6px;">${p.titulo.charAt(0).toUpperCase() + p.titulo.slice(1).replace('mercado de', 'quisieron viajar').replace(' pasajeros en esta ronda.', ' pasajeros en esta ronda (el mercado).')} El detalle de cuántos volaron se muestra en las rondas cerradas con esta versión.</p>`; })()}
+               : `<p class="sub" style="margin-bottom:6px;">${p.nombrePerfil ? p.nombrePerfil + ' · ' : ''}<b>Quisieron viajar ${p.mercado ?? '—'} pasajeros</b> en esta ronda (el mercado). Para esta ronda no se guardó cuántos volaron con la competencia, así que el desglose (cuántos volaron, cuántos no se presentaron y cuántos no encontraron asiento) aparecerá desde la próxima ronda que cierres.</p>`; })()}
     <p class="sub" style="margin-bottom:14px;"> Toca una fila para ver su Estado de Resultados completo. Puedes comentar estos resultados en clase antes de que cada equipo revise su propio reporte.</p>
     <table class="datos">
       <thead><tr><th></th><th>Aerolínea</th><th class="num">Precio</th><th class="num">Part.</th><th class="num">A bordo</th><th class="num">Ocupación</th><th class="num">Utilidad neta</th></tr></thead>

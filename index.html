@@ -2248,6 +2248,15 @@ function vistaReporte(){
 function observaciones(rep){
   const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
   const o = [];
+  // Del mercado a tu avión: cuántos quisieron viajar, cuántos eligieron tu aerolínea y cuántos volaron
+  if(rep.poolDeRonda && rep.pasajerosGanados != null && cap){
+    const sinAsiento = (cap.spill || 0) + (cap.denegados || 0);
+    const partes = [`volaron ${cap.abordados}`];
+    if(cap.noShows > 0) partes.push(`${cap.noShows} reservaron pero no se presentaron`);
+    if(sinAsiento > 0) partes.push(`${sinAsiento} quisieron volar contigo pero no encontraron asiento`);
+    const ultima = partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0];
+    o.push(`${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} <b>captó ${rep.pasajerosGanados} pasajeros</b>: ${ultima}. ¿Cuántos quisieron viajar en total y cuántos se llevó la competencia? Lo muestra el estudio de mercado.`);
+  }
   o.push(`Tu precio fue de ${money2(rep.precioFinal)}; el promedio del mercado, ${money2(rep.precioMercado)}.`);
   if(APP.decisionActual.dynamicPricing && rep.precioDecidido != null && Math.abs(rep.precioDecidido - rep.precioFinal) >= 0.01){
     const subio = rep.precioFinal > rep.precioDecidido;
@@ -2274,7 +2283,7 @@ function observaciones(rep){
     o.push(`Gastaste ${money2(tot)} en marketing, estudios e inversiones: el ${pct}% de tus ingresos.`);
   }
   o.push(`Tu margen bruto fue ${String(er.margenBrutoPct).replace('.', ',')}%.`);
-  if(cap.noShows>0) o.push(`${cap.noShows} pasajeros con reserva no se presentaron al vuelo.`);
+  if(cap.noShows > 0 && !(rep.poolDeRonda && rep.pasajerosGanados != null)) o.push(`${cap.noShows} pasajeros con reserva no se presentaron al vuelo.`);
   return o;
 }
 
@@ -2396,6 +2405,40 @@ function vistaHistorial(){
    Reúne todo lo que el equipo compró en investigación, como lo haría
    el área de research de una empresa: un solo lugar de consulta.
    ============================================================ */
+/* Tamaño y reparto del mercado en la última ronda cerrada (parte del estudio de mercado) */
+function htmlRepartoMercado(e){
+  const hist = (e.historial || []).filter(h => !h.neutra && h.capacidad);
+  const mio = hist[hist.length - 1];
+  if(!mio) return '';
+  const R = mio.ronda, filas = [];
+  const pct = v => v == null ? '—' : String(v).replace('.', ',') + '%';
+  (APP.tablero || []).filter(t => t.perfil === e.perfil).forEach(t => {
+    const h = (t.historial || []).find(x => x.ronda === R);
+    if(h && h.capacidad) filas.push({ nombre: t.nombre, yo: t.nombre.toLowerCase() === e.nombre.toLowerCase(), precio: h.precioFinal,
+      participacion: h.participacion, captados: h.pasajerosGanados, cap: h.capacidad });
+  });
+  if(!filas.some(f => f.yo)) filas.push({ nombre: e.nombre, yo: true, precio: mio.precioFinal, participacion: mio.participacion, captados: mio.pasajerosGanados, cap: mio.capacidad });
+  (mio.competidores || []).forEach(b => filas.push({ nombre: b.nombre, bot: true, precio: b.precio, participacion: b.participacion, captados: b.pasajerosGanados, cap: b.capacidad }));
+  if(!(mio.competidores || []).length) Object.entries(mio.preciosCompetidores || {}).forEach(([n, v]) => filas.push({ nombre: n, bot: true, precio: v }));
+  const completos = filas.every(f => f.cap);
+  let quisieron = 0, volaron = 0, ns = 0, sin = 0;
+  filas.forEach(f => { if(f.cap){ quisieron += f.captados || 0; volaron += f.cap.abordados || 0; ns += f.cap.noShows || 0; sin += (f.cap.spill || 0) + (f.cap.denegados || 0); } });
+  filas.sort((a, b) => (b.captados || 0) - (a.captados || 0));
+  return `<div class="grupo" style="margin-top:14px;">
+    <div class="grupo-cab"><h3>Tamaño y reparto del mercado · Ronda ${R}</h3><span class="herramienta">WTP</span></div>
+    <div class="referencia">
+    <div class="ref-nota" style="margin-top:0;">${completos
+      ? `En tu mercado <b>quisieron viajar ${quisieron} pasajeros</b> y <b>volaron ${volaron}</b>, sumando todas las aerolíneas.${quisieron > volaron ? ` No volaron ${quisieron - volaron}: ${ns} reservaron y no se presentaron${sin ? ` y ${sin} no encontraron asiento en la aerolínea que eligieron` : ''}.` : ''}`
+      : `En tu mercado <b>quisieron viajar ${mio.poolDeRonda} pasajeros</b>. El detalle de la competencia está disponible desde las rondas cerradas con la versión actual del simulador.`}</div>
+    <div style="overflow-x:auto;"><table class="tab-pos" style="margin-top:8px;"><tr><th>Aerolínea</th><th>Precio</th><th>Participación</th><th>Captó</th><th>Volaron</th></tr>
+      ${filas.map(f => `<tr${f.yo ? ' style="color:var(--marca);font-weight:600;"' : ''}><td>${esc(f.nombre)}${f.yo ? ' (tu equipo)' : ''}${f.bot ? ' <span style="color:var(--texto-tenue);font-size:12px;">competidor real</span>' : ''}</td>
+        <td>${money2(f.precio)}</td><td>${pct(f.participacion)}</td><td>${f.captados ?? "—"}</td><td>${f.cap ? f.cap.abordados : "—"}</td></tr>`).join('')}
+    </table></div>
+    <div class="ref-nota">"Captó" son los pasajeros que eligieron esa aerolínea; "Volaron", los que efectivamente subieron. La diferencia son los que reservaron y no se presentaron, y los que no encontraron asiento.</div>
+    </div>
+  </div>`;
+}
+
 function vistaMercado(){
   const e = APP.equipo;
   const p = PARAMS.perfiles[e.perfil];
@@ -2436,6 +2479,7 @@ function vistaMercado(){
         <div class="ref-nota">Promedio del perfil ${p.nombre} completo (rutas ${p.rutas.join(' y ')}) — no es la tarifa de una ruta específica.</div>
       </div>
     </div>
+    ${htmlRepartoMercado(e)}
 
     <div class="grupo" style="margin-top:14px;">
       <div class="grupo-cab"><h3>Encuesta de intención de compra</h3><span class="herramienta">100 clientes</span></div>
