@@ -1713,6 +1713,18 @@ function estimarVuelo(precio, e){
   const f = tablaEncuestaWTP(precio, precio, 'previa', e);   // fila de ese precio
   return f && f.length ? f[f.length-1] : null;
 }
+const MIN_INFORME = 30;
+function htmlEstadoInforme(){
+  const t = ((document.getElementById('dInforme') || {}).value ?? (APP.decisionActual || {}).informe ?? '').trim();
+  return t.length >= MIN_INFORME
+    ? `<span style="color:var(--marca);">✓ Informe listo</span>`
+    : `<span style="color:#E8A23C;">⚠ Falta el informe de la ronda</span> · <a href="#" id="irInforme" style="color:var(--marca);">escribirlo</a>`;
+}
+function irAlInforme(){
+  const t = document.getElementById('dInforme'); if(!t) return;
+  const g = t.closest('details'); if(g) g.open = true;
+  t.scrollIntoView({block:'center'}); t.focus();
+}
 function htmlPrevia(){
   const d = APP.decisionActual || {}, est = estimarVuelo(d.precio);
   if(!est) return 'Escribe tu Tarifa Flex para ver una estimación de tu vuelo.';
@@ -1963,7 +1975,7 @@ function vistaDecision(){
     ${grupo('Informe de la ronda', 'Anota aquí tu cálculo — te servirá para el análisis final', `
       <div class="referencia" style="margin-bottom:12px;">
         <div class="ref-nota"><b>Qué escribir:</b> el cálculo que hiciste arriba, con tus números, y por qué elegiste ese valor y no otro.</div>
-        <div class="ref-nota" style="margin-top:8px;">Este informe no da nota por sí solo, pero es tu registro de trabajo: al cierre del módulo lo necesitarás para el análisis final, y queda guardado en tu expediente como comprobante.</div>
+        <div class="ref-nota" style="margin-top:8px;"><b>Es obligatorio:</b> tu decisión no se envía sin informe (una o dos frases bastan). No suma puntos en la calificación automática, pero es tu registro de trabajo: tu docente lo revisa, lo necesitarás para el análisis final y queda en tu expediente como comprobante.</div>
       </div>
       <div class="campo">
         <label for="dInforme">Tu informe de esta ronda</label>
@@ -1974,6 +1986,7 @@ function vistaDecision(){
     ${PROXIMAS.length ? `<div class="proximas">Próximas herramientas: ${PROXIMAS.join(' · ')}.</div>` : ''}
     <div class="enviar-fijo">
       <div class="previa" id="previaVuelo">${htmlPrevia()}</div>
+      <div class="previa" id="estadoInforme" style="margin-top:-4px;">${htmlEstadoInforme()}</div>
       <div class="acciones" style="margin:0;">
         <button class="btn" style="width:auto;padding:12px 26px;" id="btnEnviar">Revisar y enviar la Ronda ${ronda}</button>
         <button class="btn-sec" id="btnRecalcular">Actualizar referencias</button>
@@ -3012,6 +3025,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   document.addEventListener('click', e=>{
+    if(e.target.id === 'irInforme'){ e.preventDefault(); irAlInforme(); return; }
     const b = e.target.closest('[data-ir], .btn-exp');
     if(!b) return;
     if(APP.vista==='decision') recolectar();
@@ -3028,6 +3042,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
       recolectar();
       const d = APP.decisionActual;
       if(!d.precio || d.precio<=0){ alert('Escribe tu Tarifa Flex antes de enviar.'); return; }
+      if((d.informe || '').trim().length < MIN_INFORME){
+        alert('Falta el informe de la ronda.\n\nAntes de enviar, escribe en una o dos frases qué decidieron y por qué (con qué datos o cálculo). Es tu registro de trabajo: tu docente lo revisa y lo necesitarás para el análisis final.');
+        irAlInforme(); return;
+      }
       if(d.tarifaPromocional > 0 && d.tarifaPromocional >= d.precio){
         alert('La Tarifa Promocional debe ser menor que tu Tarifa Flex. Si no quieres ofrecer promoción, deja ese campo vacío.'); return; }
       // Guarda el piso y el techo que el equipo está viendo: con ellos se califica el rango.
@@ -3054,6 +3072,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(d.comprarWTP) L.push('Compra estudio WTP'); if(d.comprarElasticidad) L.push('Compra estudio de elasticidad');
         if(d.gastoMadurez > 0) L.push('Madurez: $' + d.gastoMadurez + ' → ' + d.talento + '/' + d.procesos + '/' + d.datos);
         if(d.pricingAlgoritmico) L.push('Precios personalizados: sí');
+        L.push('Informe: ' + d.informe.trim().split(/\s+/).length + ' palabras');
         if(!confirm('Vas a enviar esta decisión. Después no se puede cambiar en esta ronda:\n\n• ' + L.join('\n• ') + '\n\n¿Confirmas?')) return; }
       e.target.disabled = true; e.target.textContent='Enviando…';
       try{
@@ -3074,6 +3093,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   /* Al escribir en el precio o el marketing, las referencias se actualizan solas,
      sin reconstruir los campos de entrada (así el cursor nunca salta). */
   document.getElementById('contenido').addEventListener('input', e=>{
+    if(e.target.id === 'dInforme'){ const ei = document.getElementById('estadoInforme'); if(ei) ei.innerHTML = htmlEstadoInforme(); }
     if(['dPrecio','dMarketing'].includes(e.target.id)){
       actualizarPanelesEnVivo();
       if(e.target.id === 'dPrecio'){ const pv = document.getElementById('previaVuelo'); if(pv){ APP.decisionActual.precio = parseFloat(String(e.target.value).replace(',', '.')) || 0; pv.innerHTML = htmlPrevia(); } }
