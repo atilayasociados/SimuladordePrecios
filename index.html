@@ -2218,6 +2218,7 @@ function vistaReporte(){
       <h4>Lo que pasó esta ronda</h4>
       <ul>${observaciones(rep).map(o=>`<li>${o}</li>`).join('')}</ul>
     </div>
+    ${rep.esAntecedente ? '' : htmlRepartoMercado(APP.equipo)}
     ${diagnosticos(rep).length ? `<div class="preguntas">
       <h4>Para conversar con tu equipo</h4>
       <ul>${diagnosticos(rep).map(d=>`<li>${d}</li>`).join('')}</ul>
@@ -2255,7 +2256,7 @@ function observaciones(rep){
     if(cap.noShows > 0) partes.push(`${cap.noShows} reservaron pero no se presentaron`);
     if(sinAsiento > 0) partes.push(`${sinAsiento} quisieron volar contigo pero no encontraron asiento`);
     const ultima = partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0];
-    o.push(`${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} <b>captó ${rep.pasajerosGanados} pasajeros</b>: ${ultima}. ¿Cuántos quisieron viajar en total y cuántos se llevó la competencia? Lo muestra el estudio de mercado.`);
+    o.push(`En tu mercado <b>quisieron viajar ${rep.poolDeRonda} pasajeros</b>. ${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} captó ${rep.pasajerosGanados} (el ${String(rep.participacion ?? Math.round(rep.pasajerosGanados / rep.poolDeRonda * 1000) / 10).replace('.', ',')}%): ${ultima}.`);
   }
   o.push(`Tu precio fue de ${money2(rep.precioFinal)}; el promedio del mercado, ${money2(rep.precioMercado)}.`);
   if(APP.decisionActual.dynamicPricing && rep.precioDecidido != null && Math.abs(rep.precioDecidido - rep.precioFinal) >= 0.01){
@@ -2425,8 +2426,9 @@ function htmlRepartoMercado(e){
   filas.forEach(f => { if(f.cap){ quisieron += f.captados || 0; volaron += f.cap.abordados || 0; ns += f.cap.noShows || 0; sin += (f.cap.spill || 0) + (f.cap.denegados || 0); } });
   filas.sort((a, b) => (b.captados || 0) - (a.captados || 0));
   return `<div class="grupo" style="margin-top:14px;">
-    <div class="grupo-cab"><h3>Tamaño y reparto del mercado · Ronda ${R}</h3><span class="herramienta">WTP</span></div>
+    <div class="grupo-cab"><h3>Tamaño y reparto del mercado · Ronda ${R}</h3><span class="herramienta">Estadística pública</span></div>
     <div class="referencia">
+    <div class="ref-nota" style="margin-top:0;color:var(--texto-tenue);">Como las estadísticas de tráfico que publica la DGAC: cualquier aerolínea puede consultar cuántos pasajeros hubo y cuántos llevó cada una.</div>
     <div class="ref-nota" style="margin-top:0;">${completos
       ? `En tu mercado <b>quisieron viajar ${quisieron} pasajeros</b> y <b>volaron ${volaron}</b>, sumando todas las aerolíneas.${quisieron > volaron ? ` No volaron ${quisieron - volaron}: ${ns} reservaron y no se presentaron${sin ? ` y ${sin} no encontraron asiento en la aerolínea que eligieron` : ''}.` : ''}`
       : `En tu mercado <b>quisieron viajar ${mio.poolDeRonda} pasajeros</b>. El detalle de la competencia está disponible desde las rondas cerradas con la versión actual del simulador.`}</div>
@@ -2479,7 +2481,6 @@ function vistaMercado(){
         <div class="ref-nota">Promedio del perfil ${p.nombre} completo (rutas ${p.rutas.join(' y ')}) — no es la tarifa de una ruta específica.</div>
       </div>
     </div>
-    ${htmlRepartoMercado(e)}
 
     <div class="grupo" style="margin-top:14px;">
       <div class="grupo-cab"><h3>Encuesta de intención de compra</h3><span class="herramienta">100 clientes</span></div>
@@ -2602,7 +2603,7 @@ function contenidoManual(){
         <div class="ref-fila"><span><b>Decidir</b></span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Tu Hoja de decisión. Los bloques de la sesión actual aparecen abiertos y marcados como NUEVA; los de sesiones anteriores quedan plegados con sus valores (tócalos para abrirlos). Cada bloque tiene un enlace "¿Cómo decido?" que te lleva a su explicación. Abajo verás una vista previa estimada de tu vuelo y el botón para revisar y enviar tu decisión.</div>
         <div class="ref-fila"><span><b>Resultados</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Tu Estado de resultados, el Historial de tus rondas, tu Caja y, si compraste investigaciones, el Reporte de Mercado.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Tu Estado de resultados (con el tamaño y el reparto del mercado de cada ronda, una estadística pública), el Historial de tus rondas, tu Caja y, si compraste investigaciones, el Reporte de Mercado con la encuesta de disposición a pagar.</div>
         <div class="ref-fila"><span><b>Aprender</b></span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Una lección por unidad (U1 Diagnóstico 3C, U2 Elasticidad y segmentación, U3 Arquitectura de precios, U4 Revenue management y U5 Datos y ética), calculada con los números de tu aerolínea. Primero aparece la de la sesión actual. Aquí también está este Manual.</div>
         <div class="ref-fila"><span><b>Mi expediente</b></span></div>
@@ -3079,8 +3080,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(APP.vista==='decision') recolectar();
       const rondaAntes = APP.config ? APP.config.rondaActual : null;
       await sincronizar();
-      if(APP.vista==='tablero' || APP.vista==='mercado') await cargarTablero();
       const rondaCambio = APP.config && APP.config.rondaActual !== rondaAntes;
+      if(rondaCambio || ['tablero','mercado','reporte','situacion'].includes(APP.vista)) await cargarTablero();
       // Mientras se está decidiendo, solo se reconstruye la pantalla si la ronda
       // cambió de verdad (el docente la cerró) — así nunca se interrumpe mientras
       // el equipo está escribiendo, y los campos nunca se resetean sin motivo.
@@ -3099,7 +3100,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(!b) return;
     if(APP.vista==='decision') recolectar();
     APP.vista = b.dataset.vista;
-    if(APP.vista==='tablero' || APP.vista==='mercado') await cargarTablero();
+    if(['tablero','mercado','reporte','situacion'].includes(APP.vista)) await cargarTablero();
     render();
   });
 
