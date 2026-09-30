@@ -211,6 +211,63 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
   th { background:#333 !important; color:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .grupo, table, .referencia, .explica { border:1px solid #999 !important; }
 }
+
+/* ===== Opción A: navegación por el flujo de la ronda ===== */
+.tabs.v2{display:block;padding:0;border-bottom:none;overflow:visible;}
+.nav-principal{display:flex;gap:4px;padding:8px 20px 0;background:var(--panel);border-bottom:1px solid var(--borde);}
+.np{background:none;border:none;border-bottom:3px solid transparent;color:var(--texto-tenue);font:inherit;font-size:15px;font-weight:600;padding:10px 16px;cursor:pointer;}
+.np.activa{color:var(--texto);border-bottom-color:var(--marca);}
+.np .ico{display:block;font-size:17px;line-height:1;margin-bottom:3px;}
+.subnav{display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 4px;}
+.chipnav{background:var(--panel);border:1px solid var(--borde);color:var(--texto-tenue);border-radius:16px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap;}
+.chipnav.activa{border-color:var(--marca);color:var(--marca);font-weight:600;}
+.btn-exp{margin-top:6px;background:none;border:1px solid var(--borde);color:var(--texto-tenue);border-radius:14px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer;}
+details.grupo>summary{list-style:none;cursor:pointer;}
+details.grupo>summary::-webkit-details-marker{display:none;}
+details.grupo>summary .grupo-cab h3::before{content:'▸ ';color:var(--texto-tenue);}
+details.grupo[open]>summary .grupo-cab h3::before{content:'▾ ';}
+details.grupo:not([open]){padding-bottom:14px;}
+details.grupo:not([open]) .grupo-cab{margin-bottom:0;}
+.badge-nueva{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:#0B1A0E;background:var(--marca);border-radius:10px;padding:2px 7px;vertical-align:middle;}
+.link-aprender{display:inline-block;margin:0 0 12px;background:none;border:none;padding:0;color:var(--marca);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;}
+.proximas{font-size:12.5px;color:var(--texto-tenue);margin:6px 0 16px;line-height:1.6;}
+.enviar-fijo{position:sticky;bottom:0;z-index:20;background:var(--fondo, #12161A);border-top:1px solid var(--borde);padding:12px 0 14px;margin-top:10px;}
+.enviar-fijo .previa{font-size:12.5px;color:var(--texto-tenue);margin-bottom:10px;line-height:1.5;}
+.enviar-fijo .previa b{color:var(--texto);}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0;}
+.kpis .k{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:12px 14px;}
+.kpis .k .l{font-size:11.5px;color:var(--texto-tenue);text-transform:uppercase;letter-spacing:.04em;}
+.kpis .k .v{font-size:22px;font-weight:700;margin-top:4px;}
+.kpis .k .s{font-size:12px;color:var(--texto-tenue);margin-top:2px;}
+.acc-sit{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+@media (max-width:640px){
+  .nav-principal{position:fixed;left:0;right:0;bottom:0;z-index:60;padding:0;gap:0;border-top:1px solid var(--borde);border-bottom:none;}
+  .np{flex:1;font-size:11.5px;padding:8px 2px 10px;border-bottom:none;border-top:3px solid transparent;}
+  .np.activa{border-top-color:var(--marca);}
+  body{padding-bottom:64px;}
+  .enviar-fijo{bottom:58px;}
+  .subnav{flex-wrap:nowrap;overflow-x:auto;padding:10px 14px 4px;}
+  .barra{padding:10px 14px !important;align-items:center;}
+  .barra .logo-marca{height:24px !important;}
+  .barra .modulo{display:none;}
+  .barra .nombre{font-size:16px !important;margin:2px 0 3px !important;}
+  .caja-label,.caja-delta{display:none;}
+  .caja-valor{font-size:20px !important;}
+  .kpis{grid-template-columns:1fr 1fr;}
+}
+
+.enviar-fijo .acciones{display:flex;gap:10px;flex-wrap:nowrap;align-items:center;}
+@media (max-width:640px){
+  .nota-previa{display:none;}
+  .enviar-fijo{padding:8px 0 10px;}
+  .enviar-fijo .previa{margin-bottom:6px;font-size:12px;}
+  .enviar-fijo .btn{padding:10px 14px !important;font-size:14px;flex:1;}
+  .enviar-fijo .btn-sec{padding:9px 10px;font-size:12.5px;flex:0 0 auto;}
+  .barra{display:flex !important;flex-wrap:nowrap !important;justify-content:space-between;gap:8px;}
+  .barra .chip{font-size:11px;padding:2px 7px;}
+  .barra-der{text-align:right;flex:0 0 auto;}
+  .btn-exp{margin-top:4px;font-size:11px;padding:3px 8px;}
+}
 </style>
 <style>.logo-marca{height:32px;width:auto;display:block;}.logo-marca-grande{height:32px;width:auto;display:block;margin-bottom:14px;}</style>
 </head>
@@ -270,10 +327,11 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
       <div class="caja-label">CAJA ACUMULADA</div>
       <div class="caja-valor cifra" id="hdCaja">$0</div>
       <div class="caja-delta" id="hdDelta"></div>
+      <button class="btn-exp" data-vista="expediente">Mi expediente</button>
     </div>
   </div>
 
-  <div class="tabs" id="tabs"></div>
+  <div class="tabs v2" id="tabs"></div>
   <main id="contenido"></main>
   <footer>Material preparado por Atila y Asociados e IEAC Business School para uso exclusivo de la Universidad NUR.</footer>
 </div>
@@ -811,7 +869,7 @@ async function rpc(nombreFn, params){
    ============================================================ */
 const APP = {
   equipo:null, config:null, decisionActual:{}, enviada:false,
-  vista:'decision', ultimoReporte:null, tablero:[], intervalo:null
+  vista:'situacion', ultimoReporte:null, tablero:[], intervalo:null
 };
 
 /* ============================================================
@@ -856,28 +914,70 @@ function renderBarra(){
   el.textContent = (delta>=0?'+':'') + money(delta) + ' desde el inicio';
   el.className = 'caja-delta ' + (delta>=0?'pos':'neg');
 }
-function renderTabs(){
+const ETQ_VISTA = {situacion:'Situación', decision:'Hoja de decisión', reporte:'Estado de resultados', historial:'Historial', tablero:'Caja',
+  mercado:'Mercado', briefing:'U1 · Diagnóstico 3C', unidad2:'U2 · Elasticidad y segmentación', unidad3:'U3 · Arquitectura de precios',
+  unidad4:'U4 · Revenue management', unidad5:'U5 · Datos y ética', manual:'Manual', expediente:'Mi expediente'};
+function unidadDeSesion(s){ return ['briefing','briefing','unidad2','unidad3','unidad4','unidad5'][s] || 'briefing'; }
+function seccionesEstudiante(){
   const e = APP.equipo;
-  // El Reporte de Mercado aparece solo si el equipo compró alguna investigación
   const compróAlgo = !!(APP.decisionActual.comprarWTP || APP.decisionActual.comprarElasticidad) ||
     (e && e.historial || []).some(h => h.comproWTP || h.comproElasticidad);
-  const vistas = [
-    {id:'briefing', txt:'Diagnóstico 3C'},
-    {id:'unidad2', txt:'Elasticidad y segmentación'},
-    {id:'unidad3', txt:'Arquitectura de precios'},
-    {id:'unidad4', txt:'Revenue management'},
-    {id:'unidad5', txt:'Datos y ética'},
-    {id:'decision', txt:'Hoja de decisión'},
-    {id:'reporte',  txt:'KPI y Estado de Resultados'},
-    ...(compróAlgo ? [{id:'mercado', txt:'Reporte de Mercado'}] : []),
-    {id:'historial', txt:'Historial'},
-    {id:'tablero',  txt:'Saldo de Caja'},
-    {id:'manual',   txt:'Manual'},
-    {id:'expediente', txt:'Mi expediente'}
+  const ses = sesionDeRonda(APP.config ? APP.config.rondaActual : 1), uAct = unidadDeSesion(ses);
+  const unidades = ['briefing','unidad2','unidad3','unidad4','unidad5'];
+  return [
+    {id:'situacion', txt:'Situación', ico:'◎', vistas:['situacion']},
+    {id:'decidir', txt:'Decidir', ico:'✎', vistas:['decision']},
+    {id:'resultados', txt:'Resultados', ico:'▤', vistas:['reporte','historial','tablero', ...(compróAlgo ? ['mercado'] : [])]},
+    {id:'aprender', txt:'Aprender', ico:'✦', vistas:[uAct, ...unidades.filter(v => v !== uAct), 'manual'], actual:uAct}
   ];
-  document.getElementById('tabs').innerHTML = vistas.map(v =>
-    `<button class="tab ${APP.vista===v.id?'activa':''}" data-vista="${v.id}">${v.txt}</button>`
-  ).join('');
+}
+function renderTabs(){
+  const SEC = seccionesEstudiante();
+  const actual = SEC.find(s => s.vistas.includes(APP.vista));
+  APP.ultimaVista = APP.ultimaVista || {};
+  if(actual) APP.ultimaVista[actual.id] = APP.vista;
+  const destino = s => (APP.ultimaVista[s.id] && s.vistas.includes(APP.ultimaVista[s.id])) ? APP.ultimaVista[s.id] : s.vistas[0];
+  const principal = SEC.map(s => `<button class="np ${actual===s?'activa':''}" data-vista="${destino(s)}"><span class="ico">${s.ico}</span>${s.txt}</button>`).join('');
+  const sub = (actual && actual.vistas.length > 1) ? `<div class="subnav">${actual.vistas.map(v =>
+    `<button class="chipnav ${APP.vista===v?'activa':''}" data-vista="${v}">${ETQ_VISTA[v]}${actual.actual===v?' · esta sesión':''}</button>`).join('')}</div>` : '';
+  document.getElementById('tabs').innerHTML = `<div class="nav-principal">${principal}</div>${sub}`;
+}
+
+/* ============================================================
+   VISTA — Situación: dónde está el equipo y qué toca en esta ronda
+   ============================================================ */
+const NOMBRE_HERRAMIENTA = { precio:'Tarifa Flex', marketing:'Marketing', valla:'Tarifa Promocional y valla', wtp:'Investigación de mercado (WTP)',
+  equilibrio:'Punto de equilibrio', ancillaries:'Equipaje y seguro', paseFrecuente:'Pase Frecuente', anclaje:'Tarifa tachada',
+  overbooking:'Overbooking', dynamic:'Precio dinámico', elasticidad:'Estudio de elasticidad', algoritmico:'Precios personalizados', madurez:'Madurez organizacional' };
+function vistaSituacion(){
+  const e = APP.equipo, ronda = APP.config ? APP.config.rondaActual : 1, ses = sesionDeRonda(ronda);
+  const hist = (e.historial || []).filter(h => !h.neutra), h = hist[hist.length-1];
+  const nuevas = Object.keys(DESBLOQUEO).filter(k => DESBLOQUEO[k] === ses && k !== 'equilibrio').map(k => NOMBRE_HERRAMIENTA[k]);
+  const uAct = unidadDeSesion(ses), f1 = v => (Math.round(v*10)/10).toFixed(1).replace('.',',');
+  const estado = APP.enviada ? '<b style="color:var(--marca);">Decisión enviada ✓</b> — espera a que tu docente cierre la ronda.' : 'Tu equipo todavía no envía la decisión de esta ronda.';
+  const kpis = h && h.estadoResultados ? `<div class="kpis">
+      <div class="k"><div class="l">Utilidad · Ronda ${h.ronda}</div><div class="v cifra" style="color:${h.estadoResultados.utilidadNeta>=0?'var(--marca)':'var(--peligro)'};">${h.estadoResultados.utilidadNeta<0 ? '−'+money(-h.estadoResultados.utilidadNeta) : money(h.estadoResultados.utilidadNeta)}</div><div class="s">Precio cobrado ${money2(h.precioFinal)}</div></div>
+      <div class="k"><div class="l">Ocupación</div><div class="v cifra">${h.metricas ? f1(h.metricas.loadFactor)+'%' : '—'}</div><div class="s">${h.capacidad ? h.capacidad.abordados : '—'} pasajeros a bordo</div></div>
+      <div class="k"><div class="l">Yield</div><div class="v cifra">${h.metricas ? money2(h.metricas.yield) : '—'}</div><div class="s">Mercado ${money2(h.precioMercado)}</div></div>
+      <div class="k"><div class="l">Caja acumulada</div><div class="v cifra">${money(e.caja)}</div><div class="s">${(e.caja-PARAMS.capitalSemilla)>=0?'+':''}${money(e.caja-PARAMS.capitalSemilla)} desde el inicio</div></div>
+    </div>` : '';
+  const rep = APP.ultimoReporte;
+  // Si al registro le falta algún dato, se omite esa sección en vez de romper la pantalla
+  const seguro = f => { try { return (rep && rep.estadoResultados) ? f(rep) : []; } catch(err){ return []; } };
+  const obs = seguro(observaciones), dia = seguro(diagnosticos);
+  return `<h2 class="titulo">Ronda ${ronda} de 12 · Sesión ${ses}</h2>
+    <p class="sub">${estado}</p>
+    ${kpis || `<div class="explica"><p style="margin:0;">Todavía no hay resultados: esta es tu primera ronda. Empieza por <b>Aprender</b> (Diagnóstico 3C) y luego ve a <b>Decidir</b>.</p></div>`}
+    ${obs.length ? `<div class="explica"><h4>Lo que pasó en la Ronda ${rep.ronda}</h4><ul>${obs.map(o=>`<li>${o}</li>`).join('')}</ul></div>` : ''}
+    ${dia.length ? `<div class="preguntas"><h4>Para conversar con tu equipo</h4><ul>${dia.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
+    <div class="explica" style="margin-top:14px;"><h4>En esta sesión</h4>
+      <p style="margin:0 0 6px;">${nuevas.length ? 'Herramientas nuevas: <b>' + nuevas.join(', ') + '</b>.' : 'No hay herramientas nuevas: sigue ajustando las que ya tienes.'}</p>
+      <p style="margin:0;">Antes de decidir, lee <b>${ETQ_VISTA[uAct]}</b> en Aprender: explica estas herramientas con los números de tu aerolínea.</p>
+    </div>
+    <div class="acc-sit">
+      <button class="btn" style="width:auto;padding:11px 22px;" data-ir="${uAct}">Aprender: ${ETQ_VISTA[uAct]}</button>
+      <button class="btn-sec" data-ir="decision">Ir a decidir</button>
+    </div>`;
 }
 
 /* ============================================================
@@ -1566,19 +1666,42 @@ function campoNum(id, etiqueta, valor, extra=''){
     <input type="number" step="any" id="${id}" value="${valor ?? ''}" ${extra}>
   </div>`;
 }
+/* Opción A: en la Hoja de decisión se abren los bloques de la sesión actual; los de sesiones
+   anteriores quedan plegados (sus campos siguen en la página); los futuros se resumen en una línea. */
+const META_GRUPO = {
+  'Precio': {siempre:true, u:['briefing',3]}, 'Marketing': {}, 'Investigación de mercado': {u:['unidad2',4]},
+  'Ingresos complementarios': {u:['unidad3',4]}, 'Pase Frecuente': {u:['unidad3',1]}, 'Tarifa tachada': {u:['unidad3',2]},
+  'Overbooking': {u:['unidad4',2]}, 'Precio dinámico': {u:['unidad4',4]}, 'Estudio de elasticidad': {u:['unidad5',1]},
+  'Madurez organizacional': {u:['unidad5',2]}, 'Precios personalizados': {u:['unidad5',3]}, 'Informe de la ronda': {siempre:true}
+};
+const PROXIMAS = [];
 function grupo(titulo, herramienta, contenido, desbloqueado, sesionNecesaria){
-  if(!desbloqueado){
-    return `<div class="grupo bloqueado">
-      <div class="grupo-cab"><h3>${titulo}</h3><span class="candado">Se activa en la Sesión ${sesionNecesaria}</span></div>
-    </div>`;
-  }
-  return `<div class="grupo">
-    <div class="grupo-cab"><h3>${titulo}</h3><span class="herramienta">${herramienta}</span></div>
+  if(!desbloqueado){ PROXIMAS.push(titulo + ' (Sesión ' + sesionNecesaria + ')'); return ''; }
+  const ses = sesionDeRonda(APP.config ? APP.config.rondaActual : 1), m = META_GRUPO[titulo] || {};
+  const nueva = sesionNecesaria === ses && ses > 1 && !m.siempre;
+  const abierto = m.siempre || sesionNecesaria === ses;
+  const link = m.u ? `<button type="button" class="link-aprender" data-ir="${m.u[0]}" data-paso="${m.u[1]}">¿Cómo decido? Ver en ${ETQ_VISTA[m.u[0]]} →</button>` : '';
+  return `<details class="grupo" ${abierto ? 'open' : ''}>
+    <summary><div class="grupo-cab"><h3>${titulo}${nueva ? '<span class="badge-nueva">NUEVA</span>' : ''}</h3><span class="herramienta">${herramienta}</span></div></summary>
+    ${link}
     ${contenido}
-  </div>`;
+  </details>`;
+}
+
+/* Vista previa estimada con la misma función de elección que usa la encuesta WTP (sin promoción ni extras) */
+function estimarVuelo(precio, e){
+  e = e || APP.equipo; if(!precio || precio <= 0 || !e) return null;
+  const f = tablaEncuestaWTP(precio, precio, 'previa', e);   // fila de ese precio
+  return f && f.length ? f[f.length-1] : null;
+}
+function htmlPrevia(){
+  const d = APP.decisionActual || {}, est = estimarVuelo(d.precio);
+  if(!est) return 'Escribe tu Tarifa Flex para ver una estimación de tu vuelo.';
+  return `<b>Vista previa</b> con Flex ${money2(d.precio)}: ≈ <b>${est.pasajeros} pasajeros</b>${est.lleno ? ' (lleno)' : ''} · margen del vuelo ≈ <b>${money(est.margenVuelo)}</b> <span class="nota-previa">— estimación: supone que la competencia no cambia sus precios y no incluye promoción, extras ni costos fijos.</span>`;
 }
 
 function vistaDecision(){
+  PROXIMAS.length = 0;
   const ptsMadPrev = Math.floor(((APP.equipo && APP.equipo.historial) || []).reduce((a, h) => a + ((h.decision && h.decision.gastoMadurez) || 0), 0) / PARAMS.costoPuntoMadurez);
   const e = APP.equipo;
   const ronda = APP.config ? APP.config.rondaActual : 1;
@@ -1632,7 +1755,7 @@ function vistaDecision(){
       </div>
       <div class="referencia" id="panelReferenciaPrecio">
         <div class="ref-fila"><span>Precio de referencia del mercado</span><b id="refValorMercado">${money2(pan.ref)}</b></div>
-        <div class="ref-fila"><span>Piso — bajo esto pierdes dinero por pasajero</span><b id="refValorPiso">${money2(pan.piso)}</b></div>
+        <div class="ref-fila"><span>Piso — tu costo total por asiento con el avión lleno</span><b id="refValorPiso">${money2(pan.piso)}</b></div>
         <div class="ref-fila"><span>Techo / EVC — tu límite de valor</span><b id="refValorTecho">${money2(pan.techo)}</b></div>
         <div class="barra-rango">
           <div class="zona" style="left:0;right:0;"></div>
@@ -1829,9 +1952,13 @@ function vistaDecision(){
       </div>
     `, true, 1)}
 
-    <div class="acciones">
-      <button class="btn" style="width:auto;padding:12px 26px;" id="btnEnviar">Enviar decisión de la Ronda ${ronda}</button>
-      <button class="btn-sec" id="btnRecalcular">Actualizar referencias</button>
+    ${PROXIMAS.length ? `<div class="proximas">Próximas herramientas: ${PROXIMAS.join(' · ')}.</div>` : ''}
+    <div class="enviar-fijo">
+      <div class="previa" id="previaVuelo">${htmlPrevia()}</div>
+      <div class="acciones" style="margin:0;">
+        <button class="btn" style="width:auto;padding:12px 26px;" id="btnEnviar">Revisar y enviar la Ronda ${ronda}</button>
+        <button class="btn-sec" id="btnRecalcular">Actualizar referencias</button>
+      </div>
     </div>`;
 }
 function boostMkt(g){
@@ -2347,22 +2474,17 @@ function contenidoManual(){
     <div class="grupo">
       <div class="grupo-cab"><h3>4 · Las pantallas del simulador</h3></div>
       <div class="referencia">
-        <div class="ref-fila"><span><b>Diagnóstico 3C</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Muestra qué tanto tu aerolínea fija precios mirando sus costos, a la competencia, o el valor que entrega. Arranca igual para todos y se mueve solo, según los precios que vayas fijando. No lo llenas tú. También explica tu piso, tu techo y tu Tarifa Flex (Unidad 1).</div>
-        <div class="ref-fila"><span><b>Elasticidad y segmentación · Arquitectura de precios · Revenue management · Datos y ética</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Una pestaña de aprendizaje por cada unidad, de la 2 a la 5. Explican cada herramienta con ejemplos sencillos y la calculan con los números de tu aerolínea. Léelas antes de usar la herramienta y vuelve a ellas después de cada ronda.</div>
-        <div class="ref-fila"><span><b>Hoja de decisión</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Donde decides cada trimestre. Las opciones se van habilitando conforme avanzas en el curso: en la Sesión 1 solo decides precio y marketing; para la Sesión 5 tienes todas las decisiones disponibles.</div>
-        <div class="ref-fila"><span><b>KPI y Estado de Resultados</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Cuántos pasajeros ganaste, tu estado de resultados completo, tus métricas de operación, y una explicación de por qué te fue así.</div>
-        <div class="ref-fila"><span><b>Reporte de Mercado</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Aparece solo si compraste alguna investigación. Reúne los precios reales de la competencia, la encuesta de intención de compra, y el contexto de mercado de cada ronda.</div>
-        <div class="ref-fila"><span><b>Historial</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Todas tus rondas jugadas: precio, pasajeros, ocupación, yield y RASM de cada trimestre.</div>
-        <div class="ref-fila"><span><b>Saldo de Caja</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Tu flujo de efectivo ronda por ronda: qué entró, qué salió, y cómo llegaste a tu caja actual.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">La pantalla tiene cuatro secciones, en el orden en que se juega cada ronda. En el celular están abajo; en la computadora, arriba.</div>
+        <div class="ref-fila"><span><b>Situación</b></span></div>
+        <div class="ref-nota" style="margin:0 0 10px;">Tu punto de partida: cómo te fue en la última ronda (utilidad, ocupación, yield y caja), qué pasó, preguntas para conversar con tu equipo y qué herramientas se abren en esta sesión.</div>
+        <div class="ref-fila"><span><b>Decidir</b></span></div>
+        <div class="ref-nota" style="margin:0 0 10px;">Tu Hoja de decisión. Los bloques de la sesión actual aparecen abiertos y marcados como NUEVA; los de sesiones anteriores quedan plegados con sus valores (tócalos para abrirlos). Cada bloque tiene un enlace "¿Cómo decido?" que te lleva a su explicación. Abajo verás una vista previa estimada de tu vuelo y el botón para revisar y enviar tu decisión.</div>
+        <div class="ref-fila"><span><b>Resultados</b></span></div>
+        <div class="ref-nota" style="margin:0 0 10px;">Tu Estado de resultados, el Historial de tus rondas, tu Caja y, si compraste investigaciones, el Reporte de Mercado.</div>
+        <div class="ref-fila"><span><b>Aprender</b></span></div>
+        <div class="ref-nota" style="margin:0 0 10px;">Una lección por unidad (U1 Diagnóstico 3C, U2 Elasticidad y segmentación, U3 Arquitectura de precios, U4 Revenue management y U5 Datos y ética), calculada con los números de tu aerolínea. Primero aparece la de la sesión actual. Aquí también está este Manual.</div>
         <div class="ref-fila"><span><b>Mi expediente</b></span></div>
-        <div class="ref-nota" style="margin:0;">Todas tus decisiones, resultados e informes, en formato imprimible como comprobante, con tu calificación del simulador.</div>
+        <div class="ref-nota" style="margin:0;">El botón junto a tu caja, arriba a la derecha. Reúne tus decisiones, resultados e informes en formato imprimible, con tu calificación del simulador.</div>
       </div>
     </div>
 
@@ -2666,7 +2788,8 @@ function vistaTablero(){
 function render(){
   renderBarra(); renderTabs();
   const c = document.getElementById('contenido');
-  if(APP.vista==='briefing') c.innerHTML = vistaBriefing();
+  if(APP.vista==='situacion') c.innerHTML = vistaSituacion();
+  else if(APP.vista==='briefing') c.innerHTML = vistaBriefing();
   else if(APP.vista==='unidad2') c.innerHTML = vistaUnidad2();
   else if(APP.vista==='unidad3') c.innerHTML = vistaUnidad3();
   else if(APP.vista==='unidad4') c.innerHTML = vistaUnidad4();
@@ -2822,6 +2945,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     render();
   });
 
+  document.addEventListener('click', e=>{
+    const b = e.target.closest('[data-ir], .btn-exp');
+    if(!b) return;
+    if(APP.vista==='decision') recolectar();
+    APP.vista = b.dataset.ir || b.dataset.vista;
+    render(); window.scrollTo(0,0);
+    const paso = parseInt(b.dataset.paso || '0', 10);
+    if(paso > 0){ const el = document.querySelectorAll('#contenido .paso')[paso-1]; if(el) el.scrollIntoView({block:'start'}); }
+  });
+
   document.getElementById('contenido').addEventListener('click', async e=>{
     if(e.target.id==='btnRecalcular'){ recolectar(); render(); return; }
     if(e.target.id==='btnImprimirExp'){ window.print(); return; }
@@ -2844,6 +2977,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const topeAnc = Math.round(d.precio * PARAMS.topeAncillaryPct * 100) / 100;
       if((d.precioEquipaje||0) > topeAnc || (d.precioSeguro||0) > topeAnc){
         alert('El equipaje y el seguro no pueden costar más de $' + topeAnc.toFixed(2) + ' (' + (PARAMS.topeAncillaryPct*100).toFixed(0) + '% de tu Tarifa Flex).'); return; }
+      { const L = ['Tarifa Flex: $' + d.precio];
+        if(d.tarifaPromocional > 0) L.push('Promocional: $' + d.tarifaPromocional + ' con valla ' + ({sin_valla:'sin restricciones',basica:'básica',fuerte:'fuerte'})[d.fuerzaValla||'sin_valla']);
+        if(d.marketing > 0) L.push('Marketing: $' + d.marketing);
+        if(d.precioEquipaje > 0 || d.precioSeguro > 0) L.push('Equipaje $' + (d.precioEquipaje||0) + ' · seguro $' + (d.precioSeguro||0));
+        if(d.cuotaPaseFrecuente > 0) L.push('Pase Frecuente: cuota $' + d.cuotaPaseFrecuente + ' · socio $' + (d.tarifaSocio||0));
+        if(d.anclaje) L.push('Tarifa tachada: sí');
+        if(d.overbooking > 0) L.push('Sobreventa: ' + d.overbooking + ' asientos');
+        if(d.dynamicPricing) L.push('Precio dinámico: sensibilidad ' + (d.sensibilidadDynamic ?? 0.5));
+        if(d.comprarWTP) L.push('Compra estudio WTP'); if(d.comprarElasticidad) L.push('Compra estudio de elasticidad');
+        if(d.gastoMadurez > 0) L.push('Madurez: $' + d.gastoMadurez + ' → ' + d.talento + '/' + d.procesos + '/' + d.datos);
+        if(d.pricingAlgoritmico) L.push('Precios personalizados: sí');
+        if(!confirm('Vas a enviar esta decisión. Después no se puede cambiar en esta ronda:\n\n• ' + L.join('\n• ') + '\n\n¿Confirmas?')) return; }
       e.target.disabled = true; e.target.textContent='Enviando…';
       try{
         await rpc('guardar_decision', {
@@ -2863,6 +3008,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('contenido').addEventListener('input', e=>{
     if(['dPrecio','dMarketing'].includes(e.target.id)){
       actualizarPanelesEnVivo();
+      if(e.target.id === 'dPrecio'){ const pv = document.getElementById('previaVuelo'); if(pv){ APP.decisionActual.precio = parseFloat(String(e.target.value).replace(',', '.')) || 0; pv.innerHTML = htmlPrevia(); } }
     }
     if(e.target.id === 'dWTP'){
       if(e.target.checked){
