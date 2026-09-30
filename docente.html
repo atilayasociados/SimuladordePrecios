@@ -1915,9 +1915,9 @@ function vistaPreviaPerfil(p){
             <td>${f.esBot?'':`<span class="puesto ${i===0?'primero':''}">${i+1}</span>`}</td>
             <td>${esc(f.nombre)}${f.esBot?' <span style="font-size:11px;">referencia de mercado</span>':''}${f.neutra?' <span style="font-size:11px;color:var(--peligro);">no decidió</span>':''}</td>
             <td class="num">${money2(f.precio)}</td>
-            <td class="num">${String(f.participacion).replace('.', ',')}%</td>
+            <td class="num">${f.participacion === '—' ? '—' : String(f.participacion).replace('.', ',') + '%'}</td>
             <td class="num">${f.abordados}</td>
-            <td class="num">${String(f.ocupacion).replace('.', ',')}%</td>
+            <td class="num">${f.ocupacion === '—' ? '—' : String(f.ocupacion).replace('.', ',') + '%'}</td>
             <td class="num">${f.utilidadNeta!==null?money(f.utilidadNeta):'—'}</td>
           </tr>`;
           if(f.esBot || !expandida) return filaPrincipal;
@@ -2260,6 +2260,29 @@ async function cerrarRonda(){
 /* ============================================================
    CARGA Y RENDER
    ============================================================ */
+/* Resultados de la última ronda cerrada, reconstruidos desde el historial guardado de cada equipo,
+   para que la tabla siga visible aunque el docente recargue el panel o entre otro día. */
+function reconstruirPrevia(){
+  const ronda = ((D.config && D.config.rondaActual) || 1) - 1;
+  if(ronda < 1) return null;
+  const filas = [], mercados = {}, bots = {};
+  for(const e of D.equipos){
+    const h = (e.historial || []).find(x => x.ronda === ronda);
+    if(!h) continue;
+    const pk = e.perfil || 'domestica';
+    mercados[pk] = h.poolDeRonda;
+    filas.push({ perfil: pk, nombre: e.nombre, esBot: false, neutra: !!h.neutra, precio: h.precioFinal,
+      participacion: h.participacion, abordados: h.capacidad ? h.capacidad.abordados : '—',
+      ocupacion: h.metricas ? h.metricas.loadFactor : '—',
+      utilidadNeta: h.estadoResultados ? h.estadoResultados.utilidadNeta : null, _r: h });
+    Object.entries(h.preciosCompetidores || {}).forEach(([n, v]) => { bots[pk + '|' + n] = { perfil: pk, nombre: n, precio: v }; });
+  }
+  if(!filas.length) return null;
+  Object.values(bots).forEach(b => filas.push({ ...b, esBot: true, participacion: '—', abordados: '—', ocupacion: '—', utilidadNeta: null }));
+  filas.sort((a, b) => (a.esBot !== b.esBot) ? (a.esBot ? 1 : -1) : (b.utilidadNeta ?? -1e9) - (a.utilidadNeta ?? -1e9));
+  return { ronda, mercados, filas };
+}
+
 async function cargarDatos(){
   D.config = await leer('config') || { rondaActual:1, numEquipos:4, metaOcupacion:0.80 };
   const claves = await listar('equipo:');
@@ -2271,6 +2294,7 @@ async function cargarDatos(){
     const dec = await leer(claveDecision(D.config.rondaActual, e.nombre));
     if(dec) D.decisiones[e.nombre.toLowerCase()] = dec;
   }
+  if(!D.previa || D.previa.ronda !== D.config.rondaActual - 1) D.previa = reconstruirPrevia();
 }
 function render(){
   document.getElementById('hdRonda').textContent = D.config ? D.config.rondaActual + ' / 12' : '—';
@@ -2300,7 +2324,7 @@ async function arrancarPanel(){
 async function cambiarPartida(id){
   PARTIDA_DOC = PARTIDAS.find(x => x.id === Number(id)) || PARTIDA_DOC;
   if(PARTIDA_DOC) localStorage.setItem('docentePartida', PARTIDA_DOC.id);
-  D.decisiones = {}; D.choque = 'sin_choque';
+  D.decisiones = {}; D.choque = 'sin_choque'; D.previa = null;
   await cargarDatos();
   D.vista = (D.config && D.config.poolDomestica) ? 'ronda' : 'configuracion';
   render();
