@@ -447,7 +447,7 @@ function comprobacionRonda(h, costoVariable){
   if(m && m.yield != null && m.rasm != null){
     c.push({
       titulo: 'Tus tres métricas, leídas juntas',
-      calculo: `Ocupación ${m.loadFactor}% · Yield ${m.yield}¢ · RASM ${m.rasm}¢`,
+      calculo: `Ocupación ${m.loadFactor}% · Yield ${money2(m.yield)} · RASM ${money2(m.rasm)}`,
       veredicto: m.loadFactor >= 85 && h.precioFinal < (h.techo||0) * 0.75
         ? 'Llenaste el avión vendiendo barato: ocupación alta con yield bajo deja poco margen ante cualquier subida de costos.'
         : m.loadFactor < 60

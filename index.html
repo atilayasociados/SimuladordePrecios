@@ -623,7 +623,7 @@ function comprobacionRonda(h, costoVariable){
   if(m && m.yield != null && m.rasm != null){
     c.push({
       titulo: 'Tus tres métricas, leídas juntas',
-      calculo: `Ocupación ${m.loadFactor}% · Yield ${m.yield}¢ · RASM ${m.rasm}¢`,
+      calculo: `Ocupación ${m.loadFactor}% · Yield ${money2(m.yield)} · RASM ${money2(m.rasm)}`,
       veredicto: m.loadFactor >= 85 && h.precioFinal < (h.techo||0) * 0.75
         ? 'Llenaste el avión vendiendo barato: ocupación alta con yield bajo deja poco margen ante cualquier subida de costos.'
         : m.loadFactor < 60
@@ -976,7 +976,7 @@ function vistaSituacion(){
   const kpis = h && h.estadoResultados ? `<div class="kpis">
       <div class="k"><div class="l">Utilidad · ${h.esAntecedente ? 'trimestre anterior' : 'Ronda ' + h.ronda}</div><div class="v cifra" style="color:${h.estadoResultados.utilidadNeta>=0?'var(--marca)':'var(--peligro)'};">${h.estadoResultados.utilidadNeta<0 ? '−'+money(-h.estadoResultados.utilidadNeta) : money(h.estadoResultados.utilidadNeta)}</div><div class="s">Precio cobrado ${money2(h.precioFinal)}</div></div>
       <div class="k"><div class="l">Ocupación</div><div class="v cifra">${h.metricas ? f1(h.metricas.loadFactor)+'%' : '—'}</div><div class="s">${h.capacidad ? h.capacidad.abordados : '—'} pasajeros a bordo</div></div>
-      <div class="k"><div class="l">Yield</div><div class="v cifra">${h.metricas ? money2(h.metricas.yield) : '—'}</div><div class="s">Mercado ${money2(h.precioMercado)}</div></div>
+      <div class="k"><div class="l">Yield</div><div class="v cifra">${h.metricas ? money2(h.metricas.yield) : '—'}</div><div class="s">Lo que pagó en promedio cada pasajero (el precio del mercado fue ${money2(h.precioMercado)})</div></div>
       <div class="k"><div class="l">Caja acumulada</div><div class="v cifra">${money(e.caja)}</div><div class="s">${(e.caja-PARAMS.capitalSemilla)>=0?'+':''}${money(e.caja-PARAMS.capitalSemilla)} desde el inicio</div></div>
     </div>` : '';
   const rep = APP.ultimoReporte || antecedente();
@@ -2139,8 +2139,8 @@ function vistaReporte(){
       <div class="kpi"><div class="k-nombre">Participación de mercado</div><div class="k-valor cifra">${rep.participacion}%</div></div>
       <div class="kpi"><div class="k-nombre">Pasajeros a bordo</div><div class="k-valor cifra">${cap.abordados}</div></div>
       <div class="kpi"><div class="k-nombre">Ocupación</div><div class="k-valor cifra">${m.loadFactor}%</div></div>
-      <div class="kpi"><div class="k-nombre">Yield</div><div class="k-valor cifra">${m.yield}¢</div></div>
-      <div class="kpi"><div class="k-nombre">RASM</div><div class="k-valor cifra">${m.rasm}¢</div></div>
+      <div class="kpi"><div class="k-nombre">Yield · ingreso por pasajero</div><div class="k-valor cifra">${money2(m.yield)}</div></div>
+      <div class="kpi"><div class="k-nombre">RASM · ingreso por asiento</div><div class="k-valor cifra">${money2(m.rasm)}</div></div>
     </div>
 
     <table class="er">
@@ -2216,14 +2216,16 @@ function observaciones(rep){
   if(rep.personalizado && rep.personalizado.ingresoExtra > 0){
     o.push(`Precios personalizados: ${rep.personalizado.pasajeros} pasajeros pagaron ${money2(rep.personalizado.sobreprecioUnitario)} más que la Tarifa Flex, sumando ${money2(rep.personalizado.ingresoExtra)}.${rep.componentes && rep.componentes.detectado ? ' La práctica fue detectada esta ronda: tu atractivo caerá en la siguiente.' : ' Nadie lo detectó esta ronda.'}`);
   }
-  o.push(`Volaste al ${m.loadFactor}% de ocupación. Tus costos de operación (${money2(er.doc)}) fueron los mismos que si hubieras volado lleno.`);
-  o.push(`Cada pasajero a bordo dejó ${money2(er.ingresos/Math.max(1,cap.abordados) - (er.ioc/Math.max(1,cap.abordados)))} después de su costo directo.`);
+  o.push(`Volaste al ${String(m.loadFactor).replace('.', ',')}% de ocupación. Tus costos de operación (${money2(er.doc)}) fueron los mismos que si hubieras volado lleno.`);
+  { const ab = Math.max(1, cap.abordados), ingPax = er.ingresos/ab, cvPax = (er.ioc + (er.costoExtras || 0))/ab, mg = ingPax - cvPax, contrib = mg * cap.abordados;
+    o.push(`Cada pasajero pagó en promedio ${money2(ingPax)} y atenderlo costó ${money2(cvPax)} (comida, reserva y equipaje: el <b>costo variable</b>). A tu aerolínea le quedaron ${money2(mg)} por pasajero: es tu <b>margen de contribución</b>.`);
+    o.push(`Con ${cap.abordados} pasajeros, esos márgenes sumaron ${money(contrib)}, que ${contrib >= er.doc ? 'cubrieron' : 'no alcanzaron a cubrir'} los ${money2(er.doc)} fijos del vuelo (avión, tripulación, combustible). Lo que ${contrib >= er.doc ? 'sobró' : 'faltó'}, después de restar marketing y otros gastos, es tu utilidad: ${money2(er.utilidadNeta)}.`); }
   if(er.gastosComerciales>0 || er.gastosAdministrativos>0){
     const tot = er.gastosComerciales + er.gastosAdministrativos;
     const pct = er.ingresos>0 ? ((tot/er.ingresos)*100).toFixed(0) : '—';
     o.push(`Gastaste ${money2(tot)} en marketing, estudios e inversiones: el ${pct}% de tus ingresos.`);
   }
-  o.push(`Tu margen bruto fue ${er.margenBrutoPct}%.`);
+  o.push(`Tu margen bruto fue ${String(er.margenBrutoPct).replace('.', ',')}%.`);
   if(cap.noShows>0) o.push(`${cap.noShows} pasajeros con reserva no se presentaron al vuelo.`);
   return o;
 }
@@ -2448,8 +2450,8 @@ function vistaMercado(){
             <td>${h.ronda}</td><td>${money2(h.precioFinal)}</td>
             <td>${h.capacidad?h.capacidad.abordados:'—'}</td>
             <td>${h.metricas?h.metricas.loadFactor+'%':'—'}</td>
-            <td>${h.metricas?h.metricas.yield+'¢':'—'}</td>
-            <td>${h.metricas?h.metricas.rasm+'¢':'—'}</td>
+            <td>${h.metricas?money2(h.metricas.yield):'—'}</td>
+            <td>${h.metricas?money2(h.metricas.rasm):'—'}</td>
             <td>${nombreChoque(h.choque)}</td>
           </tr>`).join('')}
         </tbody>
@@ -2648,8 +2650,8 @@ function vistaExpediente(){
       <td>${money2(h.precioFinal)}</td>
       <td>${h.capacidad ? h.capacidad.abordados : '—'}</td>
       <td>${m.loadFactor != null ? m.loadFactor+'%' : '—'}</td>
-      <td>${m.yield != null ? m.yield+'¢' : '—'}</td>
-      <td>${m.rasm != null ? m.rasm+'¢' : '—'}</td>
+      <td>${m.yield != null ? money2(m.yield) : '—'}</td>
+      <td>${m.rasm != null ? money2(m.rasm) : '—'}</td>
       <td>${er.utilidadNeta != null ? money2(er.utilidadNeta) : '—'}</td>
       <td>${h.neutra ? '<span style="color:var(--alerta);">No decidió</span>' : 'Sí'}</td>
     </tr>`;
