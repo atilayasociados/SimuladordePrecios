@@ -2170,23 +2170,39 @@ function antecedente(){
 const etqRonda = r => r === 0 ? 'Anterior' : r;
 
 function vistaReporte(){
-  const rep = APP.ultimoReporte || antecedente();
+  // Selector de ronda: Trimestre anterior, Ronda 1, Ronda 2… (por defecto, la última cerrada)
+  const histAll = (APP.equipo && APP.equipo.historial) || [], ante = antecedente();
+  const opciones = [...(ante ? [0] : []), ...histAll.map(h => h.ronda)];
+  const ultima = opciones.length ? opciones[opciones.length - 1] : null;
+  const sel = opciones.includes(APP.rondaReporte) ? APP.rondaReporte : ultima;
+  const rep = sel === 0 ? ante : (histAll.find(h => h.ronda === sel) || APP.ultimoReporte || ante);
+  const botonesRonda = opciones.length > 1 ? `<div style="margin:0 0 14px;">${opciones.map(r => `<button class="${r === sel ? 'btn' : 'btn-sec'}" style="width:auto;padding:6px 12px;margin:0 6px 6px 0;" data-ronda-reporte="${r}">${r === 0 ? 'Trimestre anterior' : 'Ronda ' + r}</button>`).join('')}</div>` : '';
   if(!rep){
     return `<h2 class="titulo">Aún no hay resultados</h2>
       <p class="sub">Cuando el docente cierre la ronda, aquí verás cuántos pasajeros ganó tu aerolínea, tu estado de resultados y las métricas de la operación.</p>`;
   }
   const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
   const fila = (t,v,cls='') => `<tr class="${cls}"><td>${t}</td><td>${money2(v)}</td></tr>`;
+  const totalM = mercadoTotal(rep), partM = Math.round(rep.pasajerosGanados / totalM * 10000) / 100;
+  const dec = rep.decision || {};
+  const hojaRonda = `<div class="explica" style="margin:0 0 16px;">
+      <h4 style="margin-top:0;">${rep.esAntecedente ? 'Decisiones de la aerolínea en el trimestre anterior' : 'Hoja de decisión de la Ronda ' + rep.ronda}</h4>
+      <table class="tbl3c" style="margin:0;">${resumenDecision(dec).map(([k, v]) => `<tr><td style="color:var(--texto-tenue);width:42%;">${k}</td><td><b>${v}</b></td></tr>`).join('')}</table>
+      ${rep.esAntecedente ? '' : `<p style="margin:10px 0 0;"><b>Informe del equipo:</b></p><p style="margin:4px 0 0;white-space:pre-wrap;line-height:1.55;">${String(rep.informe || dec.informe || '(sin informe)').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c])}</p>`}
+      ${rep.neutra ? '<p style="margin:8px 0 0;color:var(--peligro);">Tu equipo no envió decisión esta ronda: se aplicó una decisión neutra.</p>' : ''}
+    </div>`;
 
   return `
+    ${botonesRonda}
+    ${hojaRonda}
     <h2 class="titulo">${rep.esAntecedente ? 'Así recibes tu aerolínea · trimestre anterior' : 'Resultado de la Ronda ' + rep.ronda}</h2>
     ${rep.esAntecedente ? `<p class="sub">Antes de que tu equipo tomara el mando, la aerolínea cobró ${money2(rep.precioFinal)} (el mismo precio que ${Object.keys(rep.preciosCompetidores||{}).join(' y ') || 'la competencia'}) e invirtió ${money(rep.decision && rep.decision.marketing || 0)} en marketing. Todos los equipos reciben la misma aerolínea: usa estos resultados como punto de partida para tu primera decisión.</p>` : ''}
-    <p class="sub">${rep.esAntecedente ? 'La aerolínea ganó' : 'Ganaste'} ${rep.pasajerosGanados} pasajeros de los ${rep.poolDeRonda} que buscaban vuelo${cap.spill>0?`, pero ${cap.spill} se fueron con la competencia porque no tenías asientos`:''}.</p>
+    <p class="sub">${rep.esAntecedente ? 'La aerolínea ganó' : 'Ganaste'} ${rep.pasajerosGanados} pasajeros de los ${totalM} que buscaban vuelo${cap.spill>0?`, pero ${cap.spill} se fueron con la competencia porque no tenías asientos`:''}.</p>
 
     <div class="kpis">
-      <div class="kpi"><div class="k-nombre">Participación de mercado</div><div class="k-valor cifra">${rep.participacion}%</div></div>
+      <div class="kpi"><div class="k-nombre">Participación de mercado</div><div class="k-valor cifra">${_coma(partM)}%</div></div>
       <div class="kpi"><div class="k-nombre">Pasajeros a bordo</div><div class="k-valor cifra">${cap.abordados}</div></div>
-      <div class="kpi"><div class="k-nombre">Ocupación</div><div class="k-valor cifra">${m.loadFactor}%</div></div>
+      <div class="kpi"><div class="k-nombre">Ocupación</div><div class="k-valor cifra">${_coma(m.loadFactor)}%</div></div>
       <div class="kpi"><div class="k-nombre">Yield · ingreso por pasajero</div><div class="k-valor cifra">${money2(m.yield)}</div></div>
       <div class="kpi"><div class="k-nombre">RASM · ingreso por asiento</div><div class="k-valor cifra">${money2(m.rasm)}</div></div>
     </div>
@@ -2218,7 +2234,7 @@ function vistaReporte(){
       <h4>Lo que pasó esta ronda</h4>
       <ul>${observaciones(rep).map(o=>`<li>${o}</li>`).join('')}</ul>
     </div>
-    ${rep.esAntecedente ? '' : htmlRepartoMercado(APP.equipo)}
+    ${rep.esAntecedente ? '' : htmlRepartoMercado(APP.equipo, rep.ronda)}
     ${diagnosticos(rep).length ? `<div class="preguntas">
       <h4>Para conversar con tu equipo</h4>
       <ul>${diagnosticos(rep).map(d=>`<li>${d}</li>`).join('')}</ul>
@@ -2246,6 +2262,24 @@ function vistaReporte(){
    NIVEL 1 — Observaciones: describen lo que ocurrió, sin explicar
    el principio detrás. El estudiante saca su propia conclusión.
    ============================================================ */
+/* Total del mercado de una ronda: la suma de lo que captó cada aerolínea (igual que el Panel Docente
+   y la tabla de reparto). Si faltan datos de alguna aerolínea, se usa el tamaño calculado por el motor. */
+function mercadoTotal(rep){
+  let total = rep.poolDeRonda;
+  if(!rep.esAntecedente && APP.tablero && APP.equipo){
+    let suma = 0, completo = true;
+    (APP.tablero || []).filter(t => t.perfil === APP.equipo.perfil).forEach(t => {
+      const h = (t.historial || []).find(x => x.ronda === rep.ronda);
+      if(h && h.pasajerosGanados != null) suma += h.pasajerosGanados; else completo = false;
+    });
+    if((rep.competidores || []).length) rep.competidores.forEach(b => { if(b.pasajerosGanados != null) suma += b.pasajerosGanados; else completo = false; });
+    else completo = false;
+    if(completo && suma > 0) total = suma;
+  }
+  return total;
+}
+const _coma = v => String(v).replace('.', ',');
+
 function observaciones(rep){
   const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
   const o = [];
@@ -2256,19 +2290,7 @@ function observaciones(rep){
     if(cap.noShows > 0) partes.push(`${cap.noShows} reservaron pero no se presentaron`);
     if(sinAsiento > 0) partes.push(`${sinAsiento} quisieron volar contigo pero no encontraron asiento`);
     const ultima = partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0];
-    // Mismo número que el Panel Docente y la tabla de reparto: la suma de lo que captó cada aerolínea
-    // (el tamaño del motor puede diferir en 1 por redondeo al repartir el mercado).
-    let totalMercado = rep.poolDeRonda;
-    if(!rep.esAntecedente && APP.tablero && APP.equipo){
-      const R = rep.ronda; let suma = 0, completo = true;
-      (APP.tablero || []).filter(t => t.perfil === APP.equipo.perfil).forEach(t => {
-        const h = (t.historial || []).find(x => x.ronda === R);
-        if(h && h.pasajerosGanados != null) suma += h.pasajerosGanados; else completo = false;
-      });
-      if((rep.competidores || []).length) rep.competidores.forEach(b => { if(b.pasajerosGanados != null) suma += b.pasajerosGanados; else completo = false; });
-      else completo = false;
-      if(completo && suma > 0) totalMercado = suma;
-    }
+    const totalMercado = mercadoTotal(rep);
     o.push(`En tu mercado <b>quisieron viajar ${totalMercado} pasajeros</b>. ${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} captó ${rep.pasajerosGanados} (el ${String(Math.round(rep.pasajerosGanados / totalMercado * 1000) / 10).replace('.', ',')}%): ${ultima}.`);
   }
   o.push(`Tu precio fue de ${money2(rep.precioFinal)}; el promedio del mercado, ${money2(rep.precioMercado)}.`);
@@ -2420,9 +2442,9 @@ function vistaHistorial(){
    el área de research de una empresa: un solo lugar de consulta.
    ============================================================ */
 /* Tamaño y reparto del mercado en la última ronda cerrada (parte del estudio de mercado) */
-function htmlRepartoMercado(e){
-  const hist = (e.historial || []).filter(h => !h.neutra && h.capacidad);
-  const mio = hist[hist.length - 1];
+function htmlRepartoMercado(e, rondaElegida){
+  const hist = (e.historial || []).filter(h => h.capacidad);
+  const mio = rondaElegida != null ? hist.find(h => h.ronda === rondaElegida) : hist[hist.length - 1];
   if(!mio) return '';
   const R = mio.ronda, filas = [];
   const pct = v => v == null ? '—' : String(v).replace('.', ',') + '%';
@@ -2980,7 +3002,7 @@ async function sincronizar(){
   }
   // Cada ronda empieza con la Hoja vacía: no se arrastran valores ni el informe de la ronda anterior.
   // Dentro de una misma ronda, lo que el equipo va escribiendo se conserva.
-  if(APP.rondaDeLaHoja !== APP.config.rondaActual){ APP.decisionActual = {}; APP.rondaDeLaHoja = APP.config.rondaActual; }
+  if(APP.rondaDeLaHoja !== APP.config.rondaActual){ APP.decisionActual = {}; APP.rondaDeLaHoja = APP.config.rondaActual; APP.rondaReporte = null; }
   const yaEnviada = await leer(claveDecision(APP.config.rondaActual, APP.equipo.nombre));
   APP.enviada = !!yaEnviada;
   if(yaEnviada) APP.decisionActual = yaEnviada;
@@ -3123,6 +3145,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.addEventListener('click', e=>{
     if(e.target.id === 'irInforme'){ e.preventDefault(); irAlInforme(); return; }
+    const bRr = e.target.closest('[data-ronda-reporte]');
+    if(bRr){ APP.rondaReporte = Number(bRr.dataset.rondaReporte); render(); return; }
     const b = e.target.closest('[data-ir], .btn-exp');
     if(!b) return;
     if(APP.vista==='decision') recolectar();
