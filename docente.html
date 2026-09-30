@@ -1977,6 +1977,124 @@ function puntosCumplimiento(aTiempo){
   return aTiempo >= 12 ? 10 : aTiempo >= 10 ? 8 : aTiempo >= 8 ? 6 : aTiempo >= 6 ? 4 : 0;
 }
 
+/* ============================================================
+   PARA LA CLASE: fichas de enseñanza generadas con los datos reales de cada ronda
+   Reglas fijas sobre el historial guardado (sirven para cualquier simulación).
+   ============================================================ */
+const _pct = v => (Math.round(v * 10) / 10).toString().replace('.', ',') + '%';
+const _pctS = v => (v > 0 ? '+' : '') + _pct(v);   // con signo: +8,5% / −3,1%
+function fichasDeRonda(R){
+  const fichas = [], NOM = { domestica: 'doméstico', internacional: 'internacional' };
+  for(const pk of ['domestica', 'internacional']){
+    const T = D.equipos.filter(e => e.perfil === pk).map(e => {
+      const h = (e.historial || []).find(x => x.ronda === R);
+      const hp = R === 1 ? ((D.config.antecedente || {})[pk] || null) : (e.historial || []).find(x => x.ronda === R - 1);
+      return h && h.estadoResultados ? { n: e.nombre, h, hp, er: h.estadoResultados, vol: h.capacidad ? h.capacidad.abordados : 0,
+        mkt: (h.decision && h.decision.marketing) || 0, util: h.estadoResultados.utilidadNeta } : null;
+    }).filter(Boolean);
+    if(!T.length) continue;
+    const etiq = D.equipos.some(e => e.perfil !== pk) ? ` (mercado ${NOM[pk]})` : '';
+    const cvPax = t => t.vol ? (t.er.ioc + (t.er.costoExtras || 0)) / t.vol : 10;
+
+    // 1. Mismos pasajeros, distinta utilidad
+    let par = null;
+    for(let i = 0; i < T.length; i++) for(let j = i + 1; j < T.length; j++){
+      const a = T[i], b = T[j];
+      if(Math.abs(a.vol - b.vol) <= 1 && Math.abs(a.util - b.util) >= 5 && (!par || Math.abs(a.util - b.util) > Math.abs(par[0].util - par[1].util))) par = [a, b];
+    }
+    if(par){
+      const [g, p] = par[0].util > par[1].util ? par : [par[1], par[0]];
+      const dIng = g.er.ingresos - p.er.ingresos, dMkt = g.mkt - p.mkt, dPrecio = g.h.precioFinal - p.h.precioFinal;
+      fichas.push({ t: 'Llenar el avión no basta' + etiq,
+        que: `${esc(g.n)} y ${esc(p.n)} llevaron ${g.vol === p.vol ? `los mismos pasajeros (${g.vol} cada uno)` : `casi los mismos pasajeros (${g.vol} y ${p.vol})`}, pero ${esc(g.n)} ganó ${money(g.util)} y ${esc(p.n)} ${money(p.util)}.`,
+        por: `${esc(g.n)} cobró ${money2(Math.abs(dPrecio))} ${dPrecio >= 0 ? 'más' : 'menos'} por pasajero, lo que le dio ${money2(Math.abs(dIng))} ${dIng >= 0 ? 'más' : 'menos'} de ingresos${dMkt ? `, frente a ${money2(Math.abs(dMkt))} ${dMkt > 0 ? 'más' : 'menos'} de marketing` : ''}.`,
+        leccion: 'Importa cuánto deja cada pasajero, no solo cuántos suben.',
+        pregunta: `¿Cuánto más podría haber cobrado ${esc(g.n)} sin perder pasajeros? ¿Cómo lo averiguarían?` });
+    }
+
+    // 2. Elasticidad observada (equipos que movieron su precio)
+    const mov = T.filter(t => t.hp && Math.abs(t.h.precioFinal - t.hp.precioFinal) >= 0.25 && t.hp.pasajerosGanados)
+      .sort((a, b) => Math.abs(b.h.precioFinal - b.hp.precioFinal) - Math.abs(a.h.precioFinal - a.hp.precioFinal)).slice(0, 2);
+    mov.forEach(t => {
+      const dp = (t.h.precioFinal - t.hp.precioFinal) / t.hp.precioFinal * 100, dq = (t.h.pasajerosGanados - t.hp.pasajerosGanados) / t.hp.pasajerosGanados * 100;
+      const E = dp ? dq / dp : 0, elastica = Math.abs(E) > 1;
+      fichas.push({ t: `Elasticidad observada: ${esc(t.n)}` + etiq,
+        que: `${esc(t.n)} ${dp > 0 ? 'subió' : 'bajó'} su precio de ${money2(t.hp.precioFinal)} a ${money2(t.h.precioFinal)} (${_pctS(dp)}) y sus pasajeros captados pasaron de ${t.hp.pasajerosGanados} a ${t.h.pasajerosGanados} (${_pctS(dq)}).`,
+        por: `Elasticidad observada ≈ ${E.toFixed(1).replace('.', ',')}: ${elastica ? 'demanda elástica, los pasajeros reaccionaron más que proporcionalmente al precio' : 'demanda inelástica, los pasajeros reaccionaron menos que proporcionalmente'}. Ojo: es una elasticidad "ingenua", porque la competencia y el mercado también cambiaron.`,
+        leccion: elastica ? 'Con demanda elástica, bajar el precio aumenta el ingreso; subirlo lo reduce.' : 'Con demanda inelástica, subir el precio aumenta el ingreso.',
+        pregunta: '¿Qué otros factores, además del precio, pudieron cambiar sus pasajeros esta ronda? (Unidad 5: elasticidad controlada)' });
+    });
+
+    // 3. Ocupación contra utilidad
+    if(T.length > 1){
+      const maxLF = T.reduce((a, b) => (b.h.metricas.loadFactor > a.h.metricas.loadFactor ? b : a));
+      const maxU = T.reduce((a, b) => (b.util > a.util ? b : a));
+      if(maxLF !== maxU && maxLF.h.metricas.loadFactor - maxU.h.metricas.loadFactor >= 1)
+        fichas.push({ t: 'La mayor ocupación no fue la mayor utilidad' + etiq,
+          que: `${esc(maxLF.n)} voló más lleno (${_pct(maxLF.h.metricas.loadFactor)}), pero ${esc(maxU.n)} ganó más (${money(maxU.util)} contra ${money(maxLF.util)}) volando al ${_pct(maxU.h.metricas.loadFactor)}.`,
+          por: `El yield de ${esc(maxU.n)} fue ${money2(maxU.h.metricas.yield)} por pasajero, contra ${money2(maxLF.h.metricas.yield)} de ${esc(maxLF.n)}.`,
+          leccion: 'El objetivo es la utilidad, no la ocupación: el revenue management equilibra ocupación y yield.',
+          pregunta: '¿Qué indicador revisarían primero para decidir el precio de la próxima ronda, y por qué?' });
+    }
+
+    // 4. ¿Pagó el marketing? (equipos que cambiaron su inversión)
+    T.filter(t => t.hp && Math.abs(t.mkt - ((t.hp.decision && t.hp.decision.marketing) || 0)) >= 20).slice(0, 1).forEach(t => {
+      const mp = (t.hp.decision && t.hp.decision.marketing) || 0, dM = t.mkt - mp, mg = t.h.precioFinal - cvPax(t);
+      const necesarios = mg > 0 ? Math.ceil(Math.abs(dM) / mg) : null, dq = t.h.pasajerosGanados - t.hp.pasajerosGanados;
+      const mismoPrecio = Math.abs(t.h.precioFinal - t.hp.precioFinal) < 0.25;
+      fichas.push({ t: `¿Pagó el marketing? ${esc(t.n)}` + etiq,
+        que: `${esc(t.n)} ${dM > 0 ? 'subió' : 'bajó'} su marketing de ${money(mp)} a ${money(t.mkt)} y captó ${dq >= 0 ? dq + ' pasajeros más' : Math.abs(dq) + ' pasajeros menos'} que la ronda anterior.`,
+        por: necesarios != null ? `Cada pasajero le deja ${money2(mg)} de margen; para ${dM > 0 ? 'recuperar' : 'compensar'} ${money(Math.abs(dM))} ${dM > 0 ? 'necesitaba' : 'podía perder hasta'} ${necesarios} pasajeros${dM > 0 ? ' adicionales' : ''}.${mismoPrecio ? '' : ' Cuidado: también cambió su precio, así que no todo el efecto es del marketing.'}` : 'Su margen por pasajero no alcanza para evaluar el marketing.',
+        leccion: 'Toda inversión se evalúa contra el margen que genera: gasto ÷ margen por pasajero = pasajeros necesarios para recuperarla.',
+        pregunta: `¿Le convino a ${esc(t.n)} ese cambio de marketing? ¿Cómo lo separarían del efecto del precio?` });
+    });
+
+    // 5. Precio bajo el piso
+    T.filter(t => t.h.piso && t.h.precioFinal < t.h.piso).forEach(t => fichas.push({ t: `Precio bajo el piso: ${esc(t.n)}` + etiq,
+      que: `${esc(t.n)} cobró ${money2(t.h.precioFinal)}, por debajo de su piso de ${money2(t.h.piso)} (su costo total por asiento con el avión lleno).`,
+      por: 'Aun llenando el avión, ese precio no cubre el costo total del vuelo.',
+      leccion: 'El piso es el límite inferior del rango de precios razonable (Unidad 1).',
+      pregunta: '¿En qué situación podría justificarse vender por debajo del piso por una ronda?' }));
+
+    // 6. No-shows (antesala del overbooking)
+    const ns = T.reduce((s, t) => s + ((t.h.capacidad && t.h.capacidad.noShows) || 0), 0);
+    if(ns > 0){
+      const valor = T.reduce((s, t) => s + ((t.h.capacidad && t.h.capacidad.noShows) || 0) * Math.max(0, t.h.precioFinal - cvPax(t)), 0);
+      fichas.push({ t: 'Asientos que volaron vacíos' + etiq,
+        que: `Entre los equipos, ${ns} pasajeros con reserva no se presentaron.`,
+        por: `Si esos asientos se hubieran vuelto a vender, habrían dejado cerca de ${money(valor)} de margen.`,
+        leccion: 'Los no-shows son previsibles: por eso las aerolíneas venden más reservas que asientos (overbooking, Unidad 4).',
+        pregunta: '¿Cuántos asientos sobrevenderían ustedes, y qué riesgo corren si se presentan todos?' });
+    }
+
+    // 7. Equipos que no decidieron
+    const neutros = T.filter(t => t.h.neutra);
+    if(neutros.length) fichas.push({ t: 'Equipos que no decidieron' + etiq,
+      que: `${neutros.map(t => esc(t.n)).join(', ')} no enviaron su decisión y recibieron una decisión neutra (precio promedio del mercado, sin inversiones).`,
+      por: 'La decisión neutra no aprovecha lo aprendido en rondas anteriores.',
+      leccion: 'No decidir también es una decisión, y tiene costo.',
+      pregunta: '¿Qué habría decidido ese equipo con la información que tenía?' });
+  }
+  return fichas;
+}
+function vistaClase(){
+  const ult = ((D.config && D.config.rondaActual) || 1) - 1;
+  if(ult < 1) return `<h2 class="titulo">Para la clase</h2><p class="sub">Todavía no hay rondas cerradas. Cuando cierres la Ronda 1, aquí aparecerán las lecciones de cada ronda, calculadas con los datos reales de tus equipos.</p>`;
+  const R = (D.rondaClase && D.rondaClase <= ult) ? D.rondaClase : ult;
+  const botones = Array.from({ length: ult }, (_, i) => i + 1).map(r => `<button class="${r === R ? 'btn' : 'btn-sec'}" style="width:auto;padding:6px 12px;margin:0 6px 6px 0;" data-ronda-clase="${r}">Ronda ${r}</button>`).join('');
+  const f = fichasDeRonda(R);
+  return `<h2 class="titulo">Para la clase · Ronda ${R}</h2>
+    <p class="sub">Lecciones calculadas con los datos reales de tus equipos. Úsalas para abrir la discusión antes de que cada equipo revise su reporte.</p>
+    <div style="margin:10px 0 16px;">${botones}</div>
+    ${f.length ? f.map(x => `<div class="bloque" style="margin-bottom:14px;">
+      <h3 style="margin-top:0;">${x.t}</h3>
+      <p style="margin:6px 0;"><b>Qué pasó:</b> ${x.que}</p>
+      <p style="margin:6px 0;"><b>Por qué:</b> ${x.por}</p>
+      <p style="margin:6px 0;color:var(--marca);"><b>Lección:</b> ${x.leccion}</p>
+      <p style="margin:6px 0 0;"><b>Pregunta para la clase:</b> ${x.pregunta}</p>
+    </div>`).join('') : '<p class="sub">En esta ronda no hubo diferencias que merezcan una ficha. Prueba con otra ronda.</p>'}`;
+}
+
 function vistaEvaluacion(){
   const eqs = (D.equipos || []).filter(e => !e.esBot);
   if(!eqs.length) return `<h2 class="titulo">Evaluación</h2><p class="sub">Todavía no hay equipos registrados.</p>`;
@@ -2325,7 +2443,8 @@ function render(){
     {id:'configuracion', txt:'Configuración'},
     {id:'ronda', txt:'Control de ronda'},
     {id:'tablero', txt:'Tablero'},
-    {id:'evaluacion', txt:'Evaluación'}
+    {id:'evaluacion', txt:'Evaluación'},
+    {id:'clase', txt:'Para la clase'}
   ];
   document.getElementById('tabs').innerHTML = vistas.map(v=>
     `<button class="tab ${D.vista===v.id?'activa':''}" data-vista="${v.id}">${v.txt}</button>`).join('');
@@ -2333,6 +2452,7 @@ function render(){
   if(D.vista==='configuracion') c.innerHTML = vistaConfiguracion();
   else if(D.vista==='ronda') c.innerHTML = vistaRonda();
   else if(D.vista==='evaluacion') c.innerHTML = vistaEvaluacion();
+  else if(D.vista==='clase') c.innerHTML = vistaClase();
   else c.innerHTML = vistaTablero();
 }
 
@@ -2366,6 +2486,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if(e.target.id === 'simCodigoNuevo') e.target.dataset.editado = '1';
   });
   document.getElementById('contenido').addEventListener('click', async e=>{
+    const bRc = e.target.closest('[data-ronda-clase]');
+    if(bRc){ D.rondaClase = Number(bRc.dataset.rondaClase); render(); return; }
     const bSel = e.target.closest('[data-simsel]');
     if(bSel){ await cambiarPartida(bSel.dataset.simsel); return; }
     const bLink = e.target.closest('[data-simlink]');
