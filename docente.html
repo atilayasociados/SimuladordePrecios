@@ -1902,10 +1902,22 @@ function vistaPrevia(){
   return perfiles.map(pk => vistaPreviaPerfil({ ...P, filas: P.filas.filter(f => (f.perfil || 'domestica') === pk),
     titulo: (perfiles.length > 1 ? NOM[pk] + ' · ' : '') + 'mercado de ' + ((P.mercados || {})[pk] ?? '—') + ' pasajeros en esta ronda.' })).join('');
 }
+function desgloseMercado(filas){
+  // quisieron viajar = volaron + no se presentaron + sin asiento (suma de todas las aerolíneas del perfil)
+  const conDatos = filas.filter(f => f._r && f._r.capacidad);
+  if(!filas.length || conDatos.length < filas.length) return null;
+  let quisieron = 0, volaron = 0, noShows = 0, sinAsiento = 0;
+  conDatos.forEach(f => { const c = f._r.capacidad; quisieron += f._r.pasajerosGanados || 0; volaron += c.abordados || 0;
+    noShows += c.noShows || 0; sinAsiento += (c.spill || 0) + (c.denegados || 0); });
+  return { quisieron, volaron, noShows, sinAsiento };
+}
 function vistaPreviaPerfil(p){
   return `<div class="bloque">
     <h3>Resultados de la Ronda ${p.ronda}</h3>
-    <p class="sub" style="margin-bottom:14px;">${p.titulo.charAt(0).toUpperCase() + p.titulo.slice(1)} Toca una fila para ver su Estado de Resultados completo. Puedes comentar estos resultados en clase antes de que cada equipo revise su propio reporte.</p>
+    ${(() => { const m = desgloseMercado(p.filas); const pref = p.titulo.includes(' · ') ? p.titulo.split(' · ')[0] + ' · ' : '';
+      return m ? `<p class="sub" style="margin-bottom:6px;">${pref}<b>Quisieron viajar ${m.quisieron} pasajeros</b> en esta ronda (el mercado). <b>Volaron ${m.volaron}</b>, sumando todas las aerolíneas.${m.quisieron > m.volaron ? ` No volaron ${m.quisieron - m.volaron}: ${m.noShows} reservaron y no se presentaron${m.sinAsiento ? `, y ${m.sinAsiento} no encontraron asiento en la aerolínea que eligieron` : ''}.` : ''}</p>`
+               : `<p class="sub" style="margin-bottom:6px;">${p.titulo.charAt(0).toUpperCase() + p.titulo.slice(1).replace('mercado de', 'quisieron viajar').replace(' pasajeros en esta ronda.', ' pasajeros en esta ronda (el mercado).')} El detalle de cuántos volaron se muestra en las rondas cerradas con esta versión.</p>`; })()}
+    <p class="sub" style="margin-bottom:14px;"> Toca una fila para ver su Estado de Resultados completo. Puedes comentar estos resultados en clase antes de que cada equipo revise su propio reporte.</p>
     <table class="datos">
       <thead><tr><th></th><th>Aerolínea</th><th class="num">Precio</th><th class="num">Part.</th><th class="num">A bordo</th><th class="num">Ocupación</th><th class="num">Utilidad neta</th></tr></thead>
       <tbody>
@@ -2222,6 +2234,8 @@ async function cerrarRonda(){
           eq.historial.push({
             ronda, precioMercado: r.precioMercado, poolDeRonda: r.poolDeRonda, poolTemporada: r.poolTemporada, poolFijo,
             neutra: !!esNeutra, preciosCompetidores, choque: D.choque,
+            competidores: r.resultados.filter(x => x.esBot).map(bo => ({ nombre: bo.nombre, precio: bo.precioFinal, participacion: bo.participacion,
+              pasajerosGanados: bo.pasajerosGanados, capacidad: bo.capacidad, ocupacion: bo.metricas ? bo.metricas.loadFactor : null })),
             informe: (equiposMotor.find(x=>x.nombre===res.nombre)?.decision?.informe) || '',
             decision: equiposMotor.find(x=>x.nombre===res.nombre)?.decision || {},
             piso: res.piso, techo: res.techo, tresCAnterior,
@@ -2275,10 +2289,15 @@ function reconstruirPrevia(){
       participacion: h.participacion, abordados: h.capacidad ? h.capacidad.abordados : '—',
       ocupacion: h.metricas ? h.metricas.loadFactor : '—',
       utilidadNeta: h.estadoResultados ? h.estadoResultados.utilidadNeta : null, _r: h });
-    Object.entries(h.preciosCompetidores || {}).forEach(([n, v]) => { bots[pk + '|' + n] = { perfil: pk, nombre: n, precio: v }; });
+    if(h.competidores && h.competidores.length){
+      h.competidores.forEach(bo => { bots[pk + '|' + bo.nombre] = { perfil: pk, nombre: bo.nombre, precio: bo.precio, participacion: bo.participacion,
+        abordados: bo.capacidad ? bo.capacidad.abordados : '—', ocupacion: bo.ocupacion ?? '—', _r: { pasajerosGanados: bo.pasajerosGanados, capacidad: bo.capacidad } }; });
+    } else {
+      Object.entries(h.preciosCompetidores || {}).forEach(([n, v]) => { bots[pk + '|' + n] = { perfil: pk, nombre: n, precio: v }; });
+    }
   }
   if(!filas.length) return null;
-  Object.values(bots).forEach(b => filas.push({ ...b, esBot: true, participacion: '—', abordados: '—', ocupacion: '—', utilidadNeta: null }));
+  Object.values(bots).forEach(b => filas.push({ participacion: '—', abordados: '—', ocupacion: '—', ...b, esBot: true, utilidadNeta: null }));
   filas.sort((a, b) => (a.esBot !== b.esBot) ? (a.esBot ? 1 : -1) : (b.utilidadNeta ?? -1e9) - (a.utilidadNeta ?? -1e9));
   return { ronda, mercados, filas };
 }
