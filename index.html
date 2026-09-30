@@ -2964,6 +2964,9 @@ async function sincronizar(){
     const hist = eq.historial || [];
     APP.ultimoReporte = hist.length ? hist[hist.length-1] : null;
   }
+  // Cada ronda empieza con la Hoja vacía: no se arrastran valores ni el informe de la ronda anterior.
+  // Dentro de una misma ronda, lo que el equipo va escribiendo se conserva.
+  if(APP.rondaDeLaHoja !== APP.config.rondaActual){ APP.decisionActual = {}; APP.rondaDeLaHoja = APP.config.rondaActual; }
   const yaEnviada = await leer(claveDecision(APP.config.rondaActual, APP.equipo.nombre));
   APP.enviada = !!yaEnviada;
   if(yaEnviada) APP.decisionActual = yaEnviada;
