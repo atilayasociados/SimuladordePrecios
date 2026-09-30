@@ -1912,6 +1912,8 @@ function desgloseMercado(filas){
   return { quisieron, volaron, noShows, sinAsiento };
 }
 function vistaPreviaPerfil(p){
+  { const m0 = desgloseMercado(p.filas);   // participación sobre lo captado por todas: suma 100% y coincide con la pantalla del estudiante
+    if(m0 && m0.quisieron > 0) p = { ...p, filas: p.filas.map(f => ({ ...f, participacion: Math.round(((f._r && f._r.pasajerosGanados) || 0) / m0.quisieron * 10000) / 100 })) }; }
   return `<div class="bloque">
     <h3>Resultados de la Ronda ${p.ronda}</h3>
     ${(() => { const m = desgloseMercado(p.filas); const pref = p.titulo.includes(' · ') ? p.titulo.split(' · ')[0] + ' · ' : '';

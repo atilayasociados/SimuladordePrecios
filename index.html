@@ -2256,7 +2256,20 @@ function observaciones(rep){
     if(cap.noShows > 0) partes.push(`${cap.noShows} reservaron pero no se presentaron`);
     if(sinAsiento > 0) partes.push(`${sinAsiento} quisieron volar contigo pero no encontraron asiento`);
     const ultima = partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0];
-    o.push(`En tu mercado <b>quisieron viajar ${rep.poolDeRonda} pasajeros</b>. ${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} captó ${rep.pasajerosGanados} (el ${String(rep.participacion ?? Math.round(rep.pasajerosGanados / rep.poolDeRonda * 1000) / 10).replace('.', ',')}%): ${ultima}.`);
+    // Mismo número que el Panel Docente y la tabla de reparto: la suma de lo que captó cada aerolínea
+    // (el tamaño del motor puede diferir en 1 por redondeo al repartir el mercado).
+    let totalMercado = rep.poolDeRonda;
+    if(!rep.esAntecedente && APP.tablero && APP.equipo){
+      const R = rep.ronda; let suma = 0, completo = true;
+      (APP.tablero || []).filter(t => t.perfil === APP.equipo.perfil).forEach(t => {
+        const h = (t.historial || []).find(x => x.ronda === R);
+        if(h && h.pasajerosGanados != null) suma += h.pasajerosGanados; else completo = false;
+      });
+      if((rep.competidores || []).length) rep.competidores.forEach(b => { if(b.pasajerosGanados != null) suma += b.pasajerosGanados; else completo = false; });
+      else completo = false;
+      if(completo && suma > 0) totalMercado = suma;
+    }
+    o.push(`En tu mercado <b>quisieron viajar ${totalMercado} pasajeros</b>. ${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} captó ${rep.pasajerosGanados} (el ${String(Math.round(rep.pasajerosGanados / totalMercado * 1000) / 10).replace('.', ',')}%): ${ultima}.`);
   }
   o.push(`Tu precio fue de ${money2(rep.precioFinal)}; el promedio del mercado, ${money2(rep.precioMercado)}.`);
   if(APP.decisionActual.dynamicPricing && rep.precioDecidido != null && Math.abs(rep.precioDecidido - rep.precioFinal) >= 0.01){
@@ -2424,6 +2437,7 @@ function htmlRepartoMercado(e){
   const completos = filas.every(f => f.cap);
   let quisieron = 0, volaron = 0, ns = 0, sin = 0;
   filas.forEach(f => { if(f.cap){ quisieron += f.captados || 0; volaron += f.cap.abordados || 0; ns += f.cap.noShows || 0; sin += (f.cap.spill || 0) + (f.cap.denegados || 0); } });
+  if(completos && quisieron > 0) filas.forEach(f => { f.participacion = Math.round((f.captados || 0) / quisieron * 10000) / 100; });   // suma 100%
   filas.sort((a, b) => (b.captados || 0) - (a.captados || 0));
   return `<div class="grupo" style="margin-top:14px;">
     <div class="grupo-cab"><h3>Tamaño y reparto del mercado · Ronda ${R}</h3><span class="herramienta">Estadística pública</span></div>
