@@ -3092,6 +3092,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
       }catch(err){
         alert(String(err.message).includes('SIMULACION_ARCHIVADA')
           ? 'Tu docente ya cerró esta simulación: no se pueden enviar más decisiones.'
+          : String(err.message).includes('INFORME_INSUFICIENTE')
+          ? `No puedes enviar tu decisión sin el informe de la ronda: escribe al menos ${minPalabrasInforme()} palabras. Si ves este mensaje con un informe largo, recarga la página con Ctrl + F5.`
           : 'No se pudo enviar la decisión. Intenta de nuevo.');
       }
       render();

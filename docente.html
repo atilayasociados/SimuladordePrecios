@@ -1861,7 +1861,7 @@ function vistaRonda(){
 
   return `
     <h2 class="titulo">Ronda ${ronda} de 12</h2>
-    <p class="sub">${listos.length} de ${D.equipos.length} equipos han enviado su decisión${faltan>0 ? `. Los ${faltan} que falten al cerrar recibirán una decisión neutra: precio igual al promedio del mercado, sin inversiones.` : '. Puedes cerrar la ronda.'}</p>
+    <p class="sub">${listos.length} de ${D.equipos.length} equipos han enviado su decisión${faltan>0 ? (faltan === 1 ? '. El equipo que falte al cerrar recibirá' : `. Los ${faltan} equipos que falten al cerrar recibirán`) + ' una decisión neutra: precio igual al promedio del mercado, sin inversiones.' : '. Puedes cerrar la ronda.'}</p>
 
     <div class="bloque">
       <h3>Estado de los equipos</h3>
