@@ -1569,8 +1569,9 @@ const D = {
   vista:'configuracion', config:null, equipos:[], decisiones:{},
   choque:'sin_choque', calculando:false, previa:null, filaExpandida:null
 };
-const money = n => '$'+Number(n).toLocaleString('es-ES',{maximumFractionDigits:0});
-const money2 = n => '$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
+const _signo = (n,dec) => { n = Number(n)||0; if(Math.abs(n) < (dec?0.005:0.5)) n = 0; return (n<0?'−$':'$')+Math.abs(n).toLocaleString('es-ES',{minimumFractionDigits:dec,maximumFractionDigits:dec}); };
+const money = n => _signo(n,0);
+const money2 = n => _signo(n,2);
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 /* ============================================================
@@ -1895,10 +1896,16 @@ function vistaRonda(){
 }
 
 function vistaPrevia(){
-  const p = D.previa;
+  // Cada perfil es un mercado distinto: se muestra una tabla por perfil, con su mercado real de la ronda
+  const P = D.previa, NOM = { domestica: 'Doméstico', internacional: 'Internacional' };
+  const perfiles = Object.keys(P.mercados || {}).length ? Object.keys(P.mercados) : [...new Set(P.filas.map(f => f.perfil || 'domestica'))];
+  return perfiles.map(pk => vistaPreviaPerfil({ ...P, filas: P.filas.filter(f => (f.perfil || 'domestica') === pk),
+    titulo: (perfiles.length > 1 ? NOM[pk] + ' · ' : '') + 'mercado de ' + ((P.mercados || {})[pk] ?? '—') + ' pasajeros en esta ronda.' })).join('');
+}
+function vistaPreviaPerfil(p){
   return `<div class="bloque">
     <h3>Resultados de la Ronda ${p.ronda}</h3>
-    <p class="sub" style="margin-bottom:14px;">Mercado: ${p.poolTotal} pasajeros. Toca una fila para ver su Estado de Resultados completo. Puedes comentar estos resultados en clase antes de que cada equipo revise su propio reporte.</p>
+    <p class="sub" style="margin-bottom:14px;">${p.titulo.charAt(0).toUpperCase() + p.titulo.slice(1)} Toca una fila para ver su Estado de Resultados completo. Puedes comentar estos resultados en clase antes de que cada equipo revise su propio reporte.</p>
     <table class="datos">
       <thead><tr><th></th><th>Aerolínea</th><th class="num">Precio</th><th class="num">Part.</th><th class="num">A bordo</th><th class="num">Ocupación</th><th class="num">Utilidad neta</th></tr></thead>
       <tbody>
@@ -1908,9 +1915,9 @@ function vistaPrevia(){
             <td>${f.esBot?'':`<span class="puesto ${i===0?'primero':''}">${i+1}</span>`}</td>
             <td>${esc(f.nombre)}${f.esBot?' <span style="font-size:11px;">referencia de mercado</span>':''}${f.neutra?' <span style="font-size:11px;color:var(--peligro);">no decidió</span>':''}</td>
             <td class="num">${money2(f.precio)}</td>
-            <td class="num">${f.participacion}%</td>
+            <td class="num">${String(f.participacion).replace('.', ',')}%</td>
             <td class="num">${f.abordados}</td>
-            <td class="num">${f.ocupacion}%</td>
+            <td class="num">${String(f.ocupacion).replace('.', ',')}%</td>
             <td class="num">${f.utilidadNeta!==null?money(f.utilidadNeta):'—'}</td>
           </tr>`;
           if(f.esBot || !expandida) return filaPrincipal;
@@ -1928,8 +1935,8 @@ function vistaPrevia(){
                 ${er.ingresoAncillaries>0 ? flaDet('+ Ingreso por equipaje y seguro', er.ingresoAncillaries) : ''}
                 ${er.ingresoPaseFrecuente>0 ? flaDet('+ Ingreso por Pase Frecuente', er.ingresoPaseFrecuente) : ''}
                 ${flaDet('= Ingresos', er.ingresos)}
-                ${flaDet('Costos Operativos Directos', -er.doc)}
-                ${flaDet('Costos Operativos Indirectos', -er.ioc)}
+                ${flaDet('Costos Operativos Directos · costo fijo', -er.doc)}
+                ${flaDet('Costos Operativos Indirectos · costo variable', -er.ioc)}
                 ${flaDet('= Utilidad Bruta ('+er.margenBrutoPct+'%)', er.utilidadBruta)}
                 ${flaDet('Gastos Administrativos', -er.gastosAdministrativos)}
                 ${flaDet('Gastos Comerciales', -er.gastosComerciales)}
@@ -2155,7 +2162,7 @@ function calcularAntecedente(c){
 async function cerrarRonda(){
   D.calculando = true; render();
   const c = D.config, ronda = c.rondaActual;
-  const filas = [];
+  const filas = [], mercados = {};
 
   // Clonar los parámetros por defecto y sobreescribir los costos de
   // investigación con lo que el profesor haya configurado (Configuración)
@@ -2189,11 +2196,12 @@ async function cerrarRonda(){
       perfilKey, ronda, poolFijo, choque: D.choque,
       equipos: equiposMotor, semilla: 'nur-mkt202', params: paramsRonda
     });
+    mercados[perfilKey] = r.poolDeRonda;   // mercado real de la ronda en este perfil
 
     for(const res of r.resultados){
       const esNeutra = equiposMotor.find(x=>x.nombre===res.nombre)?._neutra;
       filas.push({
-        nombre: res.nombre, esBot: res.esBot, neutra: !res.esBot && esNeutra,
+        perfil: perfilKey, nombre: res.nombre, esBot: res.esBot, neutra: !res.esBot && esNeutra,
         precio: res.precioFinal, participacion: res.participacion,
         abordados: res.capacidad.abordados, ocupacion: res.metricas.loadFactor,
         utilidadNeta: res.estadoResultados ? res.estadoResultados.utilidadNeta : null,
@@ -2240,7 +2248,7 @@ async function cerrarRonda(){
     if(a.esBot !== b.esBot) return a.esBot ? 1 : -1;
     return (b.utilidadNeta??-1e9) - (a.utilidadNeta??-1e9);
   });
-  D.previa = { ronda, poolTotal: (c.poolDomestica||0)+(c.poolInternacional||0), filas };
+  D.previa = { ronda, mercados, filas };
 
   c.rondaActual = Math.min(ronda+1, PARAMS_DEFECTO.rondasTotales);
   await rpc('docente_guardar_config_v2', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: PID(), p_config: configAFila(c) });

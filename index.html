@@ -684,8 +684,9 @@ function hashStr(s){
   return h >>> 0;
 }
 const red=(v,d=2)=>{const f=Math.pow(10,d);return Math.round(v*f)/f;};
-const money=n=>'$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:0});
-const money2=n=>'$'+Number(n).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
+const _signo=(n,dec)=>{ n=Number(n)||0; if(Math.abs(n)<(dec?0.005:0.5)) n=0; return (n<0?'−$':'$')+Math.abs(n).toLocaleString('es-ES',{minimumFractionDigits:dec,maximumFractionDigits:dec}); };
+const money=n=>_signo(n,0);   // −$801 (no "$-801")
+const money2=n=>_signo(n,2);  // −$801,84 y $0,00 (no "$-0,00")
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 /* Qué se desbloquea en cada sesión (Acta Sección 3) */
@@ -2203,8 +2204,8 @@ function vistaReporte(){
       ${er.ingresoPaseFrecuente>0 ? `<tr><td>+ Ingreso por Pase Frecuente</td><td>${money2(er.ingresoPaseFrecuente)}</td></tr>` : ''}
       ${er.ingresoPersonalizado>0 ? `<tr><td>+ Ingreso por precios personalizados</td><td>${money2(er.ingresoPersonalizado)}</td></tr>` : ''}
       ${fila('= Ingresos', er.ingresos, 'total')}
-      ${fila('Costos Operativos Directos (avión, tripulación, combustible)', -er.doc, 'resta')}
-      ${fila('Costos Operativos Indirectos (catering, reservas, equipaje)', -er.ioc, 'resta')}
+      ${fila('Costos Operativos Directos · costo fijo (avión, tripulación, combustible)', -er.doc, 'resta')}
+      ${fila('Costos Operativos Indirectos · costo variable (catering, reservas, equipaje)', -er.ioc, 'resta')}
       ${fila('= Utilidad Bruta', er.utilidadBruta, 'total')}
       ${fila('Gastos administrativos', -er.gastosAdministrativos, 'resta')}
       ${fila('Gastos comerciales', -er.gastosComerciales, 'resta')}
