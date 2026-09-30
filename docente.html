@@ -1458,6 +1458,7 @@ function configAFila(c){
       pctEquipaje:c.pctEquipaje, pctSeguro:c.pctSeguro,
       costoPuntoMadurez:c.costoPuntoMadurez,
       probDeteccion:c.probDeteccion, penalConfianza:c.penalConfianza, sancionDeteccion:c.sancionDeteccion, topeAncillary:c.topeAncillary,
+      antecedente:c.antecedente,
       sensibilidadPrecio:c.sensibilidadPrecio, elasticidadNegocio:c.elasticidadNegocio, elasticidadPlacer:c.elasticidadPlacer, aceptacionBasica:c.aceptacionBasica, aceptacionFuerte:c.aceptacionFuerte, extrasSensibilidad:c.extrasSensibilidad, extrasCostoPct:c.extrasCostoPct, extrasSaliencia:c.extrasSaliencia, topePaseNegocio:c.topePaseNegocio,
       paseMultiplicador:c.paseMultiplicador, paseTope:c.paseTope,
       algoPctPasajeros:c.algoPctPasajeros, algoSobreprecio:c.algoSobreprecio,
@@ -2065,13 +2066,9 @@ function vistaTablero(){
 /* ============================================================
    CIERRE DE RONDA — ejecuta el motor
    ============================================================ */
-async function cerrarRonda(){
-  D.calculando = true; render();
-  const c = D.config, ronda = c.rondaActual;
-  const filas = [];
-
-  // Clonar los parámetros por defecto y sobreescribir los costos de
-  // investigación con lo que el profesor haya configurado (Configuración)
+/* Parámetros del motor a partir de la configuración de la simulación (los usan el cierre de
+   ronda y el trimestre anterior, para que ambos calculen con exactamente los mismos valores). */
+function paramsDesdeConfig(c){
   const paramsRonda = JSON.parse(JSON.stringify(PARAMS_DEFECTO));
   paramsRonda.perfiles.domestica.costoInvestigacionWTP = c.costoWtpDomestica ?? paramsRonda.perfiles.domestica.costoInvestigacionWTP;
   paramsRonda.perfiles.domestica.costoEstudioElasticidad = c.costoElasticidadDomestica ?? paramsRonda.perfiles.domestica.costoEstudioElasticidad;
@@ -2114,6 +2111,50 @@ async function cerrarRonda(){
   if(c.multiplicadorCompensacion != null) paramsRonda.multiplicadorCompensacion = Number(c.multiplicadorCompensacion);
   paramsRonda.pctEquipaje = c.pctEquipaje != null ? pc(c.pctEquipaje) : 0.5;
   paramsRonda.pctSeguro = c.pctSeguro != null ? pc(c.pctSeguro) : 0.3;
+  return paramsRonda;
+}
+
+/* ============================================================
+   TRIMESTRE ANTERIOR (Ronda 0): la aerolínea que recibe cada equipo
+   Se calcula con el mismo motor al calibrar el mercado: todas las aerolíneas del perfil cobran
+   el precio de referencia (el de BoA) con $100 de marketing y sin herramientas avanzadas.
+   Es idéntico para todos los equipos del perfil, no mueve la caja y no cuenta para la nota.
+   ============================================================ */
+const MARKETING_TRIMESTRE_ANTERIOR = 100;
+function calcularAntecedente(c){
+  const params = paramsDesdeConfig(c), out = {};
+  for(const perfilKey of ['domestica','internacional']){
+    const poolFijo = perfilKey === 'domestica' ? c.poolDomestica : c.poolInternacional;
+    const n = Math.max(1, perfilKey === 'domestica' ? (c.eqDomestica || 0) : (c.eqInternacional || 0));
+    if(!poolFijo){ out[perfilKey] = null; continue; }
+    const pf = params.perfiles[perfilKey];
+    const dec = { precio: pf.precioBase, marketing: MARKETING_TRIMESTRE_ANTERIOR, fuerzaValla: 'sin_valla', overbooking: 0 };
+    const equipos = Array.from({length: n}, (_, i) => ({ nombre: i === 0 ? 'Tu aerolínea' : 'Aerolínea ' + (i+1),
+      decision: { ...dec }, puntajeValor: params.benchmarkValor, caja: PARAMS_DEFECTO.capitalSemilla, tresC: null }));
+    const r = ejecutarRonda({ perfilKey, ronda: 0, poolFijo, choque: 'normal', equipos, semilla: 'trimestre-anterior', params });
+    const res = r.resultados.find(x => x.nombre === 'Tu aerolínea');
+    const preciosCompetidores = {}; r.resultados.filter(x => x.esBot).forEach(b => { preciosCompetidores[b.nombre] = b.precioFinal; });
+    out[perfilKey] = {
+      ronda: 0, esAntecedente: true, neutra: false, precioMercado: r.precioMercado, poolDeRonda: r.poolDeRonda,
+      poolTemporada: r.poolTemporada, poolFijo, preciosCompetidores, choque: 'normal', informe: '', decision: dec,
+      piso: res.piso, techo: res.techo, precioDecidido: res.precioDecidido, precioFinal: res.precioFinal,
+      participacion: res.participacion, pasajerosGanados: res.pasajerosGanados, capacidad: res.capacidad,
+      metricas: res.metricas, estadoResultados: res.estadoResultados, dilucion: res.dilucion, personalizado: res.personalizado,
+      ganadosNegocio: res.ganadosNegocio, ganadosPlacer: res.ganadosPlacer, segmentosAbordo: res.segmentosAbordo,
+      comproWTP: false, comproElasticidad: false, componentes: res.componentes
+    };
+  }
+  return out;
+}
+
+async function cerrarRonda(){
+  D.calculando = true; render();
+  const c = D.config, ronda = c.rondaActual;
+  const filas = [];
+
+  // Clonar los parámetros por defecto y sobreescribir los costos de
+  // investigación con lo que el profesor haya configurado (Configuración)
+  const paramsRonda = paramsDesdeConfig(c);
 
   for(const perfilKey of ['domestica','internacional']){
     const delPerfil = D.equipos.filter(e => e.perfil === perfilKey);
@@ -2331,6 +2372,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         eqDomestica:nD, eqInternacional:nI, numEquipos:nD+nI, metaOcupacion:oc,
         poolDomestica: cd.poolFijo, pctDomestica: cd.pctPenetracion,
         poolInternacional: ci.poolFijo, pctInternacional: ci.pctPenetracion };
+      D.config.antecedente = calcularAntecedente(D.config);   // trimestre anterior, igual para todos los equipos del perfil
       await rpc('docente_guardar_config_v2', { p_password: PASS_DOCENTE_ACTUAL, p_partida_id: PID(), p_config: configAFila(D.config) });
       await cargarDatos();
       render(); return;
@@ -2485,6 +2527,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <li><b>Reiniciar:</b> solo en simulaciones de prueba. Borra sus equipos y decisiones y vuelve a la Ronda 1, conservando costos y constantes.</li>
     <li><b>Archivar:</b> al terminar un curso real. Sus datos se conservan, pero nadie puede entrar ni enviar decisiones. Se puede reactivar.</li>
   </ul>
+  <p><b>Trimestre anterior:</b> al calibrar el mercado, el panel calcula con el mismo motor el trimestre previo al curso (todas las aerolíneas cobran el precio de BoA con $100 de marketing). Los equipos lo ven desde la Ronda 1 como punto de partida: es igual para todos, no cambia su caja y no cuenta para la nota. Si recalibras, se recalcula.</p>
   <p>Antes de un curso, crea su simulación real y calibra su mercado cuando se hayan registrado todos los equipos. Usa la simulación de prueba para ensayar sin afectar a tus estudiantes.</p>
 
   <h3 id="m-calibrar">Antes de la primera clase: calibrar el mercado</h3>
