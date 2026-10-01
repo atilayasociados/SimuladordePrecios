@@ -1033,14 +1033,35 @@ function vistaBriefing(){
     const dec = h.decision||{};
     const inv = (dec.marketing>0?1:0)+((dec.precioEquipaje>0||dec.precioSeguro>0)?1:0)+(dec.cuotaPaseFrecuente>0?1:0)+(dec.gastoMadurez>0?1:0);
     const prox = L.precio/L.techo;
+    const ajC = (0.5-pos)*0.8, ajK = (0.05-dist)*1.6;
+    const ajVi = inv*0.04, ajVp = inv>0 ? (prox-0.75)*0.4 : -(prox-0.75)*0.2;
+    const pc = v => (v*100).toFixed(1).replace('.',',') + '%';
+    const sg = v => (v>=0?'+':'−') + f2(Math.abs(v));
+    const mov = (a,b) => b>a+0.0005 ? 'subió' : (b<a-0.0005 ? 'bajó' : 'se mantuvo');
+    const invTxt = [dec.marketing>0?'marketing':null, (dec.precioEquipaje>0||dec.precioSeguro>0)?'extras':null, dec.cuotaPaseFrecuente>0?'Pase Frecuente':null, dec.gastoMadurez>0?'organización':null].filter(Boolean);
     calculo = `<details class="mas"><summary>Ver cómo se calcularon tus puntajes en la Ronda ${h.ronda}</summary>
-      <p style="margin:0 0 6px;font-size:12.5px;color:var(--texto-tenue);">${L.vistos ? 'Se usan tu precio decidido y el piso y el techo que viste en tu hoja de decisión.' : 'Esta ronda es anterior al registro de tus límites: se usan los valores calculados por el motor.'}</p>
-      <table class="tbl3c">
-        <tr><th>C</th><th>Cálculo con tus números</th><th>Puntaje</th></tr>
-        <tr><td><b>Costo</b></td><td class="calc">Dónde quedó tu precio en tu rango (0 = en el piso, 1 = en el techo): (${f2(L.precio)} − ${f2(L.piso)}) ÷ (${f2(L.techo)} − ${f2(L.piso)}) = ${f2(pos)}<br>Ajuste: (0,50 − ${f2(pos)}) × 0,8 = ${f2((0.5-pos)*0.8)}</td><td class="cifra">${f2(prev.costo)} → <b>${f2(c.costo)}</b></td></tr>
-        <tr><td><b>Competencia</b></td><td class="calc">Distancia al promedio del mercado: |${f2(L.precio)} − ${f2(h.precioMercado)}| ÷ ${f2(h.precioMercado)} = ${(dist*100).toFixed(1).replace('.',',')}%<br>Ajuste: (5% − ${(dist*100).toFixed(1).replace('.',',')}%) × 1,6 = ${f2((0.05-dist)*1.6)}</td><td class="cifra">${f2(prev.competencia)} → <b>${f2(c.competencia)}</b></td></tr>
-        <tr><td><b>Valor</b></td><td class="calc">Inversiones en valor: ${inv} × 0,04 = ${f2(inv*0.04)}<br>Cercanía a tu techo: (${f2(prox)} − 0,75) × 0,4 = ${f2((prox-0.75)*0.4)}</td><td class="cifra">${f2(prev.valor)} → <b>${f2(c.valor)}</b></td></tr>
-      </table></details>`;
+      <p style="margin:0 0 8px;font-size:13px;line-height:1.55;">Cada puntaje parte del valor que tenías antes de la ronda y le suma (o resta) un ajuste según tu decisión. ${L.vistos ? 'Se usan tu precio y el piso y el techo que viste en tu Hoja de decisión.' : 'Esta ronda es anterior al registro de tus límites: se usan los valores calculados por el motor.'}</p>
+      <div style="overflow-x:auto;"><table class="tbl3c">
+        <tr><th>C</th><th>Paso a paso con tus números</th><th>Antes → ahora</th></tr>
+        <tr><td><b>Costo</b></td><td class="calc">
+          <b>1. ¿Dónde quedó tu precio en tu rango?</b> (0 = en el piso, 1 = en el techo)<br>(${f2(L.precio)} − ${f2(L.piso)}) ÷ (${f2(L.techo)} − ${f2(L.piso)}) = <b>${f2(pos)}</b><br>
+          <b>2. Ajuste:</b> (0,50 − ${f2(pos)}) × 0,8 = <b>${sg(ajC)}</b><br>
+          <span style="color:var(--texto-tenue);">${pos<0.5 ? 'Tu precio quedó en la mitad inferior, más cerca del piso: el simulador interpreta que miraste tus costos.' : 'Tu precio quedó en la mitad superior, más cerca del techo: miraste menos tus costos.'} El ajuste va de −0,40 (en el techo) a +0,40 (en el piso).</span></td>
+          <td class="cifra">${f2(prev.costo)} → <b>${f2(c.costo)}</b><br><span style="font-size:12px;">${mov(prev.costo,c.costo)}</span></td></tr>
+        <tr><td><b>Competencia</b></td><td class="calc">
+          <b>1. ¿Qué tan lejos quedaste del promedio del mercado?</b><br>|${f2(L.precio)} − ${f2(h.precioMercado)}| ÷ ${f2(h.precioMercado)} = <b>${pc(dist)}</b><br>
+          <b>2. Ajuste:</b> (5% − ${pc(dist)}) × 1,6 = <b>${sg(ajK)}</b><br>
+          <span style="color:var(--texto-tenue);">${dist<0.05 ? 'Quedaste a menos de 5% del promedio: el simulador interpreta que te ubicaste cerca de la competencia.' : 'Quedaste a más de 5% del promedio: te alejaste de la competencia.'} El máximo que puede subir es +0,08 (justo en el promedio).</span></td>
+          <td class="cifra">${f2(prev.competencia)} → <b>${f2(c.competencia)}</b><br><span style="font-size:12px;">${mov(prev.competencia,c.competencia)}</span></td></tr>
+        <tr><td><b>Valor</b></td><td class="calc">
+          <b>1. ¿Invertiste en el pasajero?</b> ${inv ? 'Sí, en ' + invTxt.join(', ') : 'No'} → ${inv} × 0,04 = <b>${sg(ajVi)}</b><br>
+          <b>2. ¿Qué tan cerca de tu techo cobraste?</b> ${f2(L.precio)} ÷ ${f2(L.techo)} = ${f2(prox)}<br>
+          ${inv ? `Como invertiste, cobrar cerca del techo suma: (${f2(prox)} − 0,75) × 0,4 = <b>${sg(ajVp)}</b>` : `Como no invertiste, cobrar cerca del techo resta: −(${f2(prox)} − 0,75) × 0,2 = <b>${sg(ajVp)}</b>`}<br>
+          <b>3. Ajuste total:</b> ${sg(ajVi)} ${ajVp>=0?'+':'−'} ${f2(Math.abs(ajVp))} = <b>${sg(ajVi+ajVp)}</b><br>
+          <span style="color:var(--texto-tenue);">${inv ? 'Diste algo más al pasajero, y por eso tu precio se percibe como justo.' : 'Sin inversión, un precio alto se percibe como caro para lo que recibe el pasajero.'}</span></td>
+          <td class="cifra">${f2(prev.valor)} → <b>${f2(c.valor)}</b><br><span style="font-size:12px;">${mov(prev.valor,c.valor)}</span></td></tr>
+      </table></div>
+      <p style="margin:8px 0 0;font-size:12.5px;color:var(--texto-tenue);">Los puntajes están entre 1 y 7. Si un ajuste los llevaría fuera de ese rango, se quedan en el límite.</p></details>`;
   }
   const pctEn = v => Math.max(0,Math.min(100,(v - pan.piso*0.8)/(pan.techo*1.12 - pan.piso*0.8)*100));
   const flexUlt = h ? h.precioFinal : null;
@@ -1103,22 +1124,23 @@ function vistaBriefing(){
   <div class="paso"><div class="num">2</div><h2>¿Con quién te comparas?</h2></div>
   <p class="sub">Para saber si te fijas "mucho" o "poco" en algo, necesitas un punto de comparación. En gestión se le llama <b>benchmark</b>. El nuestro viene de un estudio real: De Toni y sus colegas (2017) preguntaron a los gerentes de 150 empresas industriales de Brasil qué tanto consideraban cada aspecto al fijar precios, del 1 (nada) al 7 (muchísimo). Los promedios fueron: <b>Costo 6,24</b>, <b>Competencia 5,14</b> y <b>Valor 5,76</b>.</p>
   <details class="mas"><summary>Ver las 12 preguntas del estudio</summary>
-    <table class="tbl3c">
-      <tr><th>C</th><th>Qué tanto considera la empresa…</th><th>Promedio</th></tr>
-      <tr><td><b>Costo</b></td><td>El costo total del producto · Los costos variables del producto · El % de margen de ganancia que la empresa fija sobre el precio del producto</td><td class="cifra">6,24</td></tr>
-      <tr><td><b>Competencia</b></td><td>El precio de los productos de la competencia · El grado de competencia en el mercado · La estrategia de precios actual de la competencia · La reacción de la competencia a nuestros precios · Las ventajas competitivas de los competidores en el mercado</td><td class="cifra">5,14</td></tr>
-      <tr><td><b>Valor</b></td><td>Las ventajas que el producto ofrece al cliente · El equilibrio entre las ventajas del producto y su posible precio · Las ventajas del producto frente a los productos de la competencia · El valor percibido por el cliente (beneficios frente a costos)</td><td class="cifra">5,76</td></tr>
-    </table>
-    <p style="font-size:12.5px;line-height:1.5;color:var(--texto-tenue);margin:6px 0 0;">Escala de cada pregunta: 1 = totalmente desatendido, 7 = plenamente considerado. Traducción propia del original en inglés.</p>
+    <p style="margin:0 0 8px;font-size:13.5px;line-height:1.55;">De Toni y sus colegas (2017) preguntaron a los gerentes de 150 empresas <b>qué tanto consideraban cada aspecto al fijar sus precios</b>, del 1 (nada) al 7 (plenamente). Agruparon las respuestas en las tres C, y cada puntaje es el promedio de sus preguntas. Al lado de cada pregunta original está su versión para tu aerolínea.</p>
+    <div style="overflow-x:auto;"><table class="tbl3c">
+      <tr><th>N.º · código</th><th>Pregunta del estudio: "¿Qué tanto considera la empresa…"</th><th>La misma pregunta para tu aerolínea</th></tr>
+      <tr><td colspan="3" style="background:var(--panel-alto);"><b>Costo</b> · promedio de las empresas del estudio: <b>6,24</b></td></tr><tr><td class="cifra" style="white-space:nowrap;">1 · V11</td><td>El costo total del producto</td><td>¿Qué tanto consideramos el costo total de operar el vuelo?</td></tr><tr><td class="cifra" style="white-space:nowrap;">2 · V12</td><td>Los costos variables del producto</td><td>¿Qué tanto consideramos el costo de atender a cada pasajero (comida, reserva, equipaje)?</td></tr><tr><td class="cifra" style="white-space:nowrap;">3 · V13</td><td>El porcentaje de margen de ganancia que la empresa fija sobre el precio</td><td>¿Qué tanto consideramos el margen de ganancia que queremos obtener sobre el precio?</td></tr><tr><td colspan="3" style="background:var(--panel-alto);"><b>Competencia</b> · promedio de las empresas del estudio: <b>5,14</b></td></tr><tr><td class="cifra" style="white-space:nowrap;">4 · V05</td><td>El precio de los productos de la competencia</td><td>¿Qué tanto consideramos el precio que cobran las otras aerolíneas?</td></tr><tr><td class="cifra" style="white-space:nowrap;">5 · V06</td><td>El grado de competencia en el mercado</td><td>¿Qué tanto consideramos qué tan intensa es la competencia en nuestra ruta?</td></tr><tr><td class="cifra" style="white-space:nowrap;">6 · V08</td><td>La estrategia de precios actual de la competencia</td><td>¿Qué tanto consideramos la estrategia de precios de las otras aerolíneas?</td></tr><tr><td class="cifra" style="white-space:nowrap;">7 · V09</td><td>La reacción de la competencia a nuestros precios</td><td>¿Qué tanto consideramos cómo reaccionarán las otras aerolíneas ante nuestro precio?</td></tr><tr><td class="cifra" style="white-space:nowrap;">8 · V10</td><td>Las ventajas competitivas de los competidores</td><td>¿Qué tanto consideramos las ventajas que tienen las otras aerolíneas?</td></tr><tr><td colspan="3" style="background:var(--panel-alto);"><b>Valor</b> · promedio de las empresas del estudio: <b>5,76</b></td></tr><tr><td class="cifra" style="white-space:nowrap;">9 · V01</td><td>Las ventajas que el producto ofrece al cliente</td><td>¿Qué tanto consideramos los beneficios que nuestro vuelo le ofrece al pasajero?</td></tr><tr><td class="cifra" style="white-space:nowrap;">10 · V02</td><td>El equilibrio entre las ventajas del producto y su posible precio</td><td>¿Qué tanto consideramos el equilibrio entre lo que ofrece nuestro vuelo y el precio que podemos cobrar?</td></tr><tr><td class="cifra" style="white-space:nowrap;">11 · V03</td><td>Las ventajas del producto frente a los de la competencia</td><td>¿Qué tanto consideramos las ventajas de nuestro vuelo frente a los de otras aerolíneas?</td></tr><tr><td class="cifra" style="white-space:nowrap;">12 · V04</td><td>El valor percibido por el cliente (beneficios frente a costos)</td><td>¿Qué tanto consideramos el valor que percibe el pasajero: lo que recibe frente a lo que paga?</td></tr>
+    </table></div>
+    <p style="font-size:13px;line-height:1.5;margin:8px 0 0;"><b>Hagan la prueba como equipo:</b> respondan las 12 preguntas pensando en cómo fijaron su última Tarifa Flex y promedien cada grupo. Luego compárenlo con los puntajes que les calcula el simulador (arriba). ¿Lo que dicen coincide con lo que hacen?</p>
+    <p style="font-size:12.5px;line-height:1.5;color:var(--texto-tenue);margin:6px 0 0;">Traducción y adaptación propias del original en inglés. El estudio numera sus preguntas de V01 a V13; la V07 no aparece entre los factores finales, por eso son 12.<br>Fuente: De Toni, D., Milan, G. S., Saciloto, E. B., y Larentis, F. (2017). Pricing strategies and levels and their impact on corporate profitability. <i>Revista de Administração, 52</i>(2), 120–133.</p>
   </details>
   <details class="mas"><summary>¿Y en el simulador, quién responde estas preguntas?</summary>
-    <p style="margin:0 0 8px;font-size:13.5px;line-height:1.55;">Nadie: el simulador observa lo que decides y lo traduce a las mismas tres C al cerrar cada ronda.</p>
-    <table class="tbl3c">
-      <tr><th>C</th><th>Qué observa el simulador</th></tr>
-      <tr><td><b>Costo</b></td><td>Si cobras cerca de tu piso (lo mínimo). Mientras más pegado al piso, más "orientado al costo".</td></tr>
-      <tr><td><b>Competencia</b></td><td>Si cobras cerca del promedio del mercado (a menos de 5% de diferencia).</td></tr>
-      <tr><td><b>Valor</b></td><td>Si inviertes en darle algo más al cliente (marketing, extras, Pase Frecuente, organización) y cobras cerca de tu techo. Cobrar caro sin dar nada a cambio lo baja.</td></tr>
-    </table>
+    <p style="margin:0 0 8px;font-size:13.5px;line-height:1.55;"><b>Nadie las responde: el simulador observa lo que haces.</b> En el estudio, los gerentes contaron <i>lo que dicen</i> que consideran. Aquí no basta con decirlo: al cerrar cada ronda, el simulador mira tus decisiones y deduce en qué te fijaste realmente para poner tu precio. Cada puntaje parte en 5,76 y se mueve un poco en cada ronda (normalmente unas centésimas o décimas), siempre dentro de la escala del 1 al 7.</p>
+    <div style="overflow-x:auto;"><table class="tbl3c">
+      <tr><th>C</th><th>Sus preguntas en la lista de arriba</th><th>Qué mira el simulador</th><th>Sube cuando…</th><th>Baja cuando…</th></tr>
+      <tr><td><b>Costo</b></td><td>Preguntas n.º 1, 2 y 3<br><span style="color:var(--texto-tenue);font-size:12px;">(V11 a V13)</span></td><td>Dónde quedó tu precio entre tu piso y tu techo</td><td>Tu precio está en la mitad inferior del rango, cerca del piso: fijas el precio mirando tus costos</td><td>Tu precio está en la mitad superior, cerca del techo</td></tr>
+      <tr><td><b>Competencia</b></td><td>Preguntas n.º 4 a 8<br><span style="color:var(--texto-tenue);font-size:12px;">(V05, V06, V08, V09 y V10)</span></td><td>La distancia entre tu precio y el promedio del mercado</td><td>Tu precio queda a menos de 5% del promedio: te ubicas cerca de los demás</td><td>Te alejas más de 5% del promedio, hacia arriba o hacia abajo</td></tr>
+      <tr><td><b>Valor</b></td><td>Preguntas n.º 9 a 12<br><span style="color:var(--texto-tenue);font-size:12px;">(V01 a V04)</span></td><td>Si inviertes en darle algo más al pasajero (marketing, extras, Pase Frecuente, organización) y qué tan cerca de tu techo cobras</td><td>Inviertes en el pasajero y cobras cerca de tu techo: el cliente paga más porque recibe más</td><td>Cobras caro <b>sin</b> invertir en nada: el pasajero paga más por lo mismo</td></tr>
+    </table></div>
+    <p style="margin:8px 0 0;font-size:13px;line-height:1.55;"><b>Por qué importa el Valor:</b> en el estudio, fue el único enfoque asociado a mayores márgenes de ganancia. En el simulador, cada punto de Valor sobre 5,76 sube tu techo un 7,3% y hace más atractiva a tu aerolínea. Costo y Competencia no son "malos": describen tu estilo de fijar precios.</p>
   </details>
   ${calculo}
   <details class="mas"><summary>Datos técnicos del estudio (para profundizar)</summary>
