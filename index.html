@@ -582,7 +582,7 @@ function tareaDeCalculo(sesion){
          pasos:[
            'Calcula tu margen nuevo: el precio que piensas poner menos tu costo variable por pasajero.',
            'Divide el cambio de precio entre ese margen nuevo. Ese porcentaje es la caída de ventas que toleras.',
-           'Si compraste la investigación WTP: multiplica cada precio candidato por su aceptación. El mayor resultado es tu precio óptimo.'
+           'Si compraste el estudio de mercado (la encuesta de disposición a pagar): multiplica cada precio candidato por la proporción de clientes que lo aceptan. El mayor resultado es tu precio óptimo.'
          ],
          formula:'Caída tolerable = −Δ Precio ÷ Margen nuevo' },
     3: { titulo:'Calcula el punto de equilibrio de tu Pase Frecuente',
@@ -1851,6 +1851,7 @@ function explicaPrecio(d, p){
     <b>Techo (lo máximo):</b> lo más que pagaría un pasajero antes de irse con otra aerolínea. Se arma con el <b>precio de referencia</b> (lo que cobra en promedio el mercado) más lo que vale tu diferencia. A ese máximo se le llama <b>EVC</b> (valor económico para el cliente).</p>
     ${seg ? `<h4>2. Dos tipos de pasajeros: la segmentación</h4>
     <p>No todos los pasajeros son iguales. El <b>viajero de negocios</b> (40%) reserva con poca anticipación y paga su empresa: acepta pagar más. El <b>viajero de placer</b> (60%) planea con tiempo y cuida su dinero. <b>Segmentar</b> es cobrarle distinto a cada grupo.</p>
+    <p>Cada grupo tiene su propia <b>disposición a pagar</b>, que en los libros verás como <b>WTP</b> (del inglés <i>willingness to pay</i>): el precio máximo que un pasajero acepta pagar antes de buscar otra opción. Abajo verás una estimación para cada grupo: ahí apunta tu Flex (negocios) y tu Promocional (placer).</p>
     <p>La <b>Tarifa Promocional</b> es un pasaje más barato pensado para el viajero de placer. La <b>valla</b> son sus restricciones (comprar con anticipación, no se devuelve), que buscan que el viajero de negocios no se pase al pasaje barato. Toda valla tiene dos riesgos:</p>
     <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Valla</th><th>Fuga: viajeros de negocios que igual compran la barata</th><th>Aceptación: viajeros de placer que aceptan las restricciones</th></tr>
       <tr><td>Sin restricciones</td><td>${_P(F.sin_valla)}</td><td>${_P(A.sin_valla ?? 1)}</td></tr>
@@ -2122,9 +2123,9 @@ function vistaDecision(){
       ${activo('valla',ronda) ? `
       <div class="referencia" style="margin-top:10px;">
         <div class="ref-nota" style="margin-bottom:6px;"><b>Paso 1 y 2 del método — quiénes son y cuánto pagarían</b></div>
-        <div class="ref-fila"><span>Viajeros de negocio (poca anticipación, la empresa paga)</span><b>${(p.segmentos.negocio*100).toFixed(0)}% · WTP ~${money2(pan.techo)}</b></div>
-        <div class="ref-fila"><span>Viajeros de placer (planean con tiempo, cuidan el bolsillo)</span><b>${(p.segmentos.placer*100).toFixed(0)}% · WTP ~${money2(pan.piso + (pan.techo-pan.piso)*0.35)}</b></div>
-        <div class="ref-nota">La proporción es fija — no la decides tú. El WTP de cada segmento es una estimación de cuánto pagaría cada tipo de viajero: úsalo como referencia para fijar tu Tarifa Flex (apuntando al negocio) y tu Promocional (apuntando al placer).</div>
+        <div class="ref-fila"><span>Viajeros de negocio (poca anticipación, la empresa paga)</span><b>${(p.segmentos.negocio*100).toFixed(0)}% · disposición a pagar ≈ ${money2(pan.techo)}</b></div>
+        <div class="ref-fila"><span>Viajeros de placer (planean con tiempo, cuidan el bolsillo)</span><b>${(p.segmentos.placer*100).toFixed(0)}% · disposición a pagar ≈ ${money2(pan.piso + (pan.techo-pan.piso)*0.35)}</b></div>
+        <div class="ref-nota">La proporción es fija — no la decides tú. La disposición a pagar (WTP) de cada grupo es una estimación de cuánto pagaría cada tipo de viajero: úsala como referencia para fijar tu Tarifa Flex (apuntando al negocio) y tu Promocional (apuntando al placer).</div>
         <div class="ref-nota" style="margin-top:8px;"><b>Paso 6 — ¿tu valla es creíble?</b> ${
           d.fuerzaValla==='fuerte'
             ? 'Con 21 días de anticipación y sin reembolso, un viaje de negocio típico prácticamente no puede cumplirla — valla fuerte.'
@@ -2760,7 +2761,7 @@ function vistaMercado(){
 
   return `
     <h2 class="titulo">Reporte de Mercado</h2>
-    <p class="sub">Investigaciones compradas: ${tieneWTP ? 'WTP — Rondas '+rondasWTP.join(', ') : 'WTP — ninguna'} · ${tieneElast ? 'Elasticidad — Rondas '+rondasElast.join(', ') : 'Elasticidad — ninguna'}</p>
+    <p class="sub">Investigaciones compradas: ${tieneWTP ? 'Estudio de mercado (disposición a pagar) — Rondas '+rondasWTP.join(', ') : 'Estudio de mercado (disposición a pagar) — ninguna'} · ${tieneElast ? 'Elasticidad — Rondas '+rondasElast.join(', ') : 'Elasticidad — ninguna'}</p>
 
     <div class="explica">
       <h4>Qué ya sabías gratis, sin comprar nada</h4>
@@ -2770,7 +2771,7 @@ function vistaMercado(){
 
     ${tieneWTP ? `
     <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Precios reales de la competencia</h3><span class="herramienta">WTP</span></div>
+      <div class="grupo-cab"><h3>Precios reales de la competencia</h3><span class="herramienta">Estudio de mercado</span></div>
       <div class="referencia">
         ${filasPrecios}
         <div class="ref-nota">Promedio del perfil ${p.nombre} completo (rutas ${p.rutas.join(' y ')}) — no es la tarifa de una ruta específica.</div>
@@ -2796,7 +2797,7 @@ function vistaMercado(){
     </div>
 
     <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Otros rubros de referencia</h3><span class="herramienta">WTP</span></div>
+      <div class="grupo-cab"><h3>Otros rubros de referencia</h3><span class="herramienta">Estudio de mercado</span></div>
       <div class="referencia">
         <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
         <div class="ref-fila"><span>Seguro de viaje (estimado)</span><b>${money2(p.refSeguro)}</b></div>
@@ -2807,7 +2808,7 @@ function vistaMercado(){
 
     ${tieneWTP && APP.tablero && APP.tablero.length ? `
     <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Posición financiera de la competencia</h3><span class="herramienta">WTP</span></div>
+      <div class="grupo-cab"><h3>Posición financiera de la competencia</h3><span class="herramienta">Estudio de mercado</span></div>
       <table class="tab-pos">
         <thead><tr><th></th><th>Aerolínea</th><th>Perfil</th><th>Ronda</th><th>Caja acumulada</th></tr></thead>
         <tbody>
@@ -2932,7 +2933,7 @@ function contenidoManual(){
         <div class="ref-nota" style="margin:0 0 10px;">Sube el atractivo de tu aerolínea, pero rinde cada vez menos por dólar adicional: duplicar la inversión no duplica el resultado.</div>
         <div class="ref-fila"><span><b>Tarifa Promocional y valla</b></span><span>Sesión 2</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Un segundo precio, más bajo, con restricciones que impiden que el viajero de negocios lo aproveche. Ver la sección 8 para entender por qué la valla no resuelve todo.</div>
-        <div class="ref-fila"><span><b>Investigación de mercado (WTP)</b></span><span>Sesión 2</span></div>
+        <div class="ref-fila"><span><b>Estudio de mercado (encuesta de disposición a pagar, WTP)</b></span><span>Sesión 2</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Te da el precio real de cada competidor por separado y una encuesta de intención de compra con 4 precios candidatos: cuántos te comprarían a cada uno, cuántos pasajeros cabrían en tu avión y cuánto margen dejaría el vuelo. Es una estimación que supone que la competencia no reacciona. Cuesta dinero, y una vez comprada esa ronda no puede deshacerse.</div>
         <div class="ref-fila"><span><b>Precio de equipaje y seguro</b></span><span>Sesión 3</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Ingresos adicionales sobre los pasajeros que vuelan contigo. Cada extra vendido tiene un costo, y si lo cobras por encima del precio de referencia del mercado, menos pasajeros lo compran y algunos de los que lo necesitan se van con la competencia. Tiene un precio que conviene más que los demás.</div>
