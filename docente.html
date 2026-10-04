@@ -710,6 +710,22 @@ function componentePrecio(precio, precioMercado, params = PARAMS_DEFECTO) {
   return redondear(Math.exp(-beta * (precio / precioMercado - 1)), 4);
 }
 
+/* Tarifa tachada (Unidad 3, efecto ancla): el ancla funciona solo si es honesta.
+   - sin precio declarado (rondas antiguas): se asume creíble, como antes
+   - precio tachado <= Flex actual: no hay descuento que mostrar, sin efecto
+   - precio tachado <= precio más alto que el equipo realmente cobró: creíble (+ atractivo)
+   - por encima: publicidad engañosa. Funciona con el cliente (+ atractivo), pero con una
+     probabilidad de detección; si se detecta: sanción y caída de confianza esa ronda. */
+function evaluarAnclaje(decision, precioMaxPrevio, rng, params = PARAMS_DEFECTO) {
+  if (!decision || !decision.anclaje) return { estado: 'no', activo: false, detectado: false };
+  const pt = Number(decision.precioTachado) || 0, flex = Number(decision.precio) || 0, maxP = Number(precioMaxPrevio) || 0;
+  if (pt <= 0) return { estado: 'creible', activo: true, detectado: false, precioTachado: null, precioMaxPrevio: maxP };
+  if (pt <= flex) return { estado: 'sin_efecto', activo: false, detectado: false, precioTachado: pt, precioMaxPrevio: maxP };
+  if (pt <= maxP + 0.005) return { estado: 'creible', activo: true, detectado: false, precioTachado: pt, precioMaxPrevio: maxP };
+  const detectado = rng() < (params.probDeteccionAnclaje ?? params.probabilidadDeteccion ?? 0.30);
+  return { estado: 'enganoso', activo: true, detectado, precioTachado: pt, precioMaxPrevio: maxP };
+}
+
 /* Componente Confianza: baja si se activó pricing algorítmico y fue detectado */
 function componenteConfianza(activo, rng, params = PARAMS_DEFECTO) {
   if (!activo) return { valor: 1, detectado: false };
@@ -818,7 +834,8 @@ function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
   // --- Otros gastos: compensación por denegación + sanción algorítmica ---
   const compensacionDenegados = (datos.denegados || 0) * (datos.precioRealizado * (params.multiplicadorCompensacion ?? 2));
   const sancionAlgoritmica = datos.sancionAlgoritmica || 0;
-  const otrosGastos = compensacionDenegados + sancionAlgoritmica;
+  const sancionAnclaje = datos.sancionAnclaje || 0;   // tarifa tachada engañosa detectada
+  const otrosGastos = compensacionDenegados + sancionAlgoritmica + sancionAnclaje;
   const utilidadNeta = utilidadOperativa - otrosGastos;
 
   return {
@@ -841,6 +858,7 @@ function estadoDeResultados(datos, params = PARAMS_DEFECTO) {
     utilidadOperativa: redondear(utilidadOperativa),
     compensacionDenegados: redondear(compensacionDenegados),
     sancionAlgoritmica: redondear(sancionAlgoritmica),
+    sancionAnclaje: redondear(sancionAnclaje),
     otrosGastos: redondear(otrosGastos),
     utilidadNeta: redondear(utilidadNeta),
     margenBrutoPct: ingresos > 0 ? redondear((utilidadBruta / ingresos) * 100, 1) : 0,
@@ -1098,7 +1116,8 @@ function ejecutarRonda(config) {
     const techoDin = precioMercado + (c.puntajeValor - params.benchmarkValor) * params.factorValorAPorcentaje * precioMercado;
     const precioFinal = aplicarDynamicPricing(d.precio, d, poolFijo, poolTemporada, pisoDin, techoDin);
 
-    const cProducto = componenteProducto(d, precioMercado, c.puntajeValor, params);
+    const anc = c.esBot ? { estado: 'no', activo: false, detectado: false } : evaluarAnclaje(d, c.precioMaxPrevio, rng, params);
+    const cProducto = componenteProducto({ ...d, anclaje: anc.activo }, precioMercado, c.puntajeValor, params);
     const cConfianza = componenteConfianza(d.pricingAlgoritmico, rng, params);
     // Precio que ve cada segmento. Placer: la promocional para quien acepta la valla,
     // la Flex para quien no la acepta (riesgo 2). Negocios: siempre la Flex.
@@ -1111,7 +1130,7 @@ function ejecutarRonda(config) {
     // sin valla, casi todos; con valla fuerte, casi ninguno (fuga de la Unidad 2).
     const fugaN = tienePromo ? ((params.fugaValla || FUGA_POR_VALLA)[d.fuerzaValla || 'sin_valla'] ?? 0.8) : 0;
     const precioNegocio = (tienePromo ? (1 - fugaN) * precioFinal + fugaN * d.tarifaPromocional : precioFinal) + extraPercibido;
-    return { ...c, precioFinal, precioNegocio, precioPlacer, aceptaValla: acepta, extras, cProducto, cConfianza };
+    return { ...c, precioFinal, precioNegocio, precioPlacer, aceptaValla: acepta, extras, cProducto, cConfianza, anc };
   });
 
   // NIVEL 2 — cada segmento tiene su propio mercado y responde al precio que ve
@@ -1128,7 +1147,7 @@ function ejecutarRonda(config) {
   const poolPlacer = poolTemporada * p.segmentos.placer * Math.pow(pmPlacerPasaje / p.precioBase, params.elasticidadPlacer ?? -1.8);
   const pool = Math.round(poolNegocio + poolPlacer);
   conAtractivo.forEach(c => {
-    const k = c.cProducto.valor * c.cConfianza.valor;
+    const k = c.cProducto.valor * c.cConfianza.valor * (c.anc && c.anc.detectado ? (1 - (params.penalizacionConfianza ?? 0.15)) : 1);
     const bPaseN = c.esBot ? 0 : Math.min(ofertaPaseFrecuente(c.decision).atractivoOferta * (params.paseFrecuente.multiplicador ?? 2), params.topePaseNegocio ?? 0.15);
     c.aNegocio = componentePrecio(c.precioNegocio, pmNegocio, params) * k * (1 + bPaseN);
     c.aPlacer = componentePrecio(c.precioPlacer, pmPlacer, params) * k;
@@ -1163,6 +1182,9 @@ function ejecutarRonda(config) {
     const costoAncillaries = c.esBot ? 0 : redondear(cap.abordados * c.extras.costoPorPax);
 
     const sancion = (c.cConfianza.detectado)
+      ? redondear(cap.abordados * c.precioFinal * (params.sancionDeteccion ?? 0.10))
+      : 0;
+    const sancionAnclaje = (c.anc && c.anc.detectado)
       ? redondear(cap.abordados * c.precioFinal * (params.sancionDeteccion ?? 0.10))
       : 0;
 
@@ -1227,7 +1249,8 @@ function ejecutarRonda(config) {
       gastoEstudioElasticidad: c.decision.comprarElasticidad ? p.costoEstudioElasticidad : 0,
       gastoMadurez: c.decision.gastoMadurez || 0,
       denegados: cap.denegados,
-      sancionAlgoritmica: sancion
+      sancionAlgoritmica: sancion,
+      sancionAnclaje
     }, params);
 
     const panel = panelPrecio(perfilKey, precioMercado, c.puntajeValor, 
@@ -1260,6 +1283,7 @@ function ejecutarRonda(config) {
         confianza: c.cConfianza.valor,
         detectado: c.cConfianza.detectado
       },
+      anclaje: c.esBot ? null : c.anc,
       atractivo: c.atractivo,
       participacion: c.participacion,
       pasajerosGanados: c.pasajerosGanados,
@@ -2081,6 +2105,13 @@ function fichasDeRonda(R){
         pregunta: '¿Cuántos asientos sobrevenderían ustedes, y qué riesgo corren si se presentan todos?' });
     }
 
+    // 7b. Tarifa tachada engañosa
+    T.filter(t => t.h.anclaje && t.h.anclaje.estado === 'enganoso').forEach(t => fichas.push({ t: `Un ancla que no era honesta: ${esc(t.n)}` + etiq,
+      que: `${esc(t.n)} mostró ${money2(t.h.anclaje.precioTachado)} tachado, pero el precio más alto que había cobrado era ${money2(t.h.anclaje.precioMaxPrevio)}. ${t.h.anclaje.detectado ? `Fue detectado como publicidad engañosa y pagó ${money2(t.er.sancionAnclaje || 0)} de sanción.` : 'Esta vez no fue detectado.'}`,
+      por: 'Un precio "anterior" que nunca existió engaña al pasajero. Funciona mientras nadie lo note, pero cada ronda hay una nueva probabilidad de detección.',
+      leccion: 'El efecto ancla funciona, pero solo es legítimo si la referencia es real (Unidad 3).',
+      pregunta: '¿Ganar uno o dos pasajeros justifica arriesgar una sanción y la confianza de los clientes?' }));
+
     // 7. Equipos que no decidieron
     const neutros = T.filter(t => t.h.neutra);
     if(neutros.length) fichas.push({ t: 'Equipos que no decidieron' + etiq,
@@ -2149,6 +2180,90 @@ function filtrarGlosario(){
   document.querySelectorAll('#glosLista .glos-letra').forEach(el => { el.style.display = letrasVisibles.has(el) ? '' : 'none'; });
   const c = document.getElementById('glosConteo'); if(c) c.textContent = n + (n === 1 ? ' término' : ' términos');
   const v = document.getElementById('glosVacio'); if(v) v.style.display = n ? 'none' : '';
+}
+
+/* ============================================================
+   EQUIPOS: decisiones y resultados de cada equipo, por ronda o por equipo
+   ============================================================ */
+const VALLA_TXT = { sin_valla: 'sin valla', basica: 'básica', fuerte: 'fuerte' };
+const COLS_DEC = [
+  { t: 'Flex', usa: () => true, v: d => money2(d.precio || 0) },
+  { t: 'Promocional', usa: d => d.tarifaPromocional > 0, v: d => d.tarifaPromocional > 0 ? money2(d.tarifaPromocional) + ' · ' + VALLA_TXT[d.fuerzaValla || 'sin_valla'] : '—' },
+  { t: 'Marketing', usa: () => true, v: d => money(d.marketing || 0) },
+  { t: 'Equipaje / seguro', usa: d => d.precioEquipaje > 0 || d.precioSeguro > 0, v: d => (d.precioEquipaje > 0 || d.precioSeguro > 0) ? money2(d.precioEquipaje || 0) + ' / ' + money2(d.precioSeguro || 0) : '—' },
+  { t: 'Pase (cuota / socio)', usa: d => d.cuotaPaseFrecuente > 0, v: d => d.cuotaPaseFrecuente > 0 ? money2(d.cuotaPaseFrecuente) + ' / ' + money2(d.tarifaSocio || 0) : '—' },
+  { t: 'Tachada', usa: d => !!d.anclaje, v: (d, h) => !d.anclaje ? '—' : (d.precioTachado > 0 ? money2(d.precioTachado) : 'Sí') + (h && h.anclaje && h.anclaje.estado === 'enganoso' ? (h.anclaje.detectado ? ' · <span style="color:var(--peligro);">engañosa, detectada</span>' : ' · <span style="color:#E8A23C;">engañosa</span>') : (h && h.anclaje && h.anclaje.estado === 'sin_efecto' ? ' · sin efecto' : '')) },
+  { t: 'Sobreventa', usa: d => d.overbooking > 0, v: d => d.overbooking > 0 ? d.overbooking : '—' },
+  { t: 'Dinámico', usa: d => !!d.dynamicPricing, v: d => d.dynamicPricing ? 'Sí · ' + String(d.sensibilidadDynamic ?? 0.5).replace('.', ',') : '—' },
+  { t: 'Estudios', usa: d => d.comprarWTP || d.comprarElasticidad, v: d => [d.comprarWTP ? 'Mercado' : null, d.comprarElasticidad ? 'Elasticidad' : null].filter(Boolean).join(', ') || '—' },
+  { t: 'Madurez', usa: d => d.gastoMadurez > 0, v: d => d.gastoMadurez > 0 ? money(d.gastoMadurez) + ' → ' + [d.talento, d.procesos, d.datos].join('/') : '—' },
+  { t: 'Personaliz.', usa: d => !!d.pricingAlgoritmico, v: d => d.pricingAlgoritmico ? 'Sí' : '—' }
+];
+const _c = v => String(v).replace('.', ',');
+function erDetalle(h){
+  const er = h.estadoResultados; if(!er) return '';
+  const L = (t, v, cls = '') => `<tr class="${cls}"><td>${t}</td><td class="num">${money2(v)}</td></tr>`;
+  const dp = er.desglosePrecio;
+  return `<table class="datos" style="margin:6px 0 0;">
+    ${dp ? L('Pasajeros Flex (' + dp.flex.pax + ' × ' + money2(dp.flex.precio) + ')', dp.flex.pax * dp.flex.precio) + (dp.promo ? L('Pasajeros Promocional (' + dp.promo.pax + ' × ' + money2(dp.promo.precio) + ')', dp.promo.pax * dp.promo.precio) : '')
+         : L('Ingreso por pasajes (' + (h.capacidad ? h.capacidad.abordados : 0) + ' × ' + money2(er.precioVenta) + ')', er.ingresoTarifas)}
+    ${er.ingresoAncillaries > 0 ? L('+ Equipaje y seguro', er.ingresoAncillaries) : ''}
+    ${er.ingresoPaseFrecuente > 0 ? L('+ Pase Frecuente', er.ingresoPaseFrecuente) : ''}
+    ${er.ingresoPersonalizado > 0 ? L('+ Precios personalizados', er.ingresoPersonalizado) : ''}
+    ${er.ingresoNoShows > 0 ? L('+ Promocionales no reembolsables (no-shows)', er.ingresoNoShows) : ''}
+    ${L('= Ingresos', er.ingresos, 'tot')}
+    ${L('− Costo fijo del vuelo', -er.doc)}${L('− Costo variable por pasajero', -er.ioc)}${er.costoExtras > 0 ? L('− Costo de los extras', -er.costoExtras) : ''}
+    ${L('− Gastos comerciales (marketing y estudios)', -er.gastosComerciales)}${er.gastosAdministrativos > 0 ? L('− Gastos administrativos (madurez)', -er.gastosAdministrativos) : ''}
+    ${er.compensacionDenegados > 0 ? L('− Compensación a pasajeros en tierra', -er.compensacionDenegados) : ''}${er.sancionAlgoritmica > 0 ? L('− Sanción por precios personalizados', -er.sancionAlgoritmica) : ''}${er.sancionAnclaje > 0 ? L('− Sanción por publicidad engañosa (tarifa tachada)', -er.sancionAnclaje) : ''}
+    ${L('= Utilidad neta de la ronda', er.utilidadNeta, 'tot')}
+  </table>`;
+}
+function vistaEquipos(){
+  const ult = ((D.config && D.config.rondaActual) || 1) - 1, actual = (D.config && D.config.rondaActual) || 1;
+  const modo = D.eqModo || 'ronda';
+  const tabs = `<div style="margin:0 0 12px;"><button class="${modo === 'ronda' ? 'btn' : 'btn-sec'}" style="width:auto;padding:6px 14px;margin-right:6px;" data-eq-modo="ronda">Por ronda</button><button class="${modo === 'equipo' ? 'btn' : 'btn-sec'}" style="width:auto;padding:6px 14px;" data-eq-modo="equipo">Por equipo</button></div>`;
+  if(!D.equipos.length) return `<h2 class="titulo">Equipos</h2><p class="sub">Todavía no hay equipos registrados en esta simulación.</p>`;
+  if(modo === 'ronda'){
+    const R = (D.eqRonda && D.eqRonda <= actual) ? D.eqRonda : (ult >= 1 ? ult : actual);
+    const enCurso = R === actual;
+    const botones = Array.from({ length: actual }, (_, i) => i + 1).map(r => `<button class="${r === R ? 'btn' : 'btn-sec'}" style="width:auto;padding:6px 12px;margin:0 6px 6px 0;" data-eq-ronda="${r}">${r === actual ? 'Ronda ' + r + ' · en curso' : 'Ronda ' + r}</button>`).join('');
+    const filas = D.equipos.map(e => {
+      if(enCurso){ const dec = D.decisiones[e.nombre.toLowerCase()]; return { e, d: dec || null, h: null, informe: dec ? dec.informe : '' }; }
+      const h = (e.historial || []).find(x => x.ronda === R); return { e, d: h ? (h.decision || {}) : null, h, informe: h ? (h.informe || (h.decision || {}).informe || '') : '' };
+    });
+    const cols = COLS_DEC.filter(c => filas.some(f => f.d && c.usa(f.d)));
+    const cuerpo = filas.map(f => {
+      const key = esc(f.e.nombre) + '|' + R, abierto = D.eqDet === key;
+      const dec = f.d ? cols.map(c => `<td>${c.v(f.d, f.h)}</td>`).join('') : `<td colspan="${cols.length}" style="color:var(--texto-tenue);">${enCurso ? 'Todavía no envía su decisión' : 'Sin datos'}</td>`;
+      const res = enCurso ? '' : (f.h ? `<td class="num">${f.h.pasajerosGanados ?? '—'}</td><td class="num">${f.h.capacidad ? f.h.capacidad.abordados : '—'}</td><td class="num">${f.h.metricas ? _c(f.h.metricas.loadFactor) + '%' : '—'}</td><td class="num">${f.h.metricas ? money2(f.h.metricas.yield) : '—'}</td><td class="num"><b>${f.h.estadoResultados ? money(f.h.estadoResultados.utilidadNeta) : '—'}</b></td>` : '<td colspan="5"></td>');
+      const det = abierto && (f.d || f.h) ? `<tr><td colspan="${1 + cols.length + (enCurso ? 0 : 5)}" style="background:var(--panel-alto);">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div><b>Informe del equipo</b>${f.h && f.h.neutra ? ' <span style="color:var(--peligro);">(no envió decisión: se aplicó una neutra)</span>' : ''}<p style="white-space:pre-wrap;line-height:1.5;margin:6px 0 0;">${esc(f.informe || '(sin informe)')}</p></div>
+            <div>${f.h ? '<b>Estado de resultados</b>' + erDetalle(f.h) : '<span style="color:var(--texto-tenue);">Los resultados aparecen al cerrar la ronda.</span>'}</div>
+          </div></td></tr>` : '';
+      return `<tr style="cursor:pointer;" data-eq-det="${key}"><td><b>${esc(f.e.nombre)}</b>${f.h && f.h.neutra ? ' <span style="color:var(--peligro);font-size:12px;">neutra</span>' : ''}</td>${dec}${res}</tr>${det}`;
+    }).join('');
+    return `<h2 class="titulo">Equipos · decisiones y resultados</h2>
+      <p class="sub">Todos los equipos lado a lado en la ronda que elijas. Toca un equipo para ver su informe y su Estado de resultados.${enCurso ? ' En la ronda en curso ves las decisiones enviadas hasta ahora, antes de cerrar.' : ''}</p>
+      ${tabs}<div style="margin:0 0 10px;">${botones}</div>
+      <div style="overflow-x:auto;"><table class="datos"><thead><tr><th>Equipo</th>${cols.map(c => `<th>${c.t}</th>`).join('')}${enCurso ? '' : '<th class="num">Captó</th><th class="num">Volaron</th><th class="num">Ocupación</th><th class="num">Yield</th><th class="num">Utilidad</th>'}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  }
+  // Por equipo: trayectoria
+  const E = D.equipos.find(x => x.nombre === D.eqEquipo) || D.equipos[0];
+  const botones = D.equipos.map(e => `<button class="${e === E ? 'btn' : 'btn-sec'}" style="width:auto;padding:6px 12px;margin:0 6px 6px 0;" data-eq-equipo="${esc(e.nombre)}">${esc(e.nombre)}</button>`).join('');
+  const hist = (E.historial || []).slice().sort((a, b) => a.ronda - b.ronda);
+  const cols = COLS_DEC.filter(c => hist.some(h => c.usa(h.decision || {})));
+  let caja = PARAMS_DEFECTO.capitalSemilla || 50000;
+  const cuerpo = hist.map(h => {
+    caja += h.estadoResultados ? h.estadoResultados.utilidadNeta : 0;
+    const key = esc(E.nombre) + '|' + h.ronda, abierto = D.eqDet === key;
+    const det = abierto ? `<tr><td colspan="${7 + cols.length}" style="background:var(--panel-alto);"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;"><div><b>Informe</b><p style="white-space:pre-wrap;line-height:1.5;margin:6px 0 0;">${esc(h.informe || (h.decision || {}).informe || '(sin informe)')}</p></div><div><b>Estado de resultados</b>${erDetalle(h)}</div></div></td></tr>` : '';
+    return `<tr style="cursor:pointer;" data-eq-det="${key}"><td>Ronda ${h.ronda}${h.neutra ? ' <span style="color:var(--peligro);font-size:12px;">neutra</span>' : ''}</td>${cols.map(c => `<td>${c.v(h.decision || {}, h)}</td>`).join('')}<td class="num">${h.pasajerosGanados ?? '—'}</td><td class="num">${h.capacidad ? h.capacidad.abordados : '—'}</td><td class="num">${h.metricas ? _c(h.metricas.loadFactor) + '%' : '—'}</td><td class="num">${h.metricas ? money2(h.metricas.yield) : '—'}</td><td class="num"><b>${h.estadoResultados ? money(h.estadoResultados.utilidadNeta) : '—'}</b></td><td class="num">${money(caja)}</td></tr>${det}`;
+  }).join('');
+  return `<h2 class="titulo">Equipos · trayectoria de ${esc(E.nombre)}</h2>
+    <p class="sub">Qué decidió y qué obtuvo en cada ronda. Toca una ronda para ver su informe y su Estado de resultados.</p>
+    ${tabs}<div style="margin:0 0 10px;">${botones}</div>
+    ${hist.length ? `<div style="overflow-x:auto;"><table class="datos"><thead><tr><th>Ronda</th>${cols.map(c => `<th>${c.t}</th>`).join('')}<th class="num">Captó</th><th class="num">Volaron</th><th class="num">Ocupación</th><th class="num">Yield</th><th class="num">Utilidad</th><th class="num">Caja</th></tr></thead><tbody>${cuerpo}</tbody></table></div>` : '<p class="sub">Este equipo todavía no tiene rondas cerradas.</p>'}`;
 }
 
 function vistaEvaluacion(){
@@ -2376,6 +2491,10 @@ async function cerrarRonda(){
         decision: dec,
         // NIVEL 2: puntos de madurez comprados en rondas anteriores (se acumulan)
         puntosMadurezPrevios: Math.floor((e.historial || []).reduce((a, h) => a + ((h.decision && h.decision.gastoMadurez) || 0), 0) / (paramsRonda.madurez.costoPorPunto || 60)),
+        // Tarifa tachada: el precio más alto que el equipo realmente cobró hasta ahora
+        precioMaxPrevio: Math.max(
+          ((D.config.antecedente || {})[perfilKey] || {}).precioFinal || paramsRonda.perfiles[perfilKey].precioBase,
+          ...(e.historial || []).map(h => Number(h.precioFinal) || 0)),
         _neutra: !guardada
       };
     });
@@ -2422,7 +2541,8 @@ async function cerrarRonda(){
             ganadosNegocio: res.ganadosNegocio, ganadosPlacer: res.ganadosPlacer, segmentosAbordo: res.segmentosAbordo,
             comproWTP: !!(D.decisiones[res.nombre.toLowerCase()]||{}).comprarWTP,
             comproElasticidad: !!(D.decisiones[res.nombre.toLowerCase()]||{}).comprarElasticidad,
-            componentes: res.componentes
+            componentes: res.componentes,
+            anclaje: res.anclaje || null
           });
           await rpc('docente_actualizar_equipo_v2', { p_partida_id: PID(),
             p_password: PASS_DOCENTE_ACTUAL, p_nombre: eq.nombre,
@@ -2499,6 +2619,7 @@ function render(){
     {id:'configuracion', txt:'Configuración'},
     {id:'ronda', txt:'Control de ronda'},
     {id:'tablero', txt:'Tablero'},
+    {id:'equipos', txt:'Equipos'},
     {id:'evaluacion', txt:'Evaluación'},
     {id:'clase', txt:'Para la clase'},
     {id:'glosario', txt:'Glosario'}
@@ -2511,6 +2632,7 @@ function render(){
   else if(D.vista==='evaluacion') c.innerHTML = vistaEvaluacion();
   else if(D.vista==='clase') c.innerHTML = vistaClase();
   else if(D.vista==='glosario') c.innerHTML = vistaGlosario();
+  else if(D.vista==='equipos') c.innerHTML = vistaEquipos();
   else c.innerHTML = vistaTablero();
 }
 
@@ -2547,6 +2669,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   document.getElementById('contenido').addEventListener('click', async e=>{
     const bG = e.target.closest('[data-glos-u]');
     if(bG){ document.querySelectorAll('.glos-f').forEach(x => x.classList.toggle('activo', x === bG)); filtrarGlosario(); return; }
+    const bEm = e.target.closest('[data-eq-modo]'); if(bEm){ D.eqModo = bEm.dataset.eqModo; D.eqDet = null; render(); return; }
+    const bEr = e.target.closest('[data-eq-ronda]'); if(bEr){ D.eqRonda = Number(bEr.dataset.eqRonda); D.eqDet = null; render(); return; }
+    const bEe = e.target.closest('[data-eq-equipo]'); if(bEe){ D.eqEquipo = bEe.dataset.eqEquipo; D.eqDet = null; render(); return; }
+    const bEd = e.target.closest('[data-eq-det]'); if(bEd){ D.eqDet = D.eqDet === bEd.dataset.eqDet ? null : bEd.dataset.eqDet; render(); return; }
     const bRc = e.target.closest('[data-ronda-clase]');
     if(bRc){ D.rondaClase = Number(bRc.dataset.rondaClase); render(); return; }
     const bSel = e.target.closest('[data-simsel]');
@@ -2770,6 +2896,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <li>La sesión se mantiene mientras la pestaña del navegador siga abierta; si la cierras, tendrás que volver a escribir la contraseña.</li>
   </ol>
   <p>Si el sistema responde <b>"Contraseña incorrecta"</b> con la contraseña correcta, puede ser un problema de conexión: revisa tu internet e inténtalo de nuevo. Si persiste, contacta al equipo técnico.</p>
+
+  <h3 id="m-equipos">Ver lo que decidió cada equipo</h3>
+  <p>La pestaña <b>Equipos</b> muestra las decisiones y los resultados de todos los equipos. En <b>Por ronda</b> eliges una ronda y ves a los equipos lado a lado: su precio, su Promocional y su valla, su marketing y las demás herramientas que usaron, junto con sus pasajeros, ocupación, yield y utilidad. Al tocar un equipo se abre su informe y su Estado de resultados. En la ronda en curso ves las decisiones enviadas hasta ese momento, antes de cerrar. En <b>Por equipo</b> eliges un equipo y ves su trayectoria completa, ronda por ronda, con su caja acumulada.</p>
 
   <h3 id="m-simulaciones">Simulaciones: cursos y pruebas por separado</h3>
   <p>Cada <b>simulación</b> tiene su propio mercado, sus rondas y sus equipos. Todo lo que haces en el panel (calibrar, cerrar rondas, evaluar) se aplica solo a la simulación elegida en el selector de la cabecera.</p>

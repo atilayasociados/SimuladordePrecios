@@ -1749,9 +1749,10 @@ const AYUDA = {
   dWTP: 'Una encuesta a 100 clientes que estima cuántos te comprarían a cada precio: te muestra tu techo real, es decir, cuánto están dispuestos a pagar tus pasajeros. (Unidad 2)',
   dEquipaje: 'Ingreso extra por pasajero, aparte del pasaje. Si lo cobras muy caro, menos pasajeros lo compran. (Unidad 3)',
   dSeguro: 'Otro ingreso extra por pasajero. Igual que el equipaje: precio alto, menos compradores. (Unidad 3)',
-  dCuota: 'Suscripción: el socio paga una cuota mensual y vuela a la tarifa de socio. Pon 0 si no ofreces el Pase. (Unidad 3)',
+  dCuota: 'Lo que paga el socio cada mes. Calcúlala con el punto de equilibrio de uso de arriba. Pon 0 si no ofreces el Pase. (Unidad 3)',
   dTarifaSocio: 'Lo que paga el socio por cada vuelo. Debe ser menor que tu Flex para que la cuota le convenga. (Unidad 3)',
-  dAnclaje: 'Mostrar un precio de referencia más alto, tachado, hace que tu tarifa se perciba como una oferta (efecto ancla). (Unidad 3)',
+  dAnclaje: 'Márcala solo si vas a mostrar un precio tachado real, que tu aerolínea haya cobrado antes. (Unidad 3)',
+  dPrecioTachado: 'El precio "anterior" que verá el pasajero, tachado junto a tu Flex. Debe ser mayor que tu Flex y no mayor que el precio más alto que realmente cobraste. (Unidad 3)',
   dOverbooking: 'Cuántas reservas venderás por encima de tus asientos. 0 = no sobrevendes. Usa la recomendación del fractil crítico de arriba. (Unidad 4)',
   dDynamic: 'Tu precio sube o baja solo según la demanda de la ronda; solo tiene efecto cuando el docente activa una temporada. (Unidad 4)',
   dSens: 'Qué tanto se mueve tu precio: 0 = nada, 1 = lo máximo. (Unidad 4)',
@@ -1919,29 +1920,73 @@ function explicaPase(d, p){
   const flex = _flexActual(d, p), cuota = d.cuotaPaseFrecuente || 0, soc = d.tarifaSocio || 0, meses = PARAMS.mesesPorRonda || 3;
   const tipos = PARAMS.tiposSocio || [{vuelos:1,peso:0.4},{vuelos:3,peso:0.4},{vuelos:6,peso:0.2}];
   const hay = cuota > 0 && soc > 0;
+  const descSug = Math.round(flex * 0.10 * 100) / 100, socioSug = Math.round((flex - descSug) * 100) / 100, cuotaSug = Math.round(descSug * 2 / meses * 100) / 100;
+  const _n = v => String(Math.round(v * 10) / 10).replace('.', ',');
   const filas = tipos.map(t => {
     const sin = t.vuelos * flex, con = cuota * meses + t.vuelos * soc, ahorro = sin - con;
     return `<tr><td>Vuela ${t.vuelos} ${t.vuelos === 1 ? 'vez' : 'veces'} por trimestre (${_P(t.peso)} de los viajeros de negocios)</td><td>${money2(sin)}</td><td>${hay ? money2(con) : '—'}</td><td>${hay ? money2(ahorro) : '—'}</td><td>${hay ? (ahorro > 0 ? '✔ Sí' : '✘ No') : '—'}</td></tr>`;
   }).join('');
+  let equilibrio = '';
+  if(hay){
+    const desc = flex - soc;
+    if(desc <= 0) equilibrio = `<p class="reco-dec">→ Tu tarifa de socio (${money2(soc)}) no es menor que tu Flex (${money2(flex)}): ningún viajero ahorra y nadie se suscribirá.</p>`;
+    else {
+      const X = cuota * meses / desc, quienes = tipos.filter(t => t.vuelos > X).map(t => t.vuelos);
+      equilibrio = `<p class="reco-dec">→ <b>Tu punto de equilibrio de uso:</b> (${money2(cuota)} × ${meses}) ÷ ${money2(desc)} de descuento = <b>${_n(X)} vuelos</b>. Tu Pase le conviene a quien vuela <b>más de ${_n(X)} veces</b> por trimestre: ${quienes.length ? 'los viajeros que vuelan ' + quienes.join(' y ') + ' veces.' : 'ninguno de los tres tipos de viajero. Baja la cuota o aumenta el descuento.'}</p>`;
+    }
+  }
   return `<div class="explica-dec">
     <h4>1. Entiende</h4>
-    <p>El <b>Pase Frecuente</b> funciona como la membresía de un gimnasio: el socio paga una <b>cuota mensual</b> fija y, a cambio, paga menos por cada vuelo: la <b>tarifa de socio</b>. Se le llama <b>tarifa de dos partes</b>, porque el socio paga dos cosas: la cuota y cada vuelo. Para la aerolínea es un ingreso asegurado y una forma de lograr que el pasajero vuelva (<b>fidelización</b>).</p>
-    <p><b>Quiénes se suscriben:</b> solo los <b>viajeros de negocios</b>, que vuelan seguido. El viajero de placer casi no repite, así que no le conviene. Y un viajero se suscribe solo si en el trimestre ahorra más de lo que paga en cuotas.</p>
-    <p>El riesgo es la <b>canibalización</b>: los socios ya volaban contigo pagando tu Flex. Si la tarifa de socio es muy baja, terminan pagando menos por el mismo viaje.</p>
-    <h4>2. Calcula con tus números</h4>
+    <p>Piensa en un gimnasio que cobra $10 por visita, o una membresía de $15 al mes más $5 por visita. A quien va una vez al mes no le conviene la membresía (pagaría $20 en vez de $10); a quien va diez veces, sí (pagaría $65 en vez de $100). Eso es una <b>tarifa de dos partes</b>: una parte fija (la cuota) y una parte por uso. <b>Le conviene solo a quien la usa mucho.</b></p>
+    <p>El <b>Pase Frecuente</b> funciona igual: el socio paga una <b>cuota mensual</b> y, a cambio, paga menos por cada vuelo, la <b>tarifa de socio</b>. Solo pueden hacerse socios los <b>viajeros de negocios</b> que ya vuelan contigo pagando tu Flex. El viajero de placer casi no repite viaje, así que nunca le conviene.</p>
+    <h4>2. Qué ganas y qué pierdes</h4>
+    <p class="paso-dec"><b>Pierdes:</b> cada socio ya volaba contigo pagando tu Flex, y ahora paga la tarifa de socio. Esa diferencia, en cada uno de sus vuelos, es la <b>canibalización</b>.<br>
+    <b>Ganas, de dos formas:</b> ① las <b>cuotas</b>, que el socio paga aunque no vuele; y ② lo más importante: <b>más viajeros de negocios te eligen</b>. Un viajero que compara aerolíneas prefiere la que le ofrece un Pase que le conviene, así que tu <b>atractivo</b> frente a los viajeros de negocios sube (hasta un 15%) y captas más pasajeros que pagan tu Flex completa.</p>
+    <p>La pregunta de fondo: ¿los viajeros de negocios <b>nuevos</b> que atraes, más las cuotas, compensan el descuento que les das a los que <b>ya</b> volaban contigo?</p>
+    <h4>3. Cómo diseñarlo: el punto de equilibrio de uso</h4>
+    <p>No hay un "precio de mercado" para la cuota: cada aerolínea la diseña según a qué viajero quiere atraer. Se hace en dos pasos:</p>
+    <p class="paso-dec"><b>Paso A, elige el descuento por vuelo:</b> tarifa de socio = tu Flex − descuento. Un descuento chico protege tu margen; uno grande atrae a más socios, pero canibaliza más.<br>
+    <b>Paso B, elige a qué viajero quieres atraer:</b> el <b>punto de equilibrio de uso</b> es el número de vuelos a partir del cual el Pase le conviene al viajero:<br>
+    &nbsp;&nbsp;Punto de equilibrio de uso = (cuota × ${meses} meses) ÷ descuento por vuelo<br>
+    Despejando, la cuota que corresponde es:<br>
+    &nbsp;&nbsp;<b>Cuota mensual = descuento por vuelo × vuelos de equilibrio ÷ ${meses}</b></p>
+    <p><b>Un punto de partida con tu Flex de ${money2(flex)}:</b> con un descuento del 10% (${money2(descSug)}), la tarifa de socio es <b>${money2(socioSug)}</b>. Si quieres que el Pase les convenga solo a quienes vuelan más de 2 veces por trimestre (el que vuela exactamente 2 queda en el límite: ni gana ni pierde), la cuota es ${money2(descSug)} × 2 ÷ ${meses} = <b>${money2(cuotaSug)} al mes</b>. Es una sugerencia para empezar, no la única respuesta.</p>
+    <p style="font-size:12.5px;color:var(--texto-tenue);"><b>Un caso real:</b> el Flight Pass de Alaska Airlines (Estados Unidos, desde 2022) cobra una cuota mensual (desde $49, hoy $69 por seis vuelos de ida y vuelta al año) y una tarifa por vuelo casi nula, más impuestos. Es una tarifa de dos partes en su forma extrema: casi todo en la cuota, casi nada por vuelo, pensada para viajeros muy frecuentes. Sus cifras no se pueden copiar a este mercado, pero muestran el mismo principio de diseño.</p>
+    <h4>4. Calcula con tus números</h4>
     <p>Lo que paga cada tipo de viajero de negocios en un trimestre (${meses} meses) con tu Flex de ${money2(flex)}${hay ? `, tu cuota de ${money2(cuota)} y tu tarifa de socio de ${money2(soc)}` : ''}:</p>
     <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Tipo de viajero</th><th>Sin Pase (vuelos × Flex)</th><th>Con Pase (cuota × ${meses} + vuelos × tarifa de socio)</th><th>Ahorro del socio</th><th>¿Se suscribe?</th></tr>${filas}</table></div>
-    <p style="margin-top:8px;">${hay ? 'Mientras más ahorra un tipo de viajero, más de ellos se suscriben.' : 'Escribe una cuota y una tarifa de socio abajo y presiona "Actualizar referencias" para ver quién se suscribiría.'} Te conviene si el ingreso de las cuotas compensa el descuento que les das en cada vuelo.</p>
+    ${hay ? equilibrio + '<p style="margin-top:8px;">Mientras más ahorra un tipo de viajero, más de ellos se suscriben (hasta un 80%).</p>' : '<p style="margin-top:8px;"><b>Escribe tu cuota y tu tarifa de socio abajo y presiona "Actualizar referencias"</b>: la tabla mostrará quién se suscribiría y tu punto de equilibrio de uso.</p>'}
   </div>`;
 }
+function _precioMaxCobrado(p){
+  const ante = antecedente();
+  let max = ante && ante.precioFinal ? ante.precioFinal : p.precioBase, donde = 'el trimestre anterior';
+  ((APP.equipo && APP.equipo.historial) || []).forEach(h => { if(Number(h.precioFinal) > max + 0.004){ max = Number(h.precioFinal); donde = 'la Ronda ' + h.ronda; } });
+  return { max, donde };
+}
 function explicaTachada(d, p){
-  const b = PARAMS.boostAnclaje ?? 0.03;
+  const b = PARAMS.boostAnclaje ?? 0.03, flex = _flexActual(d, p), pt = Number(d.precioTachado) || 0, M = _precioMaxCobrado(p);
+  const prob = PARAMS.probDeteccionAnclaje ?? PARAMS.probDeteccion ?? 0.30, sanc = PARAMS.sancionDeteccion ?? 0.10, caida = PARAMS.penalConfianza ?? 0.15;
+  const h = _ultimaRonda(), ab = h && h.capacidad ? h.capacidad.abordados : 60, sancionEst = ab * flex * sanc;
+  let estado;
+  if(!d.anclaje) estado = '<p class="reco-dec">→ Todavía no marcas la tarifa tachada. Si decides usarla, escribe abajo el precio que mostrarás tachado.</p>';
+  else if(!(pt > 0)) estado = '<p class="reco-dec">→ Escribe abajo el precio que mostrarás tachado y presiona "Actualizar referencias".</p>';
+  else if(pt <= flex) estado = `<p class="reco-dec">→ <b>Sin efecto:</b> tu precio tachado (${money2(pt)}) no es mayor que tu Flex (${money2(flex)}). No hay descuento que mostrar.</p>`;
+  else if(pt <= M.max + 0.005) estado = `<p class="reco-dec">→ <b>Creíble:</b> ${money2(pt)} no supera el precio más alto que cobraste (${money2(M.max)}). Tu atractivo sube cerca de ${_P(b)}, sin riesgo. El pasajero ve un descuento de ${money2(pt - flex)}.</p>`;
+  else estado = `<p class="reco-dec" style="background:rgba(232,162,60,.14);">→ <b>⚠ Engañosa:</b> ${money2(pt)} es mayor que cualquier precio que hayas cobrado (el más alto fue ${money2(M.max)}). Es publicidad engañosa. Tu atractivo sube igual, pero hay un <b>${_P(prob)}</b> de probabilidad de que se detecte. Si se detecta: una sanción de cerca de <b>${money(sancionEst)}</b> (${_P(sanc)} de tu ingreso por pasajes) y una caída del ${_P(caida)} en tu atractivo esa ronda.</p>`;
   return `<div class="explica-dec">
     <h4>1. Entiende</h4>
-    <p>El <b>efecto ancla</b> es un sesgo conocido: el primer número que vemos influye en cómo juzgamos los siguientes. Si un pasajero ve <s>$40</s> y al lado tu tarifa, la percibe como una oferta, aunque el precio sea el mismo.</p>
-    <p><b>El límite ético:</b> la referencia tachada debe ser real. Inventar un "precio anterior" que nunca existió es publicidad engañosa.</p>
+    <p>El <b>efecto ancla</b> es un sesgo conocido: el primer número que vemos influye en cómo juzgamos los siguientes. Si un pasajero ve <s>${money2(M.max > flex ? M.max : flex + 3)}</s> junto a tu tarifa de ${money2(flex)}, la percibe como una oferta, aunque pague lo mismo que si no viera el precio tachado.</p>
+    <p><b>Pero el ancla tiene que ser honesta.</b> El precio tachado debe ser un precio que tu aerolínea <b>realmente cobró</b>. Mostrar un "precio anterior" que nunca existió es <b>publicidad engañosa</b>, y las autoridades de protección al consumidor la sancionan.</p>
     <h4>2. Qué pasa en el simulador</h4>
-    <p class="paso-dec">Si la activas, tu <b>atractivo</b> (qué tanto te prefieren los pasajeros) sube cerca de <b>${_P(b)}</b>. No cuesta dinero, pero su efecto es moderado y no reemplaza un buen precio.</p>
+    <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Si tu precio tachado…</th><th>Resultado</th></tr>
+      <tr><td>No es mayor que tu Flex</td><td>Sin efecto: no hay descuento que mostrar</td></tr>
+      <tr><td>Es mayor que tu Flex, pero no mayor que el precio más alto que cobraste</td><td><b>Creíble:</b> tu atractivo sube cerca de ${_P(b)}, sin riesgo</td></tr>
+      <tr><td>Es mayor que cualquier precio que hayas cobrado</td><td><b>Engañosa:</b> tu atractivo sube igual, pero con ${_P(prob)} de probabilidad de detección, sanción y caída de confianza</td></tr></table></div>
+    <p style="margin-top:8px;">El <b>atractivo</b> es qué tanto te prefieren los pasajeros frente a otras aerolíneas. Un ${_P(b)} más se traduce en 1 o 2 pasajeros más por ronda, y solo sirve si te quedan asientos libres.</p>
+    <h4>3. Calcula con tus números</h4>
+    <p class="paso-dec">El precio más alto que tu aerolínea cobró: <b>${money2(M.max)}</b> (en ${M.donde}).<br>Tu Flex de esta ronda: <b>${money2(flex)}</b>.<br>Un precio tachado creíble para ti está entre <b>${money2(flex + 0.01)}</b> y <b>${money2(M.max)}</b>.${M.max <= flex ? '<br><b>Hoy no tienes un precio tachado creíble:</b> nunca cobraste más que tu Flex actual.' : ''}</p>
+    ${estado}
   </div>`;
 }
 function explicaDinamico(d, p){
@@ -2041,7 +2086,7 @@ function resumenDecision(d){
   L.push(['Marketing', money(d.marketing || 0)]);
   if(d.precioEquipaje > 0 || d.precioSeguro > 0) L.push(['Equipaje y seguro', money2(d.precioEquipaje || 0) + ' y ' + money2(d.precioSeguro || 0)]);
   if(d.cuotaPaseFrecuente > 0) L.push(['Pase Frecuente', 'cuota ' + money2(d.cuotaPaseFrecuente) + ' al mes · tarifa de socio ' + money2(d.tarifaSocio || 0)]);
-  if(d.anclaje) L.push(['Tarifa tachada', 'sí']);
+  if(d.anclaje) L.push(['Tarifa tachada', d.precioTachado > 0 ? money2(d.precioTachado) + ' tachado' : 'sí']);
   if(d.overbooking > 0) L.push(['Sobreventa', d.overbooking + ' asientos']);
   if(d.dynamicPricing) L.push(['Precio dinámico', 'sensibilidad ' + (d.sensibilidadDynamic ?? 0.5)]);
   if(d.comprarWTP) L.push(['Estudio de mercado (WTP)', 'comprado']);
@@ -2185,13 +2230,13 @@ function vistaDecision(){
       </div>
     `, activo('paseFrecuente',ronda), 3)}
 
-    ${grupo('Tarifa tachada', 'Índice de anclaje', `
+    ${grupo('Tarifa tachada', 'Efecto ancla', `
       <div class="interruptor">
         <input type="checkbox" id="dAnclaje" ${d.anclaje?'checked':''}>
-        <label for="dAnclaje">Mostrar una tarifa más alta tachada junto a la tuya</label>
+        <label for="dAnclaje">Sí, mostraremos una tarifa tachada esta ronda</label>
       </div>
-      <div class="referencia">
-        <div class="ref-nota">Activarla suma un +3% fijo a tu atractivo (Componente Producto) — no tiene costo en dólares, y el efecto es el mismo lo actives con cualquier tarifa tachada, no depende de qué tan alta sea.</div>
+      <div class="campos" style="margin-top:10px;">
+        ${campoNum('dPrecioTachado','Precio que mostrarás tachado ($)', d.precioTachado ?? '')}
       </div>
     `, activo('anclaje',ronda), 3)}
 
@@ -2541,7 +2586,10 @@ function vistaReporte(){
       ${fila('Gastos administrativos', -er.gastosAdministrativos, 'resta')}
       ${fila('Gastos comerciales', -er.gastosComerciales, 'resta')}
       ${fila('= Utilidad Operativa', er.utilidadOperativa, 'total')}
-      ${er.otrosGastos>0 ? fila('Otros gastos (compensaciones, sanciones)', -er.otrosGastos, 'resta') : ''}
+      ${er.compensacionDenegados>0 ? fila('Compensación a pasajeros que se quedaron en tierra', -er.compensacionDenegados, 'resta') : ''}
+      ${er.sancionAlgoritmica>0 ? fila('Sanción por precios personalizados detectados', -er.sancionAlgoritmica, 'resta') : ''}
+      ${er.sancionAnclaje>0 ? fila('Sanción por publicidad engañosa (tarifa tachada)', -er.sancionAnclaje, 'resta') : ''}
+      ${(er.otrosGastos||0) - (er.compensacionDenegados||0) - (er.sancionAlgoritmica||0) - (er.sancionAnclaje||0) > 0.01 ? fila('Otros gastos', -((er.otrosGastos||0) - (er.compensacionDenegados||0) - (er.sancionAlgoritmica||0) - (er.sancionAnclaje||0)), 'resta') : ''}
       ${fila('= Utilidad Neta de la ronda', er.utilidadNeta, 'total final')}
     </table>
 
@@ -2672,6 +2720,12 @@ function diagnosticos(rep){
   // Overbooking excesivo
   if(cap.denegados>0){
     d.push(`Negaste embarque a ${cap.denegados} pasajeros y pagaste ${money2(er.compensacionDenegados)} en compensaciones. ¿Cuántos asientos extra habrían sido suficientes?`);
+  }
+  // Tarifa tachada engañosa
+  if(rep.anclaje && rep.anclaje.estado === 'enganoso'){
+    d.push(rep.anclaje.detectado
+      ? `Tu tarifa tachada (${money2(rep.anclaje.precioTachado)}) superaba el precio más alto que habías cobrado (${money2(rep.anclaje.precioMaxPrevio)}): fue detectada como publicidad engañosa y pagaste ${money2(er.sancionAnclaje)} de sanción. ¿Qué precio tachado habría sido creíble?`
+      : `Tu tarifa tachada (${money2(rep.anclaje.precioTachado)}) superaba el precio más alto que habías cobrado (${money2(rep.anclaje.precioMaxPrevio)}). Esta vez no fue detectada, pero cada ronda hay una nueva probabilidad de detección. ¿Vale la pena el riesgo por uno o dos pasajeros más?`);
   }
   // Ocupación muy baja
   if(m.loadFactor < 60){
@@ -3252,7 +3306,7 @@ function vistaTablero(){
     <div class="explica" style="margin-top:18px;">
       <h4>Cómo leer esta pantalla</h4>
       <p style="margin:0 0 8px;">Los costos directos e indirectos son los que no puedes evitar: existen porque el avión vuela. Los gastos comerciales y administrativos sí los decides tú — marketing, investigaciones de mercado, inversión en capacidad organizacional.</p>
-      <p style="margin:0;">La columna "Otros" aparece solo cuando hubo compensación por overbooking o una sanción por precios personalizados detectados. Si esa columna tiene cifras con frecuencia, vale la pena revisar esas dos decisiones.</p>
+      <p style="margin:0;">La columna "Otros" aparece solo cuando hubo compensación por overbooking, una sanción por precios personalizados detectados o una sanción por publicidad engañosa. Si esa columna tiene cifras con frecuencia, vale la pena revisar esas dos decisiones.</p>
     </div>`;
 }
 
@@ -3294,6 +3348,7 @@ function recolectar(){
   if(document.getElementById('dCuota')) d.cuotaPaseFrecuente = n(g('dCuota')) || 0;
   if(document.getElementById('dTarifaSocio')) d.tarifaSocio = n(g('dTarifaSocio')) || 0;
   if(document.getElementById('dAnclaje')) d.anclaje = ch('dAnclaje');
+  if(document.getElementById('dPrecioTachado')) d.precioTachado = n(g('dPrecioTachado'));
   if(document.getElementById('dOverbooking')) d.overbooking = n(g('dOverbooking')) || 0;
   if(document.getElementById('dDynamic')) d.dynamicPricing = ch('dDynamic');
   if(document.getElementById('dSens')) d.sensibilidadDynamic = n(g('dSens'));
@@ -3481,6 +3536,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       recolectar();
       const d = APP.decisionActual;
       if(!d.precio || d.precio<=0){ alert('Escribe tu Tarifa Flex antes de enviar.'); return; }
+      if(d.anclaje && !(d.precioTachado > 0)){ alert('Marcaste la tarifa tachada: escribe el precio que mostrarás tachado, o desmarca la casilla.'); return; }
       const nPal = contarPalabras(d.informe), minPal = minPalabrasInforme();
       if(nPal < minPal){
         alert(`No puedes enviar tu decisión sin el informe de la ronda.\n\nEscribe al menos ${minPal} palabras (llevas ${nPal}): qué decidieron, con qué datos o cálculo, y por qué ese valor y no otro.`);
