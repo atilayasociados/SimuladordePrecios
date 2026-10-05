@@ -310,6 +310,20 @@ details.repaso[open]>summary{margin-bottom:8px;}
 .calc-fila{display:block;margin:0 0 10px;font-weight:500;}
 .calc-fila input[type=range]{display:block;width:100%;margin-top:6px;accent-color:var(--marca);}
 .calc-valores{background:rgba(55,213,56,.10);border-radius:6px;padding:8px 10px;margin:0 0 10px;}
+
+.calc-precio{background:rgba(55,213,56,.10);border-radius:6px;padding:10px 12px;}
+.pase-tarjetas{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px;}
+.pase-tarj{flex:1 1 180px;background:var(--panel);border:1px solid var(--borde);border-radius:8px;padding:10px 12px;}
+.pase-con{border-color:var(--marca);}
+.pase-t1{font-weight:700;margin-bottom:4px;}
+.balanza{display:flex;gap:10px;flex-wrap:wrap;}
+.bal-col{flex:1 1 220px;border-radius:8px;padding:10px 12px;}
+.bal-col>div{margin:3px 0;}
+.bal-gana{background:rgba(55,213,56,.08);border:1px solid rgba(55,213,56,.35);}
+.bal-pierde{background:rgba(229,83,75,.08);border:1px solid rgba(229,83,75,.35);}
+.bal-tit{font-weight:700;margin-bottom:6px;}
+.bal-nota{font-size:13px;color:#E8A23C;}
+.bal-res{margin-top:10px;border:2px solid;border-radius:8px;padding:10px 12px;text-align:center;}
 </style>
 <style>.logo-marca{height:32px;width:auto;display:block;}.logo-marca-grande{height:32px;width:auto;display:block;margin-bottom:14px;}</style>
 </head>
@@ -1754,8 +1768,8 @@ const AYUDA = {
   dWTP: 'Una encuesta a 100 clientes que estima cuántos te comprarían a cada precio: te muestra tu techo real, es decir, cuánto están dispuestos a pagar tus pasajeros. (Unidad 2)',
   dEquipaje: 'Ingreso extra por pasajero, aparte del pasaje. Si lo cobras muy caro, menos pasajeros lo compran. (Unidad 3)',
   dSeguro: 'Otro ingreso extra por pasajero. Igual que el equipaje: precio alto, menos compradores. (Unidad 3)',
-  dCuota: 'Lo que paga el socio cada mes. Calcúlala con el punto de equilibrio de uso de arriba. Pon 0 si no ofreces el Pase. (Unidad 3)',
-  dTarifaSocio: 'Lo que paga el socio por cada vuelo. Debe ser menor que tu Flex para que la cuota le convenga. (Unidad 3)',
+  dCuota: 'Lo que paga el socio cada mes. Usa la calculadora de arriba para elegirla. Pon 0 si no ofreces el Pase. (Unidad 3)',
+  dTarifaSocio: 'Lo que paga el socio por cada vuelo. Debe ser menor que tu Flex. (Unidad 3)',
   dAnclaje: 'Márcala solo si vas a mostrar un precio tachado real, que tu aerolínea haya cobrado antes. (Unidad 3)',
   dPrecioTachado: 'El precio "anterior" que verá el pasajero, tachado junto a tu Flex. Debe ser mayor que tu Flex y no mayor que el precio más alto que realmente cobraste. (Unidad 3)',
   dOverbooking: 'Cuántas reservas venderás por encima de tus asientos. 0 = no sobrevendes. Usa la recomendación del fractil crítico de arriba. (Unidad 4)',
@@ -1928,10 +1942,8 @@ function actualizarCalcPase(){
   const vP = document.getElementById('dPrecio'), flex = (vP && parseFloat(vP.value)) || _flexActual(APP.decisionActual || {}, p);
   const descPct = Number(eD.value), N = Number(eN.value), r = calcPase(flex, descPct, N, p);
   APP.calcPase = { desc: descPct, N };
-  document.getElementById('cpDescTxt').textContent = descPct + '% (' + money2(r.desc) + ')';
-  document.getElementById('cpNTxt').textContent = N + (N === 1 ? ' vez' : ' veces');
-  document.getElementById('cpSocio').textContent = money2(r.socio);
-  document.getElementById('cpCuota').textContent = money2(r.cuota);
+  document.getElementById('cpDescTxt').textContent = money2(r.desc) + ' menos por vuelo (' + descPct + '%)';
+  document.getElementById('cpNTxt').textContent = 'más de ' + N + (N === 1 ? ' vuelo' : ' vuelos');
   document.getElementById('cpRes').innerHTML = htmlCalcPase(r, flex);
   return r;
 }
@@ -1961,68 +1973,76 @@ function calcPase(flex, descPct, N, p){
   return { desc, socio, cuota, filas, negFlex, viajesSocio, socios, perdida, cuotas, b, atraidos, libres, paxNuevos, margen, ganancia, neto: cuotas + ganancia - perdida, lleno, limitado };
 }
 function htmlCalcPase(r, flex){
-  const pc = v => (Math.round(v * 1000) / 10).toString().replace('.', ',') + '%';
-  const n1 = v => (Math.round(v * 10) / 10).toString().replace('.', ',');
-  return `<div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Tipo de viajero de negocios</th><th>Ahorro en el trimestre</th><th>¿Cuántos se suscriben?</th></tr>
-    ${r.filas.map(f => `<tr><td>Vuela ${f.vuelos} ${f.vuelos === 1 ? 'vez' : 'veces'} (${pc(f.peso)})</td><td>${money2(f.ahorro)}</td><td>${f.tasa > 0 ? pc(f.tasa) + ' de ellos' : 'Nadie'}</td></tr>`).join('')}</table></div>
-    <p class="paso-dec" style="margin-top:8px;">Con los <b>${n1(r.negFlex)}</b> viajeros de negocios que pagaron tu Flex en tu última ronda:<br>
-    − <b>Pierdes</b> por el descuento a los socios (canibalización): ${n1(r.viajesSocio)} vuelos de socio × ${money2(r.desc)} = <b>${money2(r.perdida)}</b><br>
-    + <b>Ganas en cuotas:</b> ${n1(r.socios)} socios × ${money2(r.cuota)} × 3 meses = <b>${money2(r.cuotas)}</b><br>
-    + <b>Ganas en pasajeros nuevos:</b> tu atractivo frente a los viajeros de negocios sube ${pc(r.b)}, lo que atraería a unos ${n1(r.atraidos)} pasajeros más. ${r.lleno ? '<span style="color:#E8A23C;">Pero en tu última ronda no te quedaron reservas libres: no cabrían.</span>' : (r.limitado ? `<span style="color:#E8A23C;">Pero solo te quedaron ${r.libres} reserva${r.libres === 1 ? '' : 's'} libre${r.libres === 1 ? '' : 's'}.</span>` : '')} Volarían unos ${n1(r.paxNuevos)} × ${money2(r.margen)} de margen = <b>${money2(r.ganancia)}</b></p>
-    <p class="reco-dec">→ <b>Resultado estimado por ronda: ${r.neto >= 0 ? '+' : '−'}${money2(Math.abs(r.neto))}</b>. ${r.neto > 5 ? 'Este diseño te conviene.' : (r.neto >= -5 ? 'Casi da igual: lo que ganas y lo que pierdes se compensan.' : 'Este diseño te cuesta más de lo que te deja: prueba un descuento menor o una cuota distinta.')} Es una estimación: el resultado real depende también de lo que decida la competencia.</p>`;
+  const de100 = v => Math.round(v * 100);
+  const filas = r.filas.map(f => {
+    const sinP = f.vuelos * flex, conP = f.vuelos * r.socio + r.cuota * 3;
+    return `<tr><td><b>${f.vuelos} ${f.vuelos === 1 ? 'vuelo' : 'vuelos'}</b> al trimestre<br><span style="color:var(--texto-tenue);font-size:13px;">${Math.round(f.peso * 100)} de cada 100 viajeros de negocios</span></td>
+      <td>${money2(sinP)}</td><td>${money2(conP)}</td>
+      <td>${f.ahorro > 0 ? `<span style="color:var(--marca);">✔ Ahorra ${money2(f.ahorro)}</span><br><span style="font-size:13px;">se hacen socios <b>${Math.max(1, de100(f.tasa))} de cada 100</b></span>` : `<span style="color:#E8A23C;">✘ No le conviene</span><br><span style="font-size:13px;">pagaría ${money2(-f.ahorro)} más</span>`}</td></tr>`;
+  }).join('');
+  const ganaN = r.ganancia, ganaC = r.cuotas, pierde = r.perdida, neto = r.neto;
+  const veredicto = neto > 5 ? '✔ Te conviene' : (neto >= -5 ? '≈ Casi da igual' : '✘ No te conviene');
+  const colorV = neto > 5 ? 'var(--marca)' : (neto >= -5 ? '#E8A23C' : 'var(--peligro)');
+  return `<div class="calc-precio"><b>Cuota fija mensual: ${money2(r.cuota)}</b> · <b>Tarifa por vuelo para socios: ${money2(r.socio)}</b> (en vez de tu Flex de ${money2(flex)})</div>
+    <p style="margin:10px 0 6px;font-weight:600;">¿A quién le conviene? (lo que paga en un trimestre)</p>
+    <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Viajero de negocios que vuela…</th><th>Sin Pase</th><th>Con Pase</th><th>¿Le conviene?</th></tr>${filas}</table></div>
+    <p style="margin:12px 0 6px;font-weight:600;">¿Y a tu aerolínea? (estimación por ronda)</p>
+    <div class="balanza">
+      <div class="bal-col bal-gana"><div class="bal-tit">Lo que ganas</div>
+        <div>Cuotas de los socios: <b>${money2(ganaC)}</b></div>
+        <div>Pasajeros nuevos que te eligen: <b>${money2(ganaN)}</b></div>
+        ${r.lleno ? '<div class="bal-nota">Tu avión ya iba lleno: aunque más gente quiera volar contigo, no hay lugar.</div>' : (r.limitado ? `<div class="bal-nota">Solo te quedaba ${r.libres === 1 ? 'un lugar libre' : r.libres + ' lugares libres'}.</div>` : '')}</div>
+      <div class="bal-col bal-pierde"><div class="bal-tit">Lo que pierdes</div>
+        <div>Lo que dejas de cobrar a los clientes que ya volaban contigo y se hacen socios: <b>${money2(pierde)}</b></div></div>
+    </div>
+    <div class="bal-res" style="border-color:${colorV};"><span style="color:${colorV};font-weight:700;">${veredicto}</span> · Resultado: <b style="font-size:20px;color:${colorV};">${neto >= 0 ? '+' : '−'}${money2(Math.abs(neto))}</b> por ronda</div>
+    <div class="paso-dec" style="margin-top:8px;"><b>Cómo se calculó</b><br>
+      ① <b>Cuotas de los socios:</b> en promedio se harían socios ${r.socios < 1 ? `unos ${Math.max(1, Math.round(r.socios * 10))} viajeros cada 10 rondas (${String(Math.round(r.socios * 100) / 100).replace('.', ',')} por ronda)` : `unos ${String(Math.round(r.socios * 10) / 10).replace('.', ',')} viajeros por ronda`} × ${money2(r.cuota)} de cuota × 3 meses = <b>${money2(ganaC)}</b><br>
+      ② <b>Pasajeros nuevos:</b> el Pase hace que los viajeros de negocios te prefieran un ${String(Math.round(r.b * 1000) / 10).replace('.', ',')}% más${r.lleno ? `, pero tu avión ya iba lleno: no hay lugar para pasajeros nuevos = <b>${money2(0)}</b>` : `; eso suma unos ${String(Math.round(r.paxNuevos * 10) / 10).replace('.', ',')} pasajeros por ronda${r.limitado ? ` (solo caben ${r.libres === 1 ? 'en tu único lugar libre' : 'en tus ' + r.libres + ' lugares libres'})` : ''} × ${money2(r.margen)} que te deja cada uno (tu Flex de ${money2(flex)} − ${money2(flex - r.margen)} de costo variable) = <b>${money2(ganaN)}</b>`}<br>
+      ③ <b>Lo que dejas de cobrar:</b> tus socios hacen unos ${String(Math.round(r.viajesSocio * 10) / 10).replace('.', ',')} vuelos por ronda, y en cada uno te pagan ${money2(r.desc)} menos = <b>${money2(pierde)}</b><br>
+      <b>Resultado = ① + ② − ③ = ${money2(ganaC)} + ${money2(ganaN)} − ${money2(pierde)} = ${neto >= 0 ? '+' : '−'}${money2(Math.abs(neto))}</b></div>
+    <p style="font-size:13px;color:var(--texto-tenue);margin:6px 0 0;">Es una estimación hecha con tu última ronda. El resultado real depende también de lo que decidan las otras aerolíneas.</p>`;
 }
 function explicaPase(d, p){
-  const flex = _flexActual(d, p), cuota = d.cuotaPaseFrecuente || 0, soc = d.tarifaSocio || 0, meses = PARAMS.mesesPorRonda || 3;
-  const tipos = PARAMS.tiposSocio || [{vuelos:1,peso:0.4},{vuelos:3,peso:0.4},{vuelos:6,peso:0.2}];
-  const hay = cuota > 0 && soc > 0;
-  const descSug = Math.round(flex * 0.10 * 100) / 100, socioSug = Math.round((flex - descSug) * 100) / 100, cuotaSug = Math.round(descSug * 2 / meses * 100) / 100;
-  const _n = v => String(Math.round(v * 10) / 10).replace('.', ',');
-  const filas = tipos.map(t => {
-    const sin = t.vuelos * flex, con = cuota * meses + t.vuelos * soc, ahorro = sin - con;
-    return `<tr><td>Vuela ${t.vuelos} ${t.vuelos === 1 ? 'vez' : 'veces'} por trimestre (${_P(t.peso)} de los viajeros de negocios)</td><td>${money2(sin)}</td><td>${hay ? money2(con) : '—'}</td><td>${hay ? money2(ahorro) : '—'}</td><td>${hay ? (ahorro > 0 ? '✔ Sí' : '✘ No') : '—'}</td></tr>`;
-  }).join('');
-  let equilibrio = '';
-  if(hay){
+  const flex = _flexActual(d, p), cp = APP.calcPase || { desc: 10, N: 2 }, r0 = calcPase(flex, cp.desc, cp.N, p);
+  const ejSocio = Math.round(flex * 0.9 * 100) / 100, ejCuota = Math.round(flex * 0.1 * 2 / 3 * 100) / 100;
+  const cuota = d.cuotaPaseFrecuente || 0, soc = d.tarifaSocio || 0;
+  let tusValores = '';
+  if(cuota > 0 && soc > 0){
     const desc = flex - soc;
-    if(desc <= 0) equilibrio = `<p class="reco-dec">→ Tu tarifa de socio (${money2(soc)}) no es menor que tu Flex (${money2(flex)}): ningún viajero ahorra y nadie se suscribirá.</p>`;
-    else {
-      const X = cuota * meses / desc, quienes = tipos.filter(t => t.vuelos > X).map(t => t.vuelos);
-      equilibrio = `<p class="reco-dec">→ <b>Tu punto de equilibrio de uso:</b> (${money2(cuota)} × ${meses}) ÷ ${money2(desc)} de descuento = <b>${_n(X)} vuelos</b>. Tu Pase le conviene a quien vuela <b>más de ${_n(X)} veces</b> por trimestre: ${quienes.length ? 'los viajeros que vuelan ' + quienes.join(' y ') + ' veces.' : 'ninguno de los tres tipos de viajero. Baja la cuota o aumenta el descuento.'}</p>`;
-    }
+    tusValores = desc <= 0 ? `<p class="reco-dec">→ Con los valores que escribiste abajo, la tarifa de socio (${money2(soc)}) no es menor que tu Flex (${money2(flex)}): a nadie le conviene el Pase.</p>`
+      : `<p class="reco-dec">→ Con los valores que escribiste abajo (cuota ${money2(cuota)} y tarifa de socio ${money2(soc)}), el Pase le conviene a quien vuela <b>más de ${String(Math.round(cuota * 3 / desc * 10) / 10).replace('.', ',')} veces</b> al trimestre.</p>`;
   }
   return `<div class="explica-dec">
-    <h4>1. Entiende</h4>
-    <p>Piensa en un gimnasio que cobra $10 por visita, o una membresía de $15 al mes más $5 por visita. A quien va una vez al mes no le conviene la membresía (pagaría $20 en vez de $10); a quien va diez veces, sí (pagaría $65 en vez de $100). Eso es una <b>tarifa de dos partes</b>: una parte fija (la cuota) y una parte por uso. <b>Le conviene solo a quien la usa mucho.</b></p>
-    <p>El <b>Pase Frecuente</b> funciona igual: el socio paga una <b>cuota mensual</b> y, a cambio, paga menos por cada vuelo, la <b>tarifa de socio</b>. Solo pueden hacerse socios los <b>viajeros de negocios</b> que ya vuelan contigo pagando tu Flex. El viajero de placer casi no repite viaje, así que nunca le conviene.</p>
-    <h4>2. Qué ganas y qué pierdes</h4>
-    <p class="paso-dec"><b>Pierdes:</b> cada socio ya volaba contigo pagando tu Flex, y ahora paga la tarifa de socio. Esa diferencia, en cada uno de sus vuelos, es la <b>canibalización</b>.<br>
-    <b>Ganas, de dos formas:</b> ① las <b>cuotas</b>, que el socio paga aunque no vuele; y ② lo más importante: <b>más viajeros de negocios te eligen</b>. Un viajero que compara aerolíneas prefiere la que le ofrece un Pase que le conviene, así que tu <b>atractivo</b> frente a los viajeros de negocios sube (hasta un 15%) y captas más pasajeros que pagan tu Flex completa.</p>
-    <p>La pregunta de fondo: ¿los viajeros de negocios <b>nuevos</b> que atraes, más las cuotas, compensan el descuento que les das a los que <b>ya</b> volaban contigo?</p>
-    <h4>3. Cómo diseñarlo: el punto de equilibrio de uso</h4>
-    <p>No hay un "precio de mercado" para la cuota: cada aerolínea la diseña según a qué viajero quiere atraer. Se hace en dos pasos:</p>
-    <p class="paso-dec"><b>Paso A, elige el descuento por vuelo:</b> tarifa de socio = tu Flex − descuento. Un descuento chico protege tu margen; uno grande atrae a más socios, pero canibaliza más.<br>
-    <b>Paso B, elige a qué viajero quieres atraer:</b> el <b>punto de equilibrio de uso</b> es el número de vuelos a partir del cual el Pase le conviene al viajero:<br>
-    &nbsp;&nbsp;Punto de equilibrio de uso = (cuota × ${meses} meses) ÷ descuento por vuelo<br>
-    Despejando, la cuota que corresponde es:<br>
-    &nbsp;&nbsp;<b>Cuota mensual = descuento por vuelo × vuelos de equilibrio ÷ ${meses}</b></p>
-    <p><b>Un punto de partida con tu Flex de ${money2(flex)}:</b> con un descuento del 10% (${money2(descSug)}), la tarifa de socio es <b>${money2(socioSug)}</b>. Si quieres que el Pase les convenga solo a quienes vuelan más de 2 veces por trimestre (el que vuela exactamente 2 queda en el límite: ni gana ni pierde), la cuota es ${money2(descSug)} × 2 ÷ ${meses} = <b>${money2(cuotaSug)} al mes</b>. Es una sugerencia para empezar, no la única respuesta.</p>
-    <p style="font-size:12.5px;color:var(--texto-tenue);"><b>Un caso real:</b> el Flight Pass de Alaska Airlines (Estados Unidos, desde 2022) cobra una cuota mensual (desde $49, hoy $69 por seis vuelos de ida y vuelta al año) y una tarifa por vuelo casi nula, más impuestos. Es una tarifa de dos partes en su forma extrema: casi todo en la cuota, casi nada por vuelo, pensada para viajeros muy frecuentes. Sus cifras no se pueden copiar a este mercado, pero muestran el mismo principio de diseño.</p>
-    <h4>4. Prueba antes de decidir: la calculadora</h4>
-    <p>Mueve los dos controles y mira el efecto al instante. Cuando encuentres un diseño que te convenza, presiona <b>"Usar estos valores"</b>.</p>
-    <div class="calc-pase">
-      ${(() => { const cp = APP.calcPase || { desc: 10, N: 2 }, r0 = calcPase(flex, cp.desc, cp.N, p); return `
-      <label class="calc-fila">Descuento por vuelo para los socios: <b id="cpDescTxt">${cp.desc}% (${money2(r0.desc)})</b>
-        <input type="range" id="cpDesc" min="2" max="30" step="1" value="${cp.desc}"></label>
-      <label class="calc-fila">Que le convenga a quien vuela más de: <b id="cpNTxt">${cp.N} ${cp.N === 1 ? 'vez' : 'veces'}</b> por trimestre
-        <input type="range" id="cpN" min="1" max="5" step="1" value="${cp.N}"></label>
-      <div class="calc-valores">Tarifa de socio: <b id="cpSocio">${money2(r0.socio)}</b> · Cuota mensual: <b id="cpCuota">${money2(r0.cuota)}</b></div>
-      <div id="cpRes">${htmlCalcPase(r0, flex)}</div>`; })()}
-      <button type="button" class="btn" id="cpUsar" style="width:auto;padding:8px 16px;margin-top:6px;">Usar estos valores</button>
+    <h4>1. ¿Qué es?</h4>
+    <p>Es una <b>membresía</b>, como la de un gimnasio: el cliente paga un monto fijo cada mes (la <b>cuota fija mensual</b>) y, a cambio, cada vuelo le sale más barato (la <b>tarifa por vuelo para socios</b>). Esas son las dos casillas que decides abajo.</p>
+    <div class="pase-tarjetas">
+      <div class="pase-tarj"><div class="pase-t1">Sin Pase</div><div>Paga <b>${money2(flex)}</b> por cada vuelo</div></div>
+      <div class="pase-tarj pase-con"><div class="pase-t1">Con Pase (ejemplo)</div><div><b>Cuota fija mensual:</b> ${money2(ejCuota)}, que paga cada mes, vuele o no<br><b>Tarifa por vuelo para socios:</b> ${money2(ejSocio)} en cada vuelo</div></div>
     </div>
-    <h4>5. Tus valores</h4>
-    <p>Lo que paga cada tipo de viajero de negocios en un trimestre (${meses} meses) con tu Flex de ${money2(flex)}${hay ? `, tu cuota de ${money2(cuota)} y tu tarifa de socio de ${money2(soc)}` : ''}:</p>
-    <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Tipo de viajero</th><th>Sin Pase (vuelos × Flex)</th><th>Con Pase (cuota × ${meses} + vuelos × tarifa de socio)</th><th>Ahorro del socio</th><th>¿Se suscribe?</th></tr>${filas}</table></div>
-    ${hay ? equilibrio + '<p style="margin-top:8px;">Mientras más ahorra un tipo de viajero, más de ellos se suscriben (hasta un 80%).</p>' : '<p style="margin-top:8px;"><b>Escribe tu cuota y tu tarifa de socio abajo y presiona "Actualizar referencias"</b>: la tabla mostrará quién se suscribiría y tu punto de equilibrio de uso.</p>'}
+    <p>A quien vuela poco, no le conviene: la cuota le cuesta más de lo que ahorra. A quien vuela seguido, sí. Por eso solo se hacen socios <b>los viajeros de negocios</b>, que vuelan varias veces al trimestre.</p>
+    <h4>2. ¿Por qué ofrecerlo?</h4>
+    <p class="paso-dec">✔ <b>Ganas clientes:</b> los viajeros de negocios prefieren la aerolínea que les ofrece un buen Pase, así que algunos dejan a la competencia y vuelan contigo.<br>
+    ✔ <b>Ganas las cuotas</b> que pagan los socios cada mes.<br>
+    ✘ <b>Pero pierdes algo:</b> algunos clientes que ya volaban contigo pagando ${money2(flex)} se hacen socios y ahora te pagan menos por el mismo vuelo.</p>
+    <p>La pregunta es simple: <b>¿lo que ganas es más que lo que pierdes?</b> Para responderla, usa la calculadora.</p>
+    <h4>3. Prueba con la calculadora</h4>
+    <p>Mueve los dos controles y mira el resultado. Cuando encuentres uno que te convenza, presiona <b>"Usar estos valores"</b>.</p>
+    <div class="calc-pase">
+      <label class="calc-fila">¿Cuánto descuento le das al socio en cada vuelo? <b id="cpDescTxt">${money2(r0.desc)} menos por vuelo (${cp.desc}%)</b>
+        <input type="range" id="cpDesc" min="2" max="30" step="1" value="${cp.desc}"></label>
+      <label class="calc-fila">¿A quién quieres que le convenga? A quien vuela <b id="cpNTxt">más de ${cp.N} ${cp.N === 1 ? 'vuelo' : 'vuelos'}</b> al trimestre
+        <input type="range" id="cpN" min="1" max="5" step="1" value="${cp.N}"></label>
+      <div id="cpRes">${htmlCalcPase(r0, flex)}</div>
+      <button type="button" class="btn" id="cpUsar" style="width:auto;padding:8px 16px;margin-top:10px;">Usar estos valores</button>
+    </div>
+    ${tusValores}
+    <details class="repaso" style="margin-top:12px;"><summary>Para profundizar: los términos técnicos y un caso real</summary>
+      <p class="paso-dec" style="margin-top:8px;"><b>Tarifa de dos partes:</b> el nombre técnico de este tipo de precio, que combina un pago fijo (la cuota) y un pago por uso (cada vuelo).<br>
+      <b>Canibalización:</b> lo que pierdes cuando tus propios clientes cambian a una opción tuya más barata.<br>
+      <b>Punto de equilibrio de uso:</b> el número de vuelos a partir del cual el Pase le conviene al cliente: (cuota × 3 meses) ÷ descuento por vuelo. La calculadora lo usa para fijar la cuota: cuota mensual = descuento × vuelos ÷ 3.</p>
+      <p style="font-size:13px;color:var(--texto-tenue);"><b>Un caso real:</b> el Flight Pass de Alaska Airlines (Estados Unidos, desde 2022) cobra una cuota mensual (desde $49, hoy $69 por seis vuelos de ida y vuelta al año) y casi nada por cada vuelo, más impuestos. Es el mismo principio, llevado al extremo, para viajeros muy frecuentes.</p>
+    </details>
   </div>`;
 }
 function _precioMaxCobrado(p){
