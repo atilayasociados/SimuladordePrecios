@@ -330,7 +330,15 @@ details.repaso[open]>summary{margin-bottom:8px;}
 .ops-estudio{display:flex;flex-direction:column;gap:8px;}
 .op-estudio{display:flex;gap:10px;align-items:flex-start;border:2px solid var(--borde);border-radius:8px;padding:10px 12px;cursor:pointer;}
 .op-estudio.sel{border-color:var(--marca);background:rgba(55,213,56,.08);}
-.op-estudio input{margin-top:4px;accent-color:var(--marca);}
+.op-estudio input{-webkit-appearance:none;appearance:none;flex:0 0 auto;width:20px;height:20px;margin:2px 0 0;border:2px solid var(--texto-tenue);border-radius:50%;background:transparent;cursor:pointer;}
+.op-estudio input:checked{border-color:var(--marca);background:radial-gradient(circle, var(--marca) 0 45%, transparent 50%);}
+.op-estudio input:disabled{cursor:default;}
+.op-estudio input:focus-visible{outline:2px solid var(--marca);outline-offset:2px;}
+
+.op-estudio.sel{border-color:var(--marca);background:rgba(55,213,56,.14);}
+.op-estudio.apagada{opacity:.45;}
+.op-elegido{align-self:center;background:var(--marca);color:#0F1416;font-weight:700;font-size:12px;padding:4px 10px;border-radius:12px;white-space:nowrap;}
+#panelReferenciaExtras{scroll-margin-top:16px;}
 </style>
 <style>.logo-marca{height:32px;width:auto;display:block;}.logo-marca-grande{height:32px;width:auto;display:block;margin-bottom:14px;}</style>
 </head>
@@ -2353,14 +2361,15 @@ function vistaDecision(){
 
     ${grupo('Investigación de mercado', 'Estándar o Premium', `
       ${(() => { const nivel = d.comprarElasticidad ? 'premium' : (d.comprarWTP ? 'estandar' : 'ninguno'), fijo = nivel !== 'ninguno';
-        const op = (v, t, sub) => `<label class="op-estudio${nivel === v ? ' sel' : ''}"><input type="radio" name="dEstudio" value="${v}" ${nivel === v ? 'checked' : ''} ${fijo ? 'disabled' : ''}><span><b>${t}</b><br><span style="font-size:13px;color:var(--texto-tenue);">${sub}</span></span></label>`;
-        return `<div class="ops-estudio">
+        const op = (v, t, sub) => `<label class="op-estudio${nivel === v ? ' sel' : ''}${fijo && nivel !== v ? ' apagada' : ''}"><input type="radio" name="dEstudio" value="${v}" ${nivel === v ? 'checked' : ''} ${fijo ? 'disabled' : ''}><span style="flex:1;"><b>${t}</b><br><span style="font-size:13px;color:var(--texto-tenue);">${sub}</span></span>${fijo && nivel === v ? '<span class="op-elegido">✔ ELEGIDO</span>' : ''}</label>`;
+        const confirmacion = fijo ? `<div class="reco-dec" style="margin:0 0 10px;">✔ <b>Elegiste la investigación ${nivel === 'premium' ? 'Premium (' + money(costoPremium(APP.equipo)) + ')' : 'Estándar (' + money(costoEstudioMercado(APP.equipo)) + ')'}.</b> Se cobrará al cerrar la ronda. <a href="#panelReferenciaExtras" id="irDatosEstudio" style="color:var(--marca);font-weight:600;">Tus datos están aquí abajo ↓</a></div>` : '';
+        return `${confirmacion}<div class="ops-estudio">
           ${op('ninguno', 'Ninguno', 'Decido con la información gratuita')}
           ${op('estandar', 'Estándar — ' + money(costoEstudioMercado(APP.equipo)), 'Encuesta por segmento, mapa de valor, y reservas y participación')}
           ${op('premium', 'Premium — ' + money(costoPremium(APP.equipo)), 'Todo lo del Estándar, más tu elasticidad ingenua y controlada')}
         </div>
         <div style="margin:6px 0 0;font-size:13px;color:var(--texto-tenue);">Elige un nivel solo si decidiste comprarlo después de revisar tus señales. Lo que compras sirve solo para esta ronda. (Unidades 2 y 5)</div>
-        <div style="margin:6px 0 0;font-size:12.5px;line-height:1.45;color:#E8A23C;">⚠ Una vez que elijas Estándar o Premium, verás los datos de inmediato y la elección queda fija para esta ronda: no podrás cambiarla ni subir de nivel.</div>`; })()}
+        ${fijo ? '' : '<div style="margin:6px 0 0;font-size:12.5px;line-height:1.45;color:#E8A23C;">⚠ Una vez que elijas Estándar o Premium, verás los datos de inmediato y la elección queda fija para esta ronda: no podrás cambiarla ni subir de nivel.</div>'}`; })()}
       <div id="panelReferenciaExtras">${contenidoPanelExtrasWTP(d.comprarWTP, APP.equipo, p)}${d.comprarElasticidad ? htmlEstudioElasticidad(APP.equipo, p) : ''}</div>
     `, activo('wtp',ronda), 2)}
 
@@ -3774,6 +3783,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.addEventListener('click', e=>{
     if(e.target.id === 'irInforme'){ e.preventDefault(); irAlInforme(); return; }
+    if(e.target.id === 'irDatosEstudio'){ e.preventDefault(); const t = document.getElementById('panelReferenciaExtras'); if(t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if(e.target.id === 'cpUsar'){
       const r = actualizarCalcPase(); if(!r) return;
       const c1 = document.getElementById('dCuota'), c2 = document.getElementById('dTarifaSocio');
@@ -3864,6 +3874,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       APP.decisionActual.comprarWTP = true;
       APP.decisionActual.comprarElasticidad = v === 'premium';
       recolectar(); render();
+      setTimeout(() => { const t = document.getElementById('panelReferenciaExtras'); if(t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
       return;
     }
     if(e.target.id === 'dValla'){
