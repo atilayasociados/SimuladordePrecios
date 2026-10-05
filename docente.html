@@ -140,6 +140,12 @@ footer{text-align:center;font-size:11.5px;color:var(--texto-tenue);padding:26px 
 .glos-cab{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:4px;}
 .glos-cab b{font-size:15px;} .glos-u{font-size:11.5px;color:var(--texto-tenue);white-space:nowrap;}
 .glos-def{font-size:13.5px;line-height:1.55;color:var(--texto);} .glos-def p{margin:0 0 6px;} .glos-def p:last-child{margin:0;}
+
+.rev-fondo{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;overflow:auto;}
+.rev-caja{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:18px 20px;max-width:640px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.5);}
+.rev-fila{margin:6px 0;}
+.rev-adv{margin-top:10px;background:rgba(232,162,60,.10);border:1px solid rgba(232,162,60,.45);border-radius:8px;padding:10px 12px;}
+.rev-adv ul{margin:6px 0 0;padding-left:20px;} .rev-adv li{margin:4px 0;}
 </style>
 <style>.logo-marca{height:32px;width:auto;display:block;}.logo-marca-grande{height:32px;width:auto;display:block;margin-bottom:14px;}</style>
 </head>
@@ -1245,7 +1251,8 @@ function ejecutarRonda(config) {
       ingresoPaseFrecuente: ingresoPase,
       ingresoPersonalizado: algo ? algo.ingresoExtra : 0,
       gastoMarketing: c.decision.marketing || 0,
-      gastoInvestigacionWTP: c.decision.comprarWTP ? p.costoInvestigacionWTP : 0,
+      // Investigación de mercado: Estándar (comprarWTP) o Premium (comprarElasticidad, incluye al Estándar y se cobra solo el Premium)
+      gastoInvestigacionWTP: c.decision.comprarWTP && !c.decision.comprarElasticidad ? p.costoInvestigacionWTP : 0,
       gastoEstudioElasticidad: c.decision.comprarElasticidad ? p.costoEstudioElasticidad : 0,
       gastoMadurez: c.decision.gastoMadurez || 0,
       denegados: cap.denegados,
@@ -1699,12 +1706,12 @@ function vistaConfiguracion(){
 
     <div class="bloque">
       <h3>Costos de investigación de mercado</h3>
-      <p class="sub" style="margin-bottom:14px;">Por defecto, calibrados para que un equipo pueda comprar la investigación todas las rondas sin que eso arruine su resultado — no para que sea gratis, pero sí para que sea una decisión recurrente, no un riesgo grande y aislado.</p>
+      <p class="sub" style="margin-bottom:14px;">Dos niveles, disponibles desde la Ronda 1, que se pagan cada ronda en que se compran. El Premium incluye todo el Estándar más la elasticidad; si un equipo elige Premium, se cobra solo el Premium.</p>
       <div class="campos">
-        <div class="campo"><label for="cWtpDom">WTP — Doméstica ($)</label><input type="number" id="cWtpDom" min="0" value="${c.costoWtpDomestica ?? 80}"></div>
-        <div class="campo"><label for="cWtpInt">WTP — Internacional ($)</label><input type="number" id="cWtpInt" min="0" value="${c.costoWtpInternacional ?? 200}"></div>
-        <div class="campo"><label for="cElastDom">Elasticidad — Doméstica ($)</label><input type="number" id="cElastDom" min="0" value="${c.costoElasticidadDomestica ?? 100}"></div>
-        <div class="campo"><label for="cElastInt">Elasticidad — Internacional ($)</label><input type="number" id="cElastInt" min="0" value="${c.costoElasticidadInternacional ?? 250}"></div>
+        <div class="campo"><label for="cWtpDom">Estándar — Doméstica ($)</label><input type="number" id="cWtpDom" min="0" value="${c.costoWtpDomestica ?? 60}"></div>
+        <div class="campo"><label for="cWtpInt">Estándar — Internacional ($)</label><input type="number" id="cWtpInt" min="0" value="${c.costoWtpInternacional ?? 200}"></div>
+        <div class="campo"><label for="cElastDom">Premium — Doméstica ($)</label><input type="number" id="cElastDom" min="0" value="${c.costoElasticidadDomestica ?? 100}"></div>
+        <div class="campo"><label for="cElastInt">Premium — Internacional ($)</label><input type="number" id="cElastInt" min="0" value="${c.costoElasticidadInternacional ?? 250}"></div>
       </div>
       <div class="acciones">
         <button class="btn-sec" id="btnGuardarCostos">Guardar costos</button>
@@ -2196,7 +2203,7 @@ const COLS_DEC = [
   { t: 'Tachada', usa: d => !!d.anclaje, v: (d, h) => !d.anclaje ? '—' : (d.precioTachado > 0 ? money2(d.precioTachado) : 'Sí') + (h && h.anclaje && h.anclaje.estado === 'enganoso' ? (h.anclaje.detectado ? ' · <span style="color:var(--peligro);">engañosa, detectada</span>' : ' · <span style="color:#E8A23C;">engañosa</span>') : (h && h.anclaje && h.anclaje.estado === 'sin_efecto' ? ' · sin efecto' : '')) },
   { t: 'Sobreventa', usa: d => d.overbooking > 0, v: d => d.overbooking > 0 ? d.overbooking : '—' },
   { t: 'Dinámico', usa: d => !!d.dynamicPricing, v: d => d.dynamicPricing ? 'Sí · ' + String(d.sensibilidadDynamic ?? 0.5).replace('.', ',') : '—' },
-  { t: 'Estudios', usa: d => d.comprarWTP || d.comprarElasticidad, v: d => [d.comprarWTP ? 'Mercado' : null, d.comprarElasticidad ? 'Elasticidad' : null].filter(Boolean).join(', ') || '—' },
+  { t: 'Investigación', usa: d => d.comprarWTP || d.comprarElasticidad, v: d => d.comprarElasticidad ? 'Premium' : (d.comprarWTP ? 'Estándar' : '—') },
   { t: 'Madurez', usa: d => d.gastoMadurez > 0, v: d => d.gastoMadurez > 0 ? money(d.gastoMadurez) + ' → ' + [d.talento, d.procesos, d.datos].join('/') : '—' },
   { t: 'Personaliz.', usa: d => !!d.pricingAlgoritmico, v: d => d.pricingAlgoritmico ? 'Sí' : '—' }
 ];
@@ -2463,6 +2470,63 @@ function calcularAntecedente(c){
   return out;
 }
 
+/* ===== Revisión antes de cerrar la ronda: muestra lo que se va a procesar y advierte valores inusuales ===== */
+function revisionCierre(){
+  const R = D.config.rondaActual, ses = R <= 3 ? 1 : R <= 6 ? 2 : R <= 8 ? 3 : R <= 10 ? 4 : 5;
+  const choques = { sin_choque: 'Mercado normal', alza: 'Temporada alta (+10% de demanda)', baja: 'Temporada baja (−10% de demanda)' };
+  const env = D.equipos.filter(eq => D.decisiones[eq.nombre.toLowerCase()]), faltan = D.equipos.filter(eq => !D.decisiones[eq.nombre.toLowerCase()]);
+  const adv = [];
+  if(PARTIDA_DOC && PARTIDA_DOC.tipo === 'prueba') adv.push('Estás en una <b>simulación de prueba</b>. Si querías cerrar la ronda del curso, cancela y cambia la simulación arriba.');
+  if(D.choque && D.choque !== 'sin_choque') adv.push(`Activaste <b>${choques[D.choque]}</b>. Confirma que es intencional: afecta a todas las aerolíneas.`);
+  if(faltan.length) adv.push(`<b>${faltan.map(x => esc(x.nombre)).join(', ')}</b> no ${faltan.length === 1 ? 'envió su decisión y recibirá' : 'enviaron su decisión y recibirán'} una decisión neutra.`);
+  // Referencia: lo que invirtieron los equipos en la ronda anterior (o $100, el marketing del trimestre anterior)
+  const mks = D.equipos.map(eq => { const h = (eq.historial || []).filter(x => !x.neutra).slice(-1)[0]; return h && h.decision ? Number(h.decision.marketing) || 0 : 0; }).filter(v => v > 0).sort((a, b) => a - b);
+  const mediana = mks.length ? mks[Math.floor(mks.length / 2)] : 100;
+  env.forEach(eq => {
+    const dc = D.decisiones[eq.nombre.toLowerCase()], n = esc(eq.nombre), pf = PARAMS_DEFECTO.perfiles[eq.perfil || 'domestica'];
+    const hist = (eq.historial || []).filter(h => !h.neutra), hAnt = hist[hist.length - 1];
+    const mk = Number(dc.marketing) || 0, mkAnt = hAnt && hAnt.decision ? Number(hAnt.decision.marketing) || 0 : 0;
+    if(mk > Math.max(1000, 5 * mediana)) adv.push(`<b>${n}</b> invierte <b>${money(mk)}</b> en marketing (${Math.round(mk / Math.max(1, mediana))} veces lo que invirtieron los equipos en la ronda anterior).`);
+    if(mk === 0 && mkAnt > 0) adv.push(`<b>${n}</b> dejó el marketing en <b>$0</b> (la ronda anterior invirtió ${money(mkAnt)}).`);
+    const piso = pf.docPorRonda / pf.capacidad + pf.iocPorPasajero;
+    if(dc.precio && dc.precio < piso) adv.push(`<b>${n}</b> fija su Tarifa Flex en ${money2(dc.precio)}, <b>bajo su piso</b> de ${money2(piso)}.`);
+    const ref = hAnt && hAnt.precioMercado ? hAnt.precioMercado : pf.precioBase;
+    if(dc.precio && dc.precio > ref * 1.25) adv.push(`<b>${n}</b> fija su Tarifa Flex en ${money2(dc.precio)}, más de un 25% sobre el precio de referencia del mercado (${money2(ref)}).`);
+    if(dc.anclaje && dc.precioTachado > 0){
+      const maxP = Math.max(((D.config.antecedente || {})[eq.perfil || 'domestica'] || {}).precioFinal || pf.precioBase, ...(eq.historial || []).map(h => Number(h.precioFinal) || 0));
+      if(dc.precioTachado > maxP + 0.005) adv.push(`<b>${n}</b> muestra ${money2(dc.precioTachado)} tachado, más que cualquier precio que cobró (${money2(maxP)}): <b>tarifa tachada engañosa</b>, con riesgo de sanción.`);
+    }
+    if(Number(dc.overbooking) > 8) adv.push(`<b>${n}</b> sobrevende <b>${dc.overbooking}</b> asientos: alto riesgo de dejar pasajeros en tierra.`);
+    if(dc.pricingAlgoritmico) adv.push(`<b>${n}</b> activó <b>precios personalizados</b> (riesgo de detección y sanción).`);
+  });
+  return `<div class="rev-caja">
+    <h3 style="margin:0 0 4px;">Vas a cerrar la Ronda ${R} de ${PARAMS_DEFECTO.rondasTotales || 12}${ses ? ' · Sesión ' + ses : ''}</h3>
+    <p style="margin:0 0 12px;color:var(--texto-tenue);">Simulación: <b style="color:var(--texto);">${esc((PARTIDA_DOC && PARTIDA_DOC.nombre) || '—')}</b>${PARTIDA_DOC && PARTIDA_DOC.tipo === 'prueba' ? ' (de prueba)' : ''}</p>
+    <div class="rev-fila">✔ <b>Condición del mercado:</b> ${choques[D.choque] || 'Mercado normal'}</div>
+    <div class="rev-fila">${faltan.length ? '⚠' : '✔'} <b>Decisiones:</b> ${env.length} de ${D.equipos.length} equipos enviaron</div>
+    ${adv.length ? `<div class="rev-adv"><b>Para revisar antes de confirmar:</b><ul>${adv.map(a => `<li>${a}</li>`).join('')}</ul></div>` : '<div class="rev-fila" style="color:var(--marca);">✔ No se detectaron valores inusuales.</div>'}
+    <p style="margin:12px 0 0;"><b>Esta acción no se puede deshacer.</b> Los resultados se calcularán y los equipos los verán al recargar.</p>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      <button class="btn" id="btnConfirmarCierre" style="width:auto;padding:10px 18px;">Confirmar y calcular</button>
+      <button class="btn-sec" id="btnCancelarCierre" style="width:auto;padding:10px 18px;">Cancelar</button>
+    </div>
+  </div>`;
+}
+function mostrarRevisionCierre(aviso){
+  let m = document.getElementById('revCierre');
+  if(!m){ m = document.createElement('div'); m.id = 'revCierre'; m.className = 'rev-fondo'; document.body.appendChild(m); }
+  m.innerHTML = (aviso ? `<div class="rev-caja" style="margin-bottom:10px;border-color:#E8A23C;">${aviso}</div>` : '') + revisionCierre();
+  const enviadas = Object.keys(D.decisiones).length, ronda = D.config.rondaActual;
+  document.getElementById('btnCancelarCierre').onclick = () => m.remove();
+  document.getElementById('btnConfirmarCierre').onclick = async (ev) => {
+    ev.target.disabled = true; ev.target.textContent = 'Verificando…';
+    try{ await cargarDatos(); }catch(_){}
+    if(D.config.rondaActual !== ronda){ m.remove(); alert(`La Ronda ${ronda} ya fue cerrada desde otra pestaña o computadora.`); render(); return; }
+    if(Object.keys(D.decisiones).length !== enviadas){ render(); mostrarRevisionCierre('Mientras revisabas llegaron decisiones nuevas. Revisa el resumen actualizado.'); return; }
+    m.remove(); await cerrarRonda();
+  };
+}
+
 async function cerrarRonda(){
   D.calculando = true; render();
   const c = D.config, ronda = c.rondaActual;
@@ -2531,7 +2595,8 @@ async function cerrarRonda(){
             ronda, precioMercado: r.precioMercado, poolDeRonda: r.poolDeRonda, poolTemporada: r.poolTemporada, poolFijo,
             neutra: !!esNeutra, preciosCompetidores, choque: D.choque,
             competidores: r.resultados.filter(x => x.esBot).map(bo => ({ nombre: bo.nombre, precio: bo.precioFinal, participacion: bo.participacion,
-              pasajerosGanados: bo.pasajerosGanados, capacidad: bo.capacidad, ocupacion: bo.metricas ? bo.metricas.loadFactor : null })),
+              pasajerosGanados: bo.pasajerosGanados, capacidad: bo.capacidad, ocupacion: bo.metricas ? bo.metricas.loadFactor : null,
+              producto: bo.componentes ? (bo.componentes.producto || 1) * (bo.componentes.confianza || 1) : 1 })),
             informe: (equiposMotor.find(x=>x.nombre===res.nombre)?.decision?.informe) || '',
             decision: equiposMotor.find(x=>x.nombre===res.nombre)?.decision || {},
             piso: res.piso, techo: res.techo, tresCAnterior,
@@ -2789,18 +2854,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         render(); return;
       }
       render();
-      const sinDecidir = D.equipos.filter(eq => !D.decisiones[eq.nombre.toLowerCase()]);
-      if(sinDecidir.length){
-        const nombres = sinDecidir.map(x => x.nombre).join(', ');
-        const ok = confirm(
-          `Faltan ${sinDecidir.length} equipo(s) por enviar su decisión:\n\n${nombres}\n\n` +
-          `Si cierra la ronda ahora, recibirán una decisión neutra: precio igual al promedio ` +
-          `del mercado, sin inversiones, y con pérdida de atractivo frente a los equipos que sí decidieron.\n\n` +
-          `¿Desea cerrar la ronda de todas formas?`
-        );
-        if(!ok) return;
-      }
-      await cerrarRonda(); return;
+      e.target.disabled = false; e.target.textContent = 'Cerrar ronda y calcular resultados';
+      mostrarRevisionCierre(); return;
     }
     const bResetPw = e.target.closest('[data-resetpw]');
     if(bResetPw){
@@ -2925,8 +2980,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <h3 id="m-costos">Costos de investigación y constantes de calibración</h3>
   <p><b>Costos de investigación de mercado.</b> Lo que paga un equipo por comprar cada estudio, por perfil:</p>
   <table><thead><tr><th>Investigación</th><th>Doméstica</th><th>Internacional</th></tr></thead>
-  <tbody><tr><td>WTP (disposición a pagar)</td><td>$80</td><td>$200</td></tr><tr><td>Elasticidad</td><td>$100</td><td>$250</td></tr></tbody></table>
-  <p>Están calibrados para que un equipo pueda comprar la investigación cada ronda sin arruinar su resultado. Para cambiarlos, edita los valores y haz clic en <b>Guardar costos</b>.</p>
+  <tbody><tr><td>Estándar (encuesta por segmento, mapa de valor, reservas y participación)</td><td>$60</td><td>$200</td></tr><tr><td>Premium (todo el Estándar más la elasticidad)</td><td>$100</td><td>$250</td></tr></tbody></table>
+  <p>Se pagan cada ronda en que se compran y lo comprado se ve solo en esa ronda. Para cambiarlos, edita los valores y haz clic en <b>Guardar costos</b>.</p>
   <p><b>Constantes de calibración.</b> Parámetros como el porcentaje de viajeros de negocio, los no-shows, la fuga de negocio por tipo de valla, la probabilidad de detección y la sanción de los precios personalizados, el tope de precio de equipaje y seguro o la penalización por no decidir, cada uno con una nota que explica qué controla. Son <b>calibración pedagógica</b>: elegidos para que el simulador enseñe bien, no medidos en el mercado real. Ajústalos solo si tu grupo necesita otro balance; luego haz clic en <b>Guardar constantes</b>. El bloque <b>Modelo de demanda y herramientas</b> reúne la calibración de esta versión: está verificada, así que conviene no tocarla sin una razón clara.</p>
 
   <h3 id="m-ronda">Durante cada ronda</h3>

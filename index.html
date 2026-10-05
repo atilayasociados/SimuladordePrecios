@@ -324,6 +324,13 @@ details.repaso[open]>summary{margin-bottom:8px;}
 .bal-tit{font-weight:700;margin-bottom:6px;}
 .bal-nota{font-size:13px;color:#E8A23C;}
 .bal-res{margin-top:10px;border:2px solid;border-radius:8px;padding:10px 12px;text-align:center;}
+
+.k-sub{font-size:12px;color:var(--texto-tenue);margin-top:2px;}
+
+.ops-estudio{display:flex;flex-direction:column;gap:8px;}
+.op-estudio{display:flex;gap:10px;align-items:flex-start;border:2px solid var(--borde);border-radius:8px;padding:10px 12px;cursor:pointer;}
+.op-estudio.sel{border-color:var(--marca);background:rgba(55,213,56,.08);}
+.op-estudio input{margin-top:4px;accent-color:var(--marca);}
 </style>
 <style>.logo-marca{height:32px;width:auto;display:block;}.logo-marca-grande{height:32px;width:auto;display:block;margin-bottom:14px;}</style>
 </head>
@@ -711,7 +718,7 @@ const PARAMS = {
   topePase:0.05, boostAnclaje:0.03, madurez:{min:-0.08,max:0.08},
   benchmarkValor:5.76, umbralValor:0.75, sensValor:0.4, factorValorPct:0.073,
   probDeteccion:0.30, penalConfianza:0.15, sancionDeteccion:0.10, topeAncillaryPct:1.00, rondasTotales:12,
-  pctEquipaje:0.50, pctSeguro:0.30, costoPuntoMadurez:20,
+  pctEquipaje:0.50, pctSeguro:0.30, costoPuntoMadurez:20, elasticidadNegocio:-0.8, elasticidadPlacer:-1.8,
   perfilMadurez:{ talento:5, procesos:4, datos:6 },   // NIVEL 2: diagnóstico inicial de cada aerolínea (igual para todas)
   extras:{ sensibilidad:1.5, costoPct:0.30, saliencia:0.5 },
   sensibilidadPrecio:2.65,   // NIVEL 2: mismo β que el motor (la encuesta WTP usa la misma función de elección)
@@ -748,10 +755,10 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 /* Qué se desbloquea en cada sesión (Acta Sección 3) */
 const DESBLOQUEO = {
   precio:1, marketing:1,
-  valla:2, wtp:2, equilibrio:2,
+  valla:2, wtp:1, equilibrio:2,
   ancillaries:3, paseFrecuente:3, anclaje:3,
   overbooking:4, dynamic:4,
-  elasticidad:5, algoritmico:5, madurez:5
+  elasticidad:1, algoritmico:5, madurez:5
 };
 /* Rondas por sesión: 3/3/2/2/2 (Acta Sección 2) */
 function sesionDeRonda(r){
@@ -820,6 +827,8 @@ function aplicarConstantesDelProfesor(){
   if(c.extrasSaliencia != null) PARAMS.extras = { ...PARAMS.extras, saliencia: pc(c.extrasSaliencia) };
   if(c.topeAncillary != null) PARAMS.topeAncillaryPct = pc(c.topeAncillary);
   if(c.pctEquipaje != null) PARAMS.pctEquipaje = pc(c.pctEquipaje);
+  if(c.elasticidadNegocio != null) PARAMS.elasticidadNegocio = Number(c.elasticidadNegocio);
+  if(c.elasticidadPlacer != null) PARAMS.elasticidadPlacer = Number(c.elasticidadPlacer);
   if(c.pctSeguro != null) PARAMS.pctSeguro = pc(c.pctSeguro);
   if(c.costoPuntoMadurez != null) PARAMS.costoPuntoMadurez = c.costoPuntoMadurez;
   if(c.paseMultiplicador != null) PARAMS.paseMultiplicador = c.paseMultiplicador;
@@ -1022,9 +1031,9 @@ function renderTabs(){
 /* ============================================================
    VISTA — Situación: dónde está el equipo y qué toca en esta ronda
    ============================================================ */
-const NOMBRE_HERRAMIENTA = { precio:'Tarifa Flex', marketing:'Marketing', valla:'Tarifa Promocional y valla', wtp:'Investigación de mercado (WTP)',
+const NOMBRE_HERRAMIENTA = { precio:'Tarifa Flex', marketing:'Marketing', valla:'Tarifa Promocional y valla', wtp:'Investigación de mercado (Estándar o Premium)',
   equilibrio:'Cambio de ventas de equilibrio', ancillaries:'Equipaje y seguro', paseFrecuente:'Pase Frecuente', anclaje:'Tarifa tachada',
-  overbooking:'Overbooking', dynamic:'Precio dinámico', elasticidad:'Estudio de elasticidad', algoritmico:'Precios personalizados', madurez:'Madurez organizacional' };
+  overbooking:'Overbooking', dynamic:'Precio dinámico', elasticidad:'Elasticidad (incluida en el Premium)', algoritmico:'Precios personalizados', madurez:'Madurez organizacional' };
 function vistaSituacion(){
   const e = APP.equipo, ronda = APP.config ? APP.config.rondaActual : 1, ses = sesionDeRonda(ronda);
   const hist = (e.historial || []).filter(h => !h.neutra), h = hist[hist.length-1] || antecedente();
@@ -1669,7 +1678,7 @@ function vistaUnidad5(){
   const dec = (APP.decisionActual && APP.decisionActual.precio) ? APP.decisionActual : (h ? h.decision : {});
   const f1 = v => (Math.round(v*10)/10).toFixed(1).replace('.',','), f2 = v => v.toFixed(2).replace('.',',');
   const temp = c => ({alza:'Alta', baja:'Baja'})[c] || 'Normal';
-  const tieneEstudio = hist.some(x => x.comproElasticidad) || !!dec.comprarElasticidad;
+  const tieneEstudio = !!(APP.decisionActual && APP.decisionActual.comprarElasticidad);   // solo la ronda en que se compra el Premium
   // Paso 1: pares de rondas consecutivas con cambio de precio
   const pares = [];
   for(let i=1;i<hist.length;i++){ const a=hist[i-1], b=hist[i];
@@ -1765,7 +1774,6 @@ const AYUDA = {
   dPromo: 'Un pasaje más barato, con restricciones, para atraer al viajero de placer que busca precio. Debe ser menor que tu Flex; déjalo vacío si no la ofreces. (Unidad 2)',
   dValla: 'Las restricciones de la Promocional. Una valla más fuerte evita que los viajeros de trabajo se pasen al pasaje barato, pero también menos pasajeros la aceptan. (Unidad 2)',
   dMarketing: 'Lo que inviertes para atraer pasajeros y subir tu Valor. Rinde cada vez menos por dólar: para recuperarlo necesitas inversión ÷ margen por pasajero pasajeros nuevos. (Unidad 1)',
-  dWTP: 'Una encuesta a 100 clientes que estima cuántos te comprarían a cada precio: te muestra tu techo real, es decir, cuánto están dispuestos a pagar tus pasajeros. (Unidad 2)',
   dEquipaje: 'Ingreso extra por pasajero, aparte del pasaje. Si lo cobras muy caro, menos pasajeros lo compran. (Unidad 3)',
   dSeguro: 'Otro ingreso extra por pasajero. Igual que el equipaje: precio alto, menos compradores. (Unidad 3)',
   dCuota: 'Lo que paga el socio cada mes. Usa la calculadora de arriba para elegirla. Pon 0 si no ofreces el Pase. (Unidad 3)',
@@ -1775,7 +1783,6 @@ const AYUDA = {
   dOverbooking: 'Cuántas reservas venderás por encima de tus asientos. 0 = no sobrevendes. Usa la recomendación del fractil crítico de arriba. (Unidad 4)',
   dDynamic: 'Tu precio sube o baja solo según la demanda de la ronda; solo tiene efecto cuando el docente activa una temporada. (Unidad 4)',
   dSens: 'Qué tanto se mueve tu precio: 0 = nada, 1 = lo máximo. (Unidad 4)',
-  dElast: 'Mide cuánto cambian tus pasajeros cuando cambias el precio, separando el efecto de la competencia. (Unidad 5)',
   dGastoMad: 'Cada $20 compra un punto para subir un pilar de tu organización. (Unidad 5)',
   dTalento: 'Nivel de tu equipo humano después de invertir. Tu pilar más bajo limita tu madurez. (Unidad 5)',
   dProcesos: 'Nivel de tus procesos de fijación de precios después de invertir. (Unidad 5)',
@@ -1783,7 +1790,7 @@ const AYUDA = {
   dAlgo: 'Márcalo solo si decidieron personalizar después de analizar el valor esperado y el dilema ético de arriba. Déjalo sin marcar para no hacerlo. (Unidad 5)',
   dInforme: 'Qué decidieron, con qué datos o cálculo, y por qué ese valor y no otro. Mínimo de palabras indicado abajo.'
 };
-const CASILLAS = ['dWTP','dAnclaje','dDynamic','dElast','dAlgo'];
+const CASILLAS = ['dAnclaje','dDynamic','dAlgo'];
 function conAyudas(html){
   // Campos y selectores: la ayuda va justo debajo de la etiqueta
   html = html.replace(/(<label for="(d[A-Za-z]+)"[^>]*>[\s\S]*?<\/label>)/g, (m, lab, id) =>
@@ -1908,17 +1915,55 @@ function explicaMarketing(d, p){
   </div>`;
 }
 function explicaWTP(d, p){
-  const cfg = APP.config || {}, costo = APP.equipo && APP.equipo.perfil === 'internacional' ? (cfg.costoWtpInternacional ?? 200) : (cfg.costoWtpDomestica ?? 80);
-  const mg = _flexActual(d, p) - p.iocPorPasajero;
+  const costo = costoEstudioMercado(APP.equipo), hist = ((APP.equipo && APP.equipo.historial) || []).filter(h => !h.neutra && h.capacidad);
+  const u = hist[hist.length - 1], a = hist[hist.length - 2];
+  // Señales de que el precio puede estar lejos del correcto (no revelan el precio óptimo)
+  const senales = [];
+  if(u && a){
+    const cm = a.precioMercado ? Math.abs(u.precioMercado / a.precioMercado - 1) : 0, cmT = String(Math.round(cm * 1000) / 10).replace('.', ',');
+    senales.push(cm >= 0.03 ? { si: true, t: `El precio promedio del mercado cambió ${cmT}% en tu última ronda`, n: 'la competencia se movió: tu precio puede haber quedado desubicado' } : { si: false, t: `El precio promedio del mercado casi no cambió (${cmT}%)` });
+    const du = u.estadoResultados && a.estadoResultados ? u.estadoResultados.utilidadNeta - a.estadoResultados.utilidadNeta : 0;
+    senales.push(du < 0 ? { si: true, t: `Tu utilidad bajó ${money(-du)} respecto de la ronda anterior`, n: 'puede indicar un precio equivocado' } : { si: false, t: `Tu utilidad subió ${money(du)} respecto de la ronda anterior` });
+  }
+  if(u){
+    const sp = u.capacidad.spill || 0, lf = u.metricas ? u.metricas.loadFactor : 0, lfT = String(lf).replace('.', ',');
+    senales.push(sp > 0 ? { si: true, t: `En tu última ronda, ${sp} pasajeros se quedaron sin asiento`, n: 'tu precio podría estar bajo' } : { si: false, t: 'Ningún pasajero se quedó sin asiento' });
+    senales.push(lf < 70 ? { si: true, t: `Volaste al ${lfT}% de ocupación`, n: 'menos de 70%: tu precio podría estar alto' } : { si: false, t: `Volaste al ${lfT}% de ocupación` });
+  }
+  const promoNueva = !!(d.tarifaPromocional > 0) && !(u && u.decision && u.decision.tarifaPromocional > 0);
+  senales.push(promoNueva ? { si: true, t: 'Vas a lanzar una Tarifa Promocional por primera vez', n: 'no tienes experiencia previa con ese precio' } : { si: false, t: 'No lanzas una Tarifa Promocional nueva' });
+  const nSi = senales.filter(x => x.si).length;
+  const costoP = costoPremium(APP.equipo);
   return `<div class="explica-dec">
-    <h4>1. Entiende</h4>
-    <p>La <b>disposición a pagar</b> (en inglés, WTP: <i>willingness to pay</i>) es el precio máximo que un cliente aceptaría pagar. Gratis ya conoces tu piso, el precio de referencia y, en Resultados, el precio de cada aerolínea. Lo que no puedes saber gratis es <b>tu techo real</b>: cuánto están dispuestos a pagar <i>tus</i> pasajeros por volar contigo.</p>
-    <p>El estudio de mercado es una <b>encuesta a 100 clientes</b> que estima cuántos te comprarían a cada precio. Es una señal fuerte, no una certeza: lo que la gente dice que haría no siempre coincide con lo que hace.</p>
-    <h4>2. Calcula con tus números</h4>
-    <p class="paso-dec">El estudio cuesta <b>${money(costo)}</b>. Para que valga la pena, debe ayudarte a ganar al menos eso: con un margen de ${money2(mg)} por pasajero, unos <b>${Math.ceil(costo / mg)} pasajeros</b> más, o un mejor precio.</p>
-    <p>Conviene sobre todo cuando no estás seguro de tu precio, por ejemplo después de un cambio fuerte de la competencia.</p>
+    <h4>1. ¿Qué es?</h4>
+    <p>Es una <b>investigación de mercado</b>: le preguntas a tus clientes cuánto pagarían y averiguas cómo se repartieron los pasajeros entre las aerolíneas. En la vida real, las aerolíneas pagan por esta información, porque no es pública. Tienes dos niveles:</p>
+    <div class="pase-tarjetas">
+      <div class="pase-tarj"><div class="pase-t1">Gratis</div><div>Tus propios resultados, el precio de cada competidor y, con una ronda de retraso, los pasajeros que transportó cada aerolínea.</div></div>
+      <div class="pase-tarj pase-con"><div class="pase-t1">Estándar (${money(costo)})</div><div>① Una <b>encuesta</b> a viajeros de negocios y de placer: cuántos te comprarían a cada precio.<br>② Un <b>mapa de valor</b>: si eres caro o barato para lo que ofreces.<br>③ Al cerrar la ronda: tus <b>reservas y participación de mercado</b> frente a cada competidor.</div></div>
+      <div class="pase-tarj pase-con"><div class="pase-t1">Premium (${money(costoP)})</div><div><b>Todo lo del Estándar</b>, más tu <b>elasticidad</b>: cuánto cambian tus pasajeros si cambias tu precio, la que calculas comparando rondas (ingenua) y la que separa el efecto de la competencia y la temporada (controlada), para negocios y para placer.</div></div>
+    </div>
+    <h4>2. ¿Por qué comprarlo?</h4>
+    <p class="paso-dec">✔ <b>Eliges tus precios con evidencia:</b> la encuesta de negocios te ayuda a fijar tu Flex, y la de placer, tu Promocional.<br>
+    ✔ <b>Ves dónde estás frente a la competencia</b>, gracias al mapa de valor.<br>
+    ✔ <b>Con el Premium, sabes cuánto subir o bajar tu precio</b>, sin confundir el efecto de tu precio con lo que hizo la competencia.<br>
+    ✘ <b>Cuesta ${money(costo)} (Estándar) o ${money(costoP)} (Premium), y solo sirve para esta ronda:</b> el mercado cambia, y la próxima ronda requiere otra compra.<br>
+    ✘ <b>La encuesta exagera:</b> la gente dice que compraría más de lo que realmente compra. El reporte te enseña a corregirlo.</p>
+    <p>La pregunta es simple: <b>¿lo que te ayuda a ganar es más que lo que cuesta?</b> Equivocarte en $1 en tu precio cuesta, según el mercado, entre $10 y $30 por ronda; equivocarte en $2, entre $40 y $70.</p>
+    <h4>3. ¿Te conviene comprarlo esta ronda?</h4>
+    <p>El estudio vale la pena cuando hay señales de que tu precio puede estar lejos del correcto. Estas son tus señales:</p>
+    <div class="paso-dec">${senales.map(x => `${x.si ? '⚠' : '✔'} ${x.t}${x.si ? ` <span style="color:#E8A23C;">(${x.n})</span>` : ''}`).join('<br>')}</div>
+    <p class="reco-dec">→ ${nSi >= 2 ? `<b>Tienes ${nSi} señales:</b> es probable que tu precio esté lejos del correcto. La investigación puede pagarse sola.` : (nSi === 1 ? '<b>Tienes 1 señal:</b> la investigación puede ayudarte, pero no es urgente. Decide según qué tan seguro estés de tu precio.' : '<b>No tienes señales:</b> tus resultados son estables. Probablemente puedas ahorrarte la investigación esta ronda.')}</p>
+    <p><b>¿Estándar o Premium?</b> El Estándar te dice <b>dónde estás</b> frente a la competencia esta ronda. El Premium agrega <b>cuánto reaccionan tus pasajeros</b> a tu precio: conviene si vas a mover tu precio y no sabes cuánto. La diferencia entre los dos es de ${money(costoP - costo)}.</p>
+    <details class="repaso" style="margin-top:12px;"><summary>Para profundizar: los métodos y la evidencia</summary>
+      <p class="paso-dec" style="margin-top:8px;"><b>La encuesta</b> usa el método de Gabor-Granger (Unidad 2): pregunta "¿comprarías a este precio?" a varios precios. La <b>disposición a pagar</b> (en inglés, WTP: <i>willingness to pay</i>) es el precio máximo que un cliente acepta pagar.<br>
+      <b>El sesgo hipotético:</b> según un metaanálisis, las encuestas sobreestiman la disposición a pagar real en un 21% en promedio (Schmidt y Bijmolt, 2020).<br>
+      <b>Las reservas de la competencia:</b> en la industria aérea se compran a los sistemas de reservas, y sus contratos prohíben publicarlas.<br>
+      <b>El mapa de valor</b> compara el precio relativo con el valor percibido relativo; la línea diagonal es la de valor justo (Gale, 1994).<br>
+      <b>La elasticidad (Premium):</b> los viajeros de negocios son menos sensibles al precio que los de placer (Brons et al., 2002; Gillen et al., 2003). La controlada se entrega como un rango, porque se estima con pocas rondas y porque el precio y la demanda se influyen mutuamente (endogeneidad). Es el ejemplo de la heladería de la Unidad 5.</p>
+    </details>
   </div>`;
 }
+
 function explicaExtras(d, p){
   const x = PARAMS.extras || {}, sens = x.sensibilidad ?? 1.5, cpct = x.costoPct ?? 0.3;
   const filaE = (nom, precio, ref, base) => {
@@ -1929,7 +1974,7 @@ function explicaExtras(d, p){
   return `<div class="explica-dec">
     <h4>1. Entiende</h4>
     <p>Los <b>ingresos complementarios</b> son el dinero que ganas con servicios aparte del pasaje, como el <b>equipaje</b> y el <b>seguro de viaje</b>. Cobrarlos por separado se llama <b>precio fraccionado</b>: el pasaje se ve más barato, y cada pasajero paga solo lo que usa.</p>
-    <p>Cada extra tiene su propia demanda: si lo cobras muy caro, menos pasajeros lo compran, y un cobro alto también hace ver más caro tu pasaje. Como referencia, el mercado cobra <b>${money2(p.refEquipaje)}</b> por el equipaje y <b>${money2(p.refSeguro)}</b> por el seguro. El precio que más dinero deja suele estar <b>cerca de esa referencia</b>.</p>
+    <p>Cada extra tiene su propia demanda: si lo cobras muy caro, menos pasajeros lo compran, y un cobro alto también hace ver más caro tu pasaje. Como referencia, BoA cobra <b>${money2(p.refEquipaje)}</b> por el equipaje (dato real, publicado); para el seguro, la referencia es <b>${money2(p.refSeguro)}</b> (una estimación, porque ninguna aerolínea boliviana lo vende así). El precio que más dinero deja suele estar <b>cerca de esa referencia</b>.</p>
     <h4>2. Calcula con tus números</h4>
     <p class="paso-dec">${filaE('Equipaje', d.precioEquipaje, p.refEquipaje, PARAMS.pctEquipaje ?? 0.5)}<br>${filaE('Seguro', d.precioSeguro, p.refSeguro, PARAMS.pctSeguro ?? 0.3)}</p>
     <p>Escribe tus precios abajo y presiona "Actualizar referencias" para recalcular.</p>
@@ -2091,18 +2136,37 @@ function explicaDinamico(d, p){
 }
 function explicaElasticidad(d, p){
   const cfg = APP.config || {}, costo = APP.equipo && APP.equipo.perfil === 'internacional' ? (cfg.costoElasticidadInternacional ?? 250) : (cfg.costoElasticidadDomestica ?? 100);
-  const hist = ((APP.equipo && APP.equipo.historial) || []).filter(x => !x.neutra);
+  const histAll = (APP.equipo && APP.equipo.historial) || [], hist = histAll.filter(x => !x.neutra);
+  const yaComprado = histAll.some(h => h.comproElasticidad);
+  const ronda = cfg.rondaActual || 1, total = PARAMS.rondasTotales || 12, quedan = Math.max(1, total - ronda + 1);
   let ingenua = '';
   for(let i = hist.length - 1; i > 0 && !ingenua; i--){
     const a = hist[i-1], b = hist[i], dp = (b.precioFinal - a.precioFinal) / a.precioFinal, dq = a.pasajerosGanados ? (b.pasajerosGanados - a.pasajerosGanados) / a.pasajerosGanados : 0;
-    if(Math.abs(dp) >= 0.01) ingenua = `Entre la Ronda ${a.ronda} y la ${b.ronda} cambiaste tu precio un ${_P(dp)} y tus pasajeros un ${_P(dq)}: elasticidad ingenua ≈ <b>${(dq/dp).toFixed(1).replace('.', ',')}</b>. Pero en ese cambio también influyeron la competencia y el mercado.`;
+    if(Math.abs(dp) >= 0.01) ingenua = { a, b, dp, dq, e: dq / dp };
   }
+  const temporadas = hist.filter(h => h.choque && h.choque !== 'normal' && h.choque !== 'sin_choque').length;
   return `<div class="explica-dec">
-    <h4>1. Entiende</h4>
-    <p>La <b>elasticidad precio de la demanda</b> mide cuánto cambian tus pasajeros cuando cambias tu precio: % de cambio en pasajeros ÷ % de cambio en precio. Por ejemplo, −2 significa que si subes el precio 1%, pierdes cerca de 2% de pasajeros.</p>
-    <p>Calcularla con tus propias rondas da una elasticidad <b>ingenua</b>: mezcla el efecto de tu precio con lo que hicieron tus competidores o con una temporada. El estudio aísla solo el efecto de tu precio: es una elasticidad <b>controlada</b>.</p>
-    <h4>2. Calcula con tus números</h4>
-    <p class="paso-dec">${ingenua || 'Todavía no tienes dos rondas con cambios de precio para calcular tu elasticidad ingenua.'}<br>El estudio cuesta <b>${money(costo)}</b>.</p>
+    <h4>1. ¿Qué es?</h4>
+    <p>La <b>elasticidad</b> mide cuánto cambian tus pasajeros cuando cambias tu precio. Por ejemplo, −2 significa que si subes el precio 1%, pierdes cerca de 2% de pasajeros.</p>
+    <div class="pase-tarjetas">
+      <div class="pase-tarj"><div class="pase-t1">La que calculas gratis (ingenua)</div><div>Comparas dos rondas tuyas. Pero mezcla tu precio con todo lo demás que cambió: la competencia, la temporada, tus otras decisiones.</div></div>
+      <div class="pase-tarj pase-con"><div class="pase-t1">Con el estudio (${money(costo)}): la controlada</div><div>Solo el efecto de <b>tu precio</b>, con la competencia y la temporada constantes, para viajeros de negocios y de placer.</div></div>
+    </div>
+    <p>Es como la heladería de la Unidad 5: bajó el precio y vendió un 30% más, pero la mitad de ese aumento vino de una ola de calor, no del precio.</p>
+    <h4>2. ¿Por qué comprarlo?</h4>
+    <p class="paso-dec">✔ <b>Sabes cuánto te conviene subir o bajar tu precio</b>, sin confundirte con lo que hizo la competencia.<br>
+    ✔ <b>Se paga una sola vez</b> y queda disponible hasta el final.<br>
+    ✘ <b>Cuesta ${money(costo)}</b>, y a esta altura quedan pocas rondas para aprovecharlo.<br>
+    ✘ <b>Es un rango, no un número exacto</b>: ningún estudio real lo es.</p>
+    <h4>3. Calcula con tus números</h4>
+    <p class="paso-dec">${ingenua ? `Tu elasticidad ingenua (gratis): entre la Ronda ${ingenua.a.ronda} y la ${ingenua.b.ronda}, tu precio cambió ${_P(ingenua.dp)} y tus pasajeros ${_P(ingenua.dq)}: <b>${(ingenua.e).toFixed(1).replace('.', ',')}</b>.${ingenua.e > 0 ? ' <span style="color:#E8A23C;">Es positiva, algo que no tiene sentido económico: señal clara de que el contexto la contaminó.</span>' : ''}` : 'Todavía no tienes dos rondas con un cambio de precio para calcular tu elasticidad ingenua.'}<br>
+    ${temporadas ? `Tu historial tiene <b>${temporadas} ${temporadas === 1 ? 'ronda' : 'rondas'} con temporada</b>: tu elasticidad ingenua está contaminada.<br>` : ''}
+    Te ${quedan === 1 ? 'queda' : 'quedan'} <b>${quedan} ${quedan === 1 ? 'ronda' : 'rondas'}</b> (contando esta): el estudio te cuesta unos <b>${money(costo / quedan)} por ronda</b>.</p>
+    <p class="reco-dec">→ ${yaComprado ? 'Ya compraste este estudio: revísalo en el Reporte de Mercado antes de decidir tu precio.' : 'Te conviene si vas a mover tu precio en las rondas que quedan y no sabes cuánto: equivocarte en $1 cuesta entre $10 y $30 por ronda.'}</p>
+    <details class="repaso" style="margin-top:12px;"><summary>Para profundizar: la evidencia y los límites</summary>
+      <p class="paso-dec" style="margin-top:8px;"><b>Elasticidades reales del transporte aéreo:</b> los metaanálisis muestran que los viajeros de negocios son menos sensibles al precio que los de placer (Brons et al., 2002; Gillen et al., 2003). El simulador usa esa diferencia.<br>
+      <b>Por qué un rango:</b> la elasticidad se estima con pocas rondas de datos, y el precio y la demanda se influyen mutuamente (cuando la demanda sube, las aerolíneas tienden a subir el precio). Eso se llama <b>endogeneidad</b> y puede sesgar cualquier cálculo hecho con datos históricos.</p>
+    </details>
   </div>`;
 }
 
@@ -2176,8 +2240,7 @@ function resumenDecision(d){
   if(d.anclaje) L.push(['Tarifa tachada', d.precioTachado > 0 ? money2(d.precioTachado) + ' tachado' : 'sí']);
   if(d.overbooking > 0) L.push(['Sobreventa', d.overbooking + ' asientos']);
   if(d.dynamicPricing) L.push(['Precio dinámico', 'sensibilidad ' + (d.sensibilidadDynamic ?? 0.5)]);
-  if(d.comprarWTP) L.push(['Estudio de mercado (WTP)', 'comprado']);
-  if(d.comprarElasticidad) L.push(['Estudio de elasticidad', 'comprado']);
+  if(d.comprarWTP) L.push(['Investigación de mercado', d.comprarElasticidad ? 'Premium (' + money(costoPremium(APP.equipo)) + ')' : 'Estándar (' + money(costoEstudioMercado(APP.equipo)) + ')']);
   if(d.gastoMadurez > 0) L.push(['Madurez', money(d.gastoMadurez) + ' → Talento ' + d.talento + ', Procesos ' + d.procesos + ', Datos ' + d.datos]);
   if(d.pricingAlgoritmico) L.push(['Precios personalizados', 'sí']);
   return L;
@@ -2198,7 +2261,7 @@ function vistaDecision(){
   const p = PARAMS.perfiles[e.perfil];
   const d = APP.decisionActual;
   const cfg = APP.config || {};
-  const costoWtpActual = e.perfil==='domestica' ? (cfg.costoWtpDomestica ?? 80) : (cfg.costoWtpInternacional ?? 200);
+  const costoWtpActual = costoEstudioMercado(APP.equipo);
   const costoElasticidadActual = e.perfil==='domestica' ? (cfg.costoElasticidadDomestica ?? 100) : (cfg.costoElasticidadInternacional ?? 250);
 
   if(APP.enviada){
@@ -2262,7 +2325,7 @@ function vistaDecision(){
         </div>
         <div class="ref-nota">${pan.preciso
           ? 'Cifras calculadas con los datos de mercado que compraste esta ronda.'
-          : 'Tu techo es una estimación. El estudio de mercado lo precisa con una encuesta a tus clientes. Los precios de cada competidor los ves gratis en Resultados.'}</div>
+          : 'Tu techo es una estimación. El estudio de mercado lo precisa con una encuesta a tus clientes, y además te muestra el tamaño del mercado. Los precios de cada competidor los ves gratis en Resultados.'}</div>
       </div>
       ${activo('valla',ronda) ? `
       <div class="referencia" style="margin-top:10px;">
@@ -2288,19 +2351,17 @@ function vistaDecision(){
       <div class="referencia" id="panelReferenciaMarketing">${contenidoPanelMarketing(d.marketing||0)}</div>
     `, true, 1)}
 
-    ${grupo('Investigación de mercado', 'Disposición a pagar (WTP)', `
-      <div class="interruptor">
-        <input type="checkbox" id="dWTP" ${d.comprarWTP?'checked':''} ${d.comprarWTP?'disabled':''}>
-        <label for="dWTP">Comprar estudio de mercado — ${money(costoWtpActual)}</label>
-      </div>
-      <div style="margin:6px 0 0;font-size:12.5px;line-height:1.45;color:#E8A23C;">⚠ Una vez que la marques y veas el dato exacto, no podrás desmarcarla: se cobra igual, aunque cambies de opinión después.</div>
-      <div class="referencia">
-        <div class="ref-nota"><b>El precio de referencia y tu piso ya los ves gratis, sin comprar nada</b> — son datos que ya existen: lo que cobra la competencia (un hecho público) y tu propio costo (algo que tú ya conoces).</div>
-        <div class="ref-nota" style="margin-top:8px;">Lo único que no puedes saber gratis es tu <b>techo</b>: cuánto más que el promedio del mercado tus propios pasajeros están dispuestos a pagar por volar contigo, específicamente. Ese número no vive en lo que cobra BoA o LATAM — vive en la cabeza de tus clientes. Nadie te lo puede decir sin preguntarles, y eso es justo lo que hace este estudio.</div>
-        <div class="ref-nota" style="margin-top:8px;">Por eso comprarlo no te informa mejor sobre la competencia (ya la conoces) — te informa mejor sobre tu propio límite de precio, que es el único de los tres números del panel que trae incertidumbre si no lo compras.</div>
-        <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como una señal fuerte, no como una certeza.</div>
-      </div>
-      <div id="panelReferenciaExtras">${d.comprarWTP ? '<div class="ref-nota" style="margin-top:10px;color:var(--marca);">Estudio comprado. Los precios de la competencia, la encuesta de intención de compra y los rubros de referencia están en la pestaña <b>Reporte de Mercado</b>.</div>' : ''}</div>
+    ${grupo('Investigación de mercado', 'Estándar o Premium', `
+      ${(() => { const nivel = d.comprarElasticidad ? 'premium' : (d.comprarWTP ? 'estandar' : 'ninguno'), fijo = nivel !== 'ninguno';
+        const op = (v, t, sub) => `<label class="op-estudio${nivel === v ? ' sel' : ''}"><input type="radio" name="dEstudio" value="${v}" ${nivel === v ? 'checked' : ''} ${fijo ? 'disabled' : ''}><span><b>${t}</b><br><span style="font-size:13px;color:var(--texto-tenue);">${sub}</span></span></label>`;
+        return `<div class="ops-estudio">
+          ${op('ninguno', 'Ninguno', 'Decido con la información gratuita')}
+          ${op('estandar', 'Estándar — ' + money(costoEstudioMercado(APP.equipo)), 'Encuesta por segmento, mapa de valor, y reservas y participación')}
+          ${op('premium', 'Premium — ' + money(costoPremium(APP.equipo)), 'Todo lo del Estándar, más tu elasticidad ingenua y controlada')}
+        </div>
+        <div style="margin:6px 0 0;font-size:13px;color:var(--texto-tenue);">Elige un nivel solo si decidiste comprarlo después de revisar tus señales. Lo que compras sirve solo para esta ronda. (Unidades 2 y 5)</div>
+        <div style="margin:6px 0 0;font-size:12.5px;line-height:1.45;color:#E8A23C;">⚠ Una vez que elijas Estándar o Premium, verás los datos de inmediato y la elección queda fija para esta ronda: no podrás cambiarla ni subir de nivel.</div>`; })()}
+      <div id="panelReferenciaExtras">${contenidoPanelExtrasWTP(d.comprarWTP, APP.equipo, p)}${d.comprarElasticidad ? htmlEstudioElasticidad(APP.equipo, p) : ''}</div>
     `, activo('wtp',ronda), 2)}
 
     ${grupo('Ingresos complementarios', 'Producto ancla y complementario', `
@@ -2348,16 +2409,7 @@ function vistaDecision(){
       </div>
     `, activo('dynamic',ronda), 4)}
 
-    ${grupo('Estudio de elasticidad', 'Elasticidad controlada', `
-      <div class="interruptor">
-        <input type="checkbox" id="dElast" ${d.comprarElasticidad?'checked':''} ${d.comprarElasticidad?'disabled':''}>
-        <label for="dElast">Comprar estudio de elasticidad — ${money(costoElasticidadActual)}</label>
-      </div>
-      <div class="referencia">
-        <div class="ref-fila"><span>Qué mide</span><b>Qué tanto cae tu venta si subes el precio</b></div>
-        <div class="ref-nota">Algunos productos casi no pierden clientes cuando suben de precio (poco elásticos); otros pierden muchos (muy elásticos).</div>
-      </div>
-    `, activo('elasticidad',ronda), 5)}
+
 
     ${grupo('Madurez organizacional', 'Talento, Procesos y Datos', `
       <div class="referencia" style="margin-bottom:10px;">
@@ -2483,41 +2535,134 @@ function tablaEncuestaWTP(piso, techoReal, semilla, equipo){
   });
 }
 
+/* ===== ESTUDIO DE MERCADO ($50): encuesta por segmento con sesgo hipotético y mapa de valor =====
+   Encuesta: la misma función de elección y el mismo tamaño de segmento que usa el motor.
+   Sesgo hipotético: las respuestas sobreestiman la compra entre 11% y 31% (promedio 21%; Schmidt y Bijmolt, 2020).
+   Mapa de valor: precio relativo contra valor percibido relativo (Gale, 1994; Leszinski y Marn, 1997). */
+function _sesgoEncuesta(sem){ const r = mulberry32(hashStr(sem + '::sesgo')); return 0.11 + r() * 0.20; }
+function competenciaUltimaRonda(e){
+  // Precio y atractivo (sin precio) de cada competidor en la última ronda, y el atractivo propio
+  const hist = (e && e.historial) || [], mio = hist.filter(h => h.capacidad).slice(-1)[0];
+  const kDe = h => h && h.componentes ? (h.componentes.producto || 1) * (h.componentes.confianza || 1) : 1;
+  if(!mio) return null;
+  const comp = [];
+  (APP.tablero || []).filter(t => t.perfil === e.perfil && t.nombre.toLowerCase() !== e.nombre.toLowerCase()).forEach(t => {
+    const h = (t.historial || []).find(x => x.ronda === mio.ronda); if(h) comp.push({ precio: h.precioFinal, k: kDe(h) });
+  });
+  (mio.competidores || []).forEach(b => comp.push({ precio: b.precio, k: b.producto || 1 }));
+  return comp.length ? { comp, kPropio: kDe(mio) } : null;
+}
+function modeloSegmento(seg, precio, e, p){
+  // Pasajeros esperados de un segmento a un precio dado, frente a la competencia de la última ronda (mismo modelo que el motor:
+  // atractivo = atractivo sin precio × e^(−β·(precio/precio promedio − 1)); tamaño del segmento según su elasticidad)
+  const hist = (e && e.historial) || [], ult = hist[hist.length - 1], beta = PARAMS.sensibilidadPrecio || 2.65;
+  let datos = competenciaUltimaRonda(e);
+  if(!datos){
+    const bots = Object.values(preciosPorCompetidor(e.perfil, hist));
+    const nEq = (APP.config && (e.perfil === 'internacional' ? APP.config.eqInternacional : APP.config.eqDomestica)) || 2;
+    const otros = Array(Math.max(0, nEq - 1)).fill(ult && ult.precioMercado ? ult.precioMercado : (bots.reduce((a, b) => a + b, 0) / bots.length));
+    datos = { comp: [...bots, ...otros].map(x => ({ precio: x, k: 1 })), kPropio: 1 };
+  }
+  const elas = seg === 'negocio' ? (PARAMS.elasticidadNegocio ?? -0.8) : (PARAMS.elasticidadPlacer ?? -1.8);
+  const poolBase = (APP.config && (e.perfil === 'internacional' ? APP.config.poolInternacional : APP.config.poolDomestica)) || Math.round(p.capacidad * 2.25);
+  const pm = (precio + datos.comp.reduce((a, c) => a + c.precio, 0)) / (datos.comp.length + 1), at = (k, x) => k * Math.exp(-beta * (x / pm - 1));
+  const mio = at(datos.kPropio, precio), prob = mio / (mio + datos.comp.reduce((s, c) => s + at(c.k, c.precio), 0));
+  return { prob, poolSeg: poolBase * p.segmentos[seg] * Math.pow(pm / p.precioBase, elas) };
+}
+function encuestaSegmento(seg, e, p, sem){
+  const hist = (e && e.historial) || [], dec = APP.decisionActual || {}, ult = hist.filter(h => h.capacidad).slice(-1)[0];
+  const cv = p.iocPorPasajero, ns = p.noShowPct, asientos = p.capacidad * (1 - ns);
+  const panReal = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, hist, true, e.nombre);
+  // 5 precios candidatos cercanos entre sí (≈$1), alrededor del precio promedio del mercado, para rodear el óptimo
+  const ref = (ult && ult.precioMercado) || p.precioBase, piso = panReal.piso;
+  const fr = seg === 'negocio' ? [0.90, 0.94, 0.97, 1.00, 1.04] : [0.80, 0.84, 0.88, 0.92, 0.96];
+  // La otra tarifa del equipo se mantiene en su valor actual (lo escrito en la Hoja, o la última ronda)
+  const flexAct = dec.precio || (ult && ult.decision && ult.decision.precio) || ref;
+  const promoAct = dec.tarifaPromocional > 0 ? dec.tarifaPromocional : (ult && ult.decision && ult.decision.tarifaPromocional > 0 ? ult.decision.tarifaPromocional : flexAct);
+  // Sin Tarifa Promocional, la Flex es el precio de los dos segmentos: cada candidato de negocios se aplica también a placer
+  const unSoloPrecio = seg === 'negocio' && !(promoAct > 0 && promoAct !== flexAct);
+  const otroSeg = seg === 'negocio' ? 'placer' : 'negocio', otroPrecioFijo = seg === 'negocio' ? promoAct : flexAct;
+  const sesgo = _sesgoEncuesta(sem);
+  // Margen del vuelo: los dos segmentos comparten los asientos; si no caben todos, se queda primero el que paga más
+  const vuelo = (paxSeg, precio, paxOtro, otroPrecio) => {
+    const [pAlto, qAlto, pBajo, qBajo] = precio >= otroPrecio ? [precio, paxSeg, otroPrecio, paxOtro] : [otroPrecio, paxOtro, precio, paxSeg];
+    const a = Math.min(qAlto, asientos), b = Math.min(qBajo, asientos - a);
+    return { margen: a * (pAlto - cv) + b * (pBajo - cv), lleno: qAlto + qBajo > asientos };
+  };
+  const filas = fr.map(f => red(Math.max(piso + 0.5, ref * f), 2)).map(precio => {
+    const m = modeloSegmento(seg, precio, e, p), dice = Math.min(0.98, m.prob * (1 + sesgo));
+    const pax = m.poolSeg * dice * (1 - ns), paxReal = m.poolSeg * m.prob * (1 - ns);
+    const otroPrecio = unSoloPrecio ? precio : otroPrecioFijo, mo = modeloSegmento(otroSeg, otroPrecio, e, p), paxOtroReal = mo.poolSeg * mo.prob * (1 - ns);
+    const vE = vuelo(pax, precio, paxOtroReal * (1 + sesgo), otroPrecio), vC = vuelo(pax / 1.21, precio, paxOtroReal * (1 + sesgo) / 1.21, otroPrecio);
+    return { precio, dice: Math.round(dice * 100), pax, ingreso: pax * precio, margen: vE.margen, margenCorr: vC.margen, lleno: vC.lleno, paxReal };
+  });
+  return { filas, sesgo, otroSeg, otroPrecio: otroPrecioFijo, unSoloPrecio };
+}
+function htmlEncuestas(e, p, sem){
+  const n0 = v => String(Math.round(v)).replace('.', ',');
+  const tabla = (seg, titulo, para) => {
+    const r = encuestaSegmento(seg, e, p, sem), mejor = r.filas.reduce((mi, f, i, a) => f.margenCorr > a[mi].margenCorr ? i : mi, 0);
+    return `<p style="margin:12px 0 4px;font-weight:600;">${titulo}</p>
+      <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Precio</th><th>Dicen que comprarían</th><th>Pasajeros de este segmento, según la encuesta</th><th>Ingreso de este segmento</th><th>Margen del vuelo, según la encuesta</th><th>Margen del vuelo corregido (÷ 1,21)</th></tr>
+      ${r.filas.map((f, i) => `<tr${i === mejor ? ' style="color:var(--marca);font-weight:600;"' : ''}><td>${money2(f.precio)}</td><td>${f.dice}%</td><td>${n0(f.pax)}${f.lleno ? ' <span style="color:#E8A23C;">(avión lleno)</span>' : ''}</td><td>${money(f.ingreso)}</td><td>${money(f.margen)}</td><td>${money(f.margenCorr)}</td></tr>`).join('')}</table></div>
+      <p style="margin:4px 0 0;font-size:13px;color:var(--texto-tenue);">${para}: el precio en verde es el de mayor margen del vuelo corregido, <b>${money2(r.filas[mejor].precio)}</b>. ${r.unSoloPrecio ? `Como no tienes Tarifa Promocional, tu Flex es el precio de los dos segmentos: el margen del vuelo incluye a los viajeros de placer al mismo precio.` : `El margen del vuelo supone que tu ${r.otroSeg === 'placer' ? 'tarifa para placer' : 'Tarifa Flex'} se mantiene en ${money2(r.otroPrecio)}.`} Los dos segmentos comparten tus ${p.capacidad} asientos: si no caben todos, se quedan primero los que pagan más.</p>`;
+  };
+  return `<h4 style="margin:4px 0 6px;">Encuesta de disposición a pagar · 100 clientes de cada segmento</h4>
+    <p style="margin:0 0 6px;">Se preguntó: "¿Comprarías un pasaje de esta aerolínea a este precio?", frente a los precios de la competencia de la ronda anterior.</p>
+    ${tabla('negocio', 'Viajeros de negocios', 'Úsala para tu Tarifa Flex')}
+    ${tabla('placer', 'Viajeros de placer', 'Úsala para tu Tarifa Promocional')}
+    <p class="paso-dec" style="margin-top:10px;"><b>Ojo con el sesgo de las encuestas:</b> la gente dice que compraría más de lo que realmente compra. En promedio, las encuestas sobreestiman la compra en un <b>21%</b> (Schmidt y Bijmolt, 2020). Por eso la última columna divide el margen entre 1,21. El sesgo cambia de una encuesta a otra, así que tómala como una guía, no como una certeza.<br>
+    <b>Por qué el margen del vuelo y no el ingreso:</b> el ingreso no descuenta lo que te cuesta atender a cada pasajero (${money2(p.iocPorPasajero)}), y un segmento no puede analizarse solo: los dos comparten los mismos asientos. Bajar un precio solo conviene mientras los pasajeros nuevos quepan en el avión (Unidad 4).</p>`;
+}
+function datosMapaValor(e){
+  const hist = (e.historial || []).filter(h => h.capacidad), mio = hist[hist.length - 1];
+  if(!mio) return null;
+  const R = mio.ronda, pts = [], kDe = h => h && h.componentes ? (h.componentes.producto || 1) * (h.componentes.confianza || 1) : 1;
+  (APP.tablero || []).filter(t => t.perfil === e.perfil && t.nombre.toLowerCase() !== e.nombre.toLowerCase()).forEach(t => {
+    const h = (t.historial || []).find(x => x.ronda === R); if(h) pts.push({ nombre: t.nombre, precio: h.precioFinal, k: kDe(h) });
+  });
+  pts.push({ nombre: e.nombre, yo: true, precio: mio.precioFinal, k: kDe(mio) });
+  (mio.competidores || []).forEach(b => pts.push({ nombre: b.nombre, bot: true, precio: b.precio, k: b.producto || 1 }));
+  const rng = mulberry32(hashStr(e.nombre + '::mapa::' + R));
+  const mp = pts.reduce((s, x) => s + x.precio, 0) / pts.length, mk = pts.reduce((s, x) => s + x.k, 0) / pts.length;
+  pts.forEach(x => { x.y = x.precio / mp; x.x = (x.k / mk) * (1 + (rng() * 2 - 1) * 0.015); });
+  return { R, pts };
+}
+function htmlMapaValor(e){
+  const m = datosMapaValor(e);
+  if(!m) return '<p class="sub">El mapa de valor estará disponible desde que cierre tu primera ronda.</p>';
+  const xs = m.pts.map(x => x.x), ys = m.pts.map(x => x.y);
+  const lo = Math.min(0.9, ...xs, ...ys) - 0.02, hi = Math.max(1.1, ...xs, ...ys) + 0.02;
+  const W = 420, H = 320, P = 46, sx = v => P + (v - lo) / (hi - lo) * (W - P - 14), sy = v => H - P - (v - lo) / (hi - lo) * (H - P - 14);
+  const yo = m.pts.find(x => x.yo), dif = yo.y - yo.x;
+  const lectura = dif > 0.015 ? `Tu aerolínea está <b>sobre la línea</b>: tu precio es alto para el valor que perciben los pasajeros. Lo más probable es que pierdas participación, salvo que subas tu valor (marketing, extras, Pase) o ajustes tu precio.`
+    : (dif < -0.015 ? `Tu aerolínea está <b>bajo la línea</b>: eres barato para el valor que ofreces. Ganas participación, pero podrías estar dejando dinero sobre la mesa; si tu avión se llena, considera subir el precio.`
+    : `Tu aerolínea está <b>sobre la línea de valor justo</b>: tu precio corresponde al valor que perciben los pasajeros.`);
+  const puntos = m.pts.map(x => `<circle cx="${sx(x.x).toFixed(1)}" cy="${sy(x.y).toFixed(1)}" r="${x.yo ? 7 : 5}" fill="${x.yo ? 'var(--marca)' : (x.bot ? '#93A09B' : '#4FA8D8')}"/><text x="${(sx(x.x) + 9).toFixed(1)}" y="${(sy(x.y) + 4).toFixed(1)}" font-size="12" fill="var(--texto)">${esc(x.nombre)}${x.yo ? ' (tú)' : ''}</text>`).join('');
+  return `<h4 style="margin:16px 0 6px;">Mapa de valor · Ronda ${m.R}</h4>
+    <p style="margin:0 0 6px;">Cada punto es una aerolínea. <b>Horizontal:</b> el valor que perciben los pasajeros (marketing, extras, Pase, tarifa tachada, organización), comparado con el promedio. <b>Vertical:</b> su precio, comparado con el promedio (el índice de precio de la Unidad 1). La línea diagonal es la de <b>valor justo</b>: precio que corresponde exactamente al valor.</p>
+    <div style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:var(--panel);border-radius:8px;">
+      <line x1="${sx(lo)}" y1="${sy(lo)}" x2="${sx(hi)}" y2="${sy(hi)}" stroke="var(--marca)" stroke-dasharray="5 4" opacity=".6"/>
+      <text x="${sx(hi) - 4}" y="${sy(hi) + 16}" font-size="11" text-anchor="end" fill="var(--texto-tenue)">valor justo</text>
+      <text x="${sx(lo) + 6}" y="${sy(hi) + 12}" font-size="11" fill="#E8A23C">caro para su valor</text>
+      <text x="${sx(hi) - 6}" y="${sy(lo) - 8}" font-size="11" text-anchor="end" fill="var(--marca)">barato para su valor</text>
+      <line x1="${P}" y1="${H - P}" x2="${W - 10}" y2="${H - P}" stroke="var(--borde)"/><line x1="${P}" y1="${H - P}" x2="${P}" y2="10" stroke="var(--borde)"/>
+      <text x="${(W + P) / 2}" y="${H - 12}" font-size="12" text-anchor="middle" fill="var(--texto-tenue)">Valor percibido relativo →</text>
+      <text x="14" y="${(H - P) / 2}" font-size="12" text-anchor="middle" fill="var(--texto-tenue)" transform="rotate(-90 14 ${(H - P) / 2})">Precio relativo →</text>
+      ${puntos}</svg></div>
+    <p class="reco-dec" style="margin-top:8px;">→ ${lectura}</p>
+    <p style="margin:4px 0 0;font-size:13px;color:var(--texto-tenue);">El valor percibido se mide con una encuesta, así que cada posición tiene un pequeño margen de error.</p>`;
+}
+function contenidoEstudioMercado(e, p){
+  const sem = e.nombre + '::' + (APP.config ? APP.config.rondaActual : 1);
+  return `${htmlEncuestas(e, p, sem)}${htmlMapaValor(e)}
+    <p style="margin:12px 0 0;font-size:13px;color:var(--texto-tenue);">Al cerrar la ronda, en <b>Resultados</b> verás además las reservas y la participación de cada aerolínea, y la demanda total estimada de esta ronda.</p>`;
+}
 function contenidoPanelExtrasWTP(comprarWTP, e, p){
   if(!comprarWTP) return '';
-  const precios = preciosPorCompetidor(e.perfil, e.historial);
-  const filasPrecios = Object.entries(precios).map(([nombre,precio]) =>
-    `<div class="ref-fila"><span>${esc(nombre)}</span><b>${money2(precio)}</b></div>`).join('');
-
-  const panReal = panelPrecio(e.perfil, e.tresC ? e.tresC.valor : PARAMS.benchmarkValor, e.historial, true, e.nombre);
-  const encuesta = tablaEncuestaWTP(panReal.piso, panReal.techo, e.nombre+'::'+(APP.config?APP.config.rondaActual:1), e);
-  const mejorIdx = encuesta.reduce((mi,f,i,arr)=> f.margenVuelo > arr[mi].margenVuelo ? i : mi, 0);
-  const filasEncuesta = encuesta.map((f,i) =>
-    `<tr style="${i===mejorIdx?'color:var(--marca);font-weight:600;':''}"><td>${money2(f.precio)}</td><td>${f.aceptacion}%</td><td>${f.pasajeros}${f.lleno?' (lleno)':''}</td><td>${money(f.margenVuelo)}</td></tr>`).join('');
-
-  return `<div class="referencia" style="margin-top:10px;">
-    <div class="ref-nota" style="margin-bottom:6px;"><b>Precio real de cada competidor esta ronda</b> — promedio del perfil ${p.nombre} completo (rutas ${p.rutas.join(' y ')}), no de una ruta específica.</div>
-    ${filasPrecios}
-    <div class="ref-nota" style="margin-top:10px;"><b>Encuesta de intención de compra</b> — ejercicio simulado: el % indica cuántos pasajeros te elegirían a cada precio frente a los precios de tu competencia en la ronda anterior. No es una encuesta real a clientes bolivianos.</div>
-    <table style="width:100%;font-size:13px;margin-top:6px;border-collapse:collapse;">
-      <tr style="color:var(--texto-tenue);"><td>Precio candidato</td><td>% que te compraría</td><td>Pasajeros estimados</td><td>Margen del vuelo</td></tr>
-      ${filasEncuesta}
-    </table>
-    <div class="ref-nota" style="margin-top:8px;"><b>Cómo leerla:</b> la Unidad 2 enseña a multiplicar precio × % que compraría. Aquí se da un paso más: el % se convierte en pasajeros, que no pueden superar los ${PARAMS.perfiles[e.perfil].capacidad} asientos de tu avión (Unidad 4), y cada pasajero te deja su precio menos tu costo variable de ${money2(PARAMS.perfiles[e.perfil].iocPorPasajero)}. La fila en verde es la de mayor <b>margen del vuelo</b>: si la usas de guía, tu precio sería <b>${money2(encuesta[mejorIdx].precio)}</b>. Si a un precio llenarías el avión, bajarlo más no suma pasajeros: solo resta margen.</div>
-    <div class="ref-nota" style="margin-top:8px;"><b>Úsala con criterio:</b> la encuesta es una estimación, no el mercado real. Antes de adoptar su precio, contrástalo con tu propio historial: cómo cambiaron tus pasajeros y tu utilidad cuando moviste la Tarifa Flex en rondas anteriores.</div>
-    <div class="ref-nota" style="margin-top:10px;"><b>Otros rubros de referencia</b></div>
-    <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
-    <div class="ref-fila"><span>Seguro de viaje — referencia de mercado (estimado)</span><b>${money2(p.refSeguro)}</b></div>
-    <div class="ref-fila"><span>Suscripción tipo Pase Frecuente — referencia de mercado (estimado)</span><b>${money2(p.refPaseFrecuente)}/mes</b></div>
-    <div class="ref-nota">El dato de equipaje es real y verificado. Ninguna aerolínea boliviana ofrece hoy un Pase Frecuente ni un seguro de viaje exactamente así — las otras dos cifras son una referencia razonada, no un precio publicado.</div>
-  </div>`;
+  return `<div class="explica-dec" style="margin-top:10px;">${contenidoEstudioMercado(e, p)}</div>`;
 }
 
-/* ============================================================
-   ACTUALIZACIÓN EN VIVO — solo cambia números de referencia,
-   nunca reconstruye los campos de entrada (evita perder el
-   cursor o el orden de los dígitos mientras se escribe).
-   ============================================================ */
 function actualizarPanelesEnVivo(){
   const e = APP.equipo;
   const inPrecio = document.getElementById('dPrecio');
@@ -2629,7 +2774,7 @@ function vistaReporte(){
   }
   const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
   const fila = (t,v,cls='') => `<tr class="${cls}"><td>${t}</td><td>${money2(v)}</td></tr>`;
-  const totalM = mercadoTotal(rep), partM = Math.round(rep.pasajerosGanados / totalM * 10000) / 100;
+  const totalM = demandaEstimada(rep), partM = participacionReservas(rep);
   const dec = rep.decision || {};
   const hojaRonda = `<div class="explica" style="margin:0 0 16px;">
       <h4 style="margin-top:0;">${rep.esAntecedente ? 'Decisiones de la aerolínea en el trimestre anterior' : 'Hoja de decisión de la Ronda ' + rep.ronda}</h4>
@@ -2643,10 +2788,10 @@ function vistaReporte(){
     ${hojaRonda}
     <h2 class="titulo">${rep.esAntecedente ? 'Así recibes tu aerolínea · trimestre anterior' : 'Resultado de la Ronda ' + rep.ronda}</h2>
     ${rep.esAntecedente ? `<p class="sub">Antes de que tu equipo tomara el mando, la aerolínea cobró ${money2(rep.precioFinal)} (el mismo precio que ${Object.keys(rep.preciosCompetidores||{}).join(' y ') || 'la competencia'}) e invirtió ${money(rep.decision && rep.decision.marketing || 0)} en marketing. Todos los equipos reciben la misma aerolínea: usa estos resultados como punto de partida para tu primera decisión.</p>` : ''}
-    <p class="sub">${rep.esAntecedente ? 'La aerolínea ganó' : 'Ganaste'} ${rep.pasajerosGanados} pasajeros de los ${totalM} que buscaban vuelo${cap.spill>0?`, pero ${cap.spill} se fueron con la competencia porque no tenías asientos`:''}.</p>
+    <p class="sub">${rep.esAntecedente ? 'La aerolínea ganó' : 'Ganaste'} ${rep.pasajerosGanados} pasajeros${conEstudio(rep) ? ` de una demanda estimada de unos ${totalM}` : ''}${cap.spill>0?`, pero ${cap.spill} se fueron con la competencia porque no tenías asientos`:''}.</p>
 
     <div class="kpis">
-      <div class="kpi"><div class="k-nombre">Participación de mercado</div><div class="k-valor cifra">${_coma(partM)}%</div></div>
+      <div class="kpi"><div class="k-nombre">Participación de mercado</div>${conEstudio(rep) ? `<div class="k-valor cifra">${_coma(partM)}%</div>` : `<div class="k-valor cifra" style="color:var(--texto-tenue);">—</div><div class="k-sub">Requiere el estudio de mercado</div>`}</div>
       <div class="kpi"><div class="k-nombre">Pasajeros a bordo</div><div class="k-valor cifra">${cap.abordados}</div></div>
       <div class="kpi"><div class="k-nombre">Ocupación</div><div class="k-valor cifra">${_coma(m.loadFactor)}%</div></div>
       <div class="kpi"><div class="k-nombre">Yield · ingreso por pasajero</div><div class="k-valor cifra">${money2(m.yield)}</div></div>
@@ -2715,6 +2860,23 @@ function vistaReporte(){
    ============================================================ */
 /* Total del mercado de una ronda: la suma de lo que captó cada aerolínea (igual que el Panel Docente
    y la tabla de reparto). Si faltan datos de alguna aerolínea, se usa el tamaño calculado por el motor. */
+/* La información del mercado (tamaño, captados, participación) solo se conoce con el estudio de mercado de esa ronda.
+   Lo público es: tus propios datos, los precios de la competencia y los pasajeros transportados con una ronda de retraso. */
+function conEstudio(rep){ return !!(rep && !rep.esAntecedente && rep.comproWTP); }
+function participacionReservas(rep){
+  // Participación sobre las reservas de todas las aerolíneas (igual que la tabla del estudio)
+  const res = h => h && h.capacidad ? (h.capacidad.reservas ?? Math.min(h.pasajerosGanados || 0, h.capacidad.cupoVenta || 70)) : null;
+  let total = 0, ok = true;
+  (APP.tablero || []).filter(t => APP.equipo && t.perfil === APP.equipo.perfil).forEach(t => { const r = res((t.historial || []).find(x => x.ronda === rep.ronda)); if(r == null) ok = false; else total += r; });
+  (rep.competidores || []).forEach(b => { const r = res(b); if(r == null) ok = false; else total += r; });
+  const mia = res(rep);
+  if(!ok || !total || mia == null) return Math.round(rep.pasajerosGanados / mercadoTotal(rep) * 10000) / 100;
+  return Math.round(mia / total * 10000) / 100;
+}
+function demandaEstimada(rep){
+  const base = mercadoTotal(rep), r = mulberry32(hashStr(((APP.equipo && APP.equipo.nombre) || 'x') + '::demanda::' + rep.ronda));
+  return Math.round(base * (1 + (r() * 2 - 1) * 0.05));
+}
 function mercadoTotal(rep){
   let total = rep.poolDeRonda;
   if(!rep.esAntecedente && APP.tablero && APP.equipo){
@@ -2742,12 +2904,13 @@ function observaciones(rep){
     if(sinAsiento > 0) partes.push(`${sinAsiento} quisieron volar contigo pero no encontraron asiento`);
     const ultima = partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0];
     const totalMercado = mercadoTotal(rep);
-    o.push(`En tu mercado <b>quisieron viajar ${totalMercado} pasajeros</b>. ${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} captó ${rep.pasajerosGanados} (el ${String(Math.round(rep.pasajerosGanados / totalMercado * 1000) / 10).replace('.', ',')}%): ${ultima}.`);
+    if(conEstudio(rep)) o.push(`Según tu estudio de mercado, la demanda total fue de <b>unos ${demandaEstimada(rep)} pasajeros</b> (estimación). Tu aerolínea captó ${rep.pasajerosGanados}: ${ultima}. Tu participación de mercado está en Resultados.`);
+    else o.push(`${rep.esAntecedente ? 'La aerolínea' : 'Tu aerolínea'} <b>captó ${rep.pasajerosGanados} pasajeros</b>: ${ultima}. ${rep.esAntecedente ? '' : '¿Cuántos quisieron viajar en total y cuántos se llevó cada competidor? Eso solo lo muestra el estudio de mercado.'}`);
   }
   o.push(`Tu precio fue de ${money2(rep.precioFinal)}; el promedio del mercado, ${money2(rep.precioMercado)}.`);
   if(APP.decisionActual.dynamicPricing && rep.precioDecidido != null && Math.abs(rep.precioDecidido - rep.precioFinal) >= 0.01){
     const subio = rep.precioFinal > rep.precioDecidido;
-    const ritmoTxt = (rep.poolDeRonda != null && rep.poolFijo) ? ` (ritmo real ${rep.poolDeRonda} vs. esperado ${rep.poolFijo} pasajeros)` : '';
+    const ritmoTxt = (conEstudio(rep) && rep.poolDeRonda != null && rep.poolFijo) ? ` (ritmo real ${rep.poolDeRonda} vs. esperado ${rep.poolFijo} pasajeros)` : '';
     o.push(`Dynamic pricing ajustó tu precio: escribiste ${money2(rep.precioDecidido)} y se cobró ${money2(rep.precioFinal)} — ${subio?'subió':'bajó'} porque la demanda fue ${subio?'más fuerte':'más débil'} de lo esperado${ritmoTxt}.`);
   }
   if(er.desglosePrecio && er.desglosePrecio.promo){
@@ -2908,10 +3071,35 @@ function vistaHistorial(){
    el área de research de una empresa: un solo lugar de consulta.
    ============================================================ */
 /* Tamaño y reparto del mercado en la última ronda cerrada (parte del estudio de mercado) */
+function htmlMercadoPublico(e, mio){
+  const R = mio.ronda, Rp = R - 1, filas = [];
+  const vol = (hist, r) => { const h = (hist || []).find(x => x.ronda === r); return h && h.capacidad ? h.capacidad.abordados : null; };
+  const histMio = (e.historial || []);
+  (APP.tablero || []).filter(t => t.perfil === e.perfil).forEach(t => {
+    const h = (t.historial || []).find(x => x.ronda === R);
+    if(h) filas.push({ nombre: t.nombre, yo: t.nombre.toLowerCase() === e.nombre.toLowerCase(), precio: h.precioFinal, volAnt: vol(t.historial, Rp) });
+  });
+  if(!filas.some(f => f.yo)) filas.push({ nombre: e.nombre, yo: true, precio: mio.precioFinal, volAnt: vol(histMio, Rp) });
+  const prev = histMio.find(x => x.ronda === Rp);
+  (mio.competidores || []).forEach(b => { const pb = prev && (prev.competidores || []).find(c => c.nombre === b.nombre); filas.push({ nombre: b.nombre, bot: true, precio: b.precio, volAnt: pb && pb.capacidad ? pb.capacidad.abordados : null }); });
+  if(!(mio.competidores || []).length) Object.entries(mio.preciosCompetidores || {}).forEach(([n, v]) => filas.push({ nombre: n, bot: true, precio: v, volAnt: null }));
+  const hayAnt = Rp >= 1 && filas.some(f => f.volAnt != null);
+  return `<div class="grupo" style="margin-top:14px;">
+    <div class="grupo-cab"><h3>Información pública del mercado · Ronda ${R}</h3><span class="herramienta">Gratis</span></div>
+    <div class="referencia">
+    <div class="ref-nota" style="margin-top:0;color:var(--texto-tenue);">Lo que cualquier aerolínea puede saber: los precios que publica la competencia y los pasajeros que transportó cada una, que la autoridad aeronáutica publica <b>con una ronda de retraso</b>.</div>
+    <div style="overflow-x:auto;"><table class="tab-pos" style="margin-top:8px;"><tr><th>Aerolínea</th><th>Precio en la Ronda ${R}</th><th>${hayAnt ? 'Pasajeros transportados en la Ronda ' + Rp : 'Pasajeros transportados'}</th></tr>
+      ${filas.map(f => `<tr${f.yo ? ' style="color:var(--marca);font-weight:600;"' : ''}><td>${esc(f.nombre)}${f.yo ? ' (tu equipo)' : ''}${f.bot ? ' <span style="color:var(--texto-tenue);font-size:12px;">competidor real</span>' : ''}</td><td>${money2(f.precio)}</td><td>${hayAnt ? (f.volAnt ?? '—') : '—'}</td></tr>`).join('')}
+    </table></div>
+    <div class="ref-nota">${hayAnt ? '' : 'Los pasajeros transportados de esta ronda se publicarán en la próxima. '}<b>¿Cuántos quisieron viajar, cuántos captó cada aerolínea y cuál fue tu participación de mercado en esta ronda?</b> Eso no es público: solo lo muestra el <b>estudio de mercado</b>${(PARAMS && typeof activo === 'function' && APP.config && !activo('wtp', APP.config.rondaActual)) ? ', que se habilita en la Sesión 2' : ''}.</div>
+    </div>
+  </div>`;
+}
 function htmlRepartoMercado(e, rondaElegida){
   const hist = (e.historial || []).filter(h => h.capacidad);
   const mio = rondaElegida != null ? hist.find(h => h.ronda === rondaElegida) : hist[hist.length - 1];
   if(!mio) return '';
+  if(!mio.comproWTP) return htmlMercadoPublico(e, mio);
   const R = mio.ronda, filas = [];
   const pct = v => v == null ? '—' : String(v).replace('.', ',') + '%';
   (APP.tablero || []).filter(t => t.perfil === e.perfil).forEach(t => {
@@ -2923,26 +3111,76 @@ function htmlRepartoMercado(e, rondaElegida){
   (mio.competidores || []).forEach(b => filas.push({ nombre: b.nombre, bot: true, precio: b.precio, participacion: b.participacion, captados: b.pasajerosGanados, cap: b.capacidad }));
   if(!(mio.competidores || []).length) Object.entries(mio.preciosCompetidores || {}).forEach(([n, v]) => filas.push({ nombre: n, bot: true, precio: v }));
   const completos = filas.every(f => f.cap);
-  let quisieron = 0, volaron = 0, ns = 0, sin = 0;
-  filas.forEach(f => { if(f.cap){ quisieron += f.captados || 0; volaron += f.cap.abordados || 0; ns += f.cap.noShows || 0; sin += (f.cap.spill || 0) + (f.cap.denegados || 0); } });
-  if(completos && quisieron > 0) filas.forEach(f => { f.participacion = Math.round((f.captados || 0) / quisieron * 10000) / 100; });   // suma 100%
-  filas.sort((a, b) => (b.captados || 0) - (a.captados || 0));
+  let reservas = 0, volaron = 0, ns = 0;
+  filas.forEach(f => { if(f.cap){ f.reservas = f.cap.reservas ?? Math.min(f.captados || 0, f.cap.cupoVenta || 70); reservas += f.reservas; volaron += f.cap.abordados || 0; ns += f.cap.noShows || 0; } });
+  if(completos && reservas > 0) filas.forEach(f => { f.participacion = Math.round((f.reservas || 0) / reservas * 10000) / 100; });
+  filas.sort((a, b) => (b.reservas || 0) - (a.reservas || 0));
+  const dem = demandaEstimada(mio);
   return `<div class="grupo" style="margin-top:14px;">
-    <div class="grupo-cab"><h3>Tamaño y reparto del mercado · Ronda ${R}</h3><span class="herramienta">Estadística pública</span></div>
+    <div class="grupo-cab"><h3>Reservas y participación de mercado · Ronda ${R}</h3><span class="herramienta">Estudio de mercado</span></div>
     <div class="referencia">
-    <div class="ref-nota" style="margin-top:0;color:var(--texto-tenue);">Como las estadísticas de tráfico que publica la DGAC: cualquier aerolínea puede consultar cuántos pasajeros hubo y cuántos llevó cada una.</div>
+    <div class="ref-nota" style="margin-top:0;color:var(--texto-tenue);">Datos de tu estudio de mercado de esta ronda: las reservas de cada aerolínea, como los datos de reservas que compran las aerolíneas en la vida real. No son públicos: otras aerolíneas solo los tienen si también compraron el estudio.</div>
     <div class="ref-nota" style="margin-top:0;">${completos
-      ? `En tu mercado <b>quisieron viajar ${quisieron} pasajeros</b> y <b>volaron ${volaron}</b>, sumando todas las aerolíneas.${quisieron > volaron ? ` No volaron ${quisieron - volaron}: ${ns} reservaron y no se presentaron${sin ? ` y ${sin} no encontraron asiento en la aerolínea que eligieron` : ''}.` : ''}`
-      : `En tu mercado <b>quisieron viajar ${mio.poolDeRonda} pasajeros</b>. El detalle de la competencia está disponible desde las rondas cerradas con la versión actual del simulador.`}</div>
-    <div style="overflow-x:auto;"><table class="tab-pos" style="margin-top:8px;"><tr><th>Aerolínea</th><th>Precio</th><th>Participación</th><th>Captó</th><th>Volaron</th></tr>
+      ? `Entre todas las aerolíneas hubo <b>${reservas} reservas</b> y <b>volaron ${volaron}</b> pasajeros (${ns} reservaron y no se presentaron). <b>Demanda total estimada: unos ${dem} pasajeros</b>, contando a quienes no encontraron asiento. Es una estimación: nadie observa directamente a quien quiso viajar y no pudo.`
+      : `Demanda total estimada: unos <b>${dem} pasajeros</b>. El detalle de la competencia está disponible desde las rondas cerradas con la versión actual del simulador.`}</div>
+    <div style="overflow-x:auto;"><table class="tab-pos" style="margin-top:8px;"><tr><th>Aerolínea</th><th>Precio</th><th>Reservas</th><th>Participación</th><th>Volaron</th></tr>
       ${filas.map(f => `<tr${f.yo ? ' style="color:var(--marca);font-weight:600;"' : ''}><td>${esc(f.nombre)}${f.yo ? ' (tu equipo)' : ''}${f.bot ? ' <span style="color:var(--texto-tenue);font-size:12px;">competidor real</span>' : ''}</td>
-        <td>${money2(f.precio)}</td><td>${pct(f.participacion)}</td><td>${f.captados ?? "—"}</td><td>${f.cap ? f.cap.abordados : "—"}</td></tr>`).join('')}
+        <td>${money2(f.precio)}</td><td>${f.reservas ?? "—"}</td><td>${pct(f.participacion)}</td><td>${f.cap ? f.cap.abordados : "—"}</td></tr>`).join('')}
     </table></div>
-    <div class="ref-nota">"Captó" son los pasajeros que eligieron esa aerolínea; "Volaron", los que efectivamente subieron. La diferencia son los que reservaron y no se presentaron, y los que no encontraron asiento.</div>
+    <div class="ref-nota">"Reservas" son los pasajes vendidos por cada aerolínea; "Volaron", los pasajeros que efectivamente subieron. La participación se calcula sobre las reservas.</div>
     </div>
   </div>`;
 }
 
+function costoPremium(e){ const c = APP.config || {}; return e && e.perfil === 'internacional' ? (c.costoElasticidadInternacional ?? 250) : (c.costoElasticidadDomestica ?? 100); }
+function costoEstudioMercado(e){ const c = APP.config || {}; return e && e.perfil === 'internacional' ? (c.costoWtpInternacional ?? 200) : (c.costoWtpDomestica ?? 60); }
+/* ===== ESTUDIO DE ELASTICIDAD ($100, vigente hasta el final) =====
+   Elasticidad controlada: la del modelo de elección del motor, con la competencia y la temporada constantes:
+   elasticidad de arco entre −5% y +5% del precio, con el mismo modelo de elección del motor. Se entrega con un rango de ±20%
+   (validado contra el motor en 12 escenarios), porque ningún estudio real es exacto. */
+function htmlEstudioElasticidad(e, p){
+  let hist = (e.historial || []).filter(h => !h.neutra && h.capacidad);
+  if(!hist.length){ const ante = antecedente(); if(ante && ante.capacidad) hist = [ante]; else return ''; }
+  const beta = PARAMS.sensibilidadPrecio || 2.65, ult = hist[hist.length - 1];
+  const precioSeg = (h, seg) => seg === 'negocio' ? (h.decision && h.decision.precio) || h.precioFinal : ((h.decision && h.decision.tarifaPromocional > 0) ? h.decision.tarifaPromocional : ((h.decision && h.decision.precio) || h.precioFinal));
+  const paxSeg = (h, seg) => seg === 'negocio' ? h.ganadosNegocio : h.ganadosPlacer;
+  const N = 1 + Object.keys(ult.preciosCompetidores || {}).length + Math.max(0, ((APP.config && APP.config.eqDomestica) || 2) - 1);
+  const pc = v => (v >= 0 ? '+' : '−') + String(Math.abs(Math.round(v * 10) / 10)).replace('.', ',') + '%';
+  const f1 = v => (v < 0 ? '−' : '') + String(Math.abs(Math.round(v * 100) / 100).toFixed(2)).replace('.', ',');
+  const bloques = ['negocio', 'placer'].map(seg => {
+    const elasSeg = seg === 'negocio' ? (PARAMS.elasticidadNegocio ?? -0.8) : (PARAMS.elasticidadPlacer ?? -1.8);
+    const ps = precioSeg(ult, seg), q = x => { const m = modeloSegmento(seg, x, e, p); return m.poolSeg * m.prob; };
+    const ec = Math.log(q(ps * 1.05) / q(ps * 0.95)) / Math.log(1.05 / 0.95);
+    const lo = ec * 1.20, hi = ec * 0.80;
+    // Elasticidad ingenua: el último par de rondas en que cambió el precio de ese segmento
+    let ing = null;
+    for(let i = hist.length - 1; i > 0 && !ing; i--){
+      const A = hist[i - 1], B = hist[i], pa = precioSeg(A, seg), pb = precioSeg(B, seg), qa = paxSeg(A, seg), qb = paxSeg(B, seg);
+      if(pa && pb && qa && qb != null && Math.abs(pb / pa - 1) >= 0.01) ing = { A, B, dp: (pb - pa) / pa * 100, dq: (qb - qa) / qa * 100 };
+    }
+    let desc = '';
+    if(ing){
+      const ei = ing.dq / ing.dp, porPrecio = ec * ing.dp, porContexto = ing.dq - porPrecio;
+      desc = `<p class="paso-dec">Entre la Ronda ${ing.A.ronda} y la ${ing.B.ronda}, tu precio para este segmento cambió ${pc(ing.dp)} y tus pasajeros ${pc(ing.dq)}: <b>elasticidad ingenua ${f1(ei)}</b>.<br>
+        Con la elasticidad controlada, el cambio de precio explica cerca de <b>${pc(porPrecio)}</b> de pasajeros; el resto, <b>${pc(porContexto)}</b>, vino del contexto (lo que hicieron tus competidores, la temporada o tus otras decisiones).</p>`;
+    } else desc = '<p class="paso-dec">Todavía no tienes dos rondas con un cambio de precio en este segmento, así que no se puede calcular tu elasticidad ingenua.</p>';
+    return `<p style="margin:12px 0 4px;font-weight:600;">${seg === 'negocio' ? 'Viajeros de negocios (tu Tarifa Flex)' : 'Viajeros de placer (' + (ult.decision && ult.decision.tarifaPromocional > 0 ? 'tu Tarifa Promocional' : 'tu Tarifa Flex') + ')'}</p>
+      <p class="reco-dec" style="margin:0 0 6px;"><b>Elasticidad controlada: entre ${f1(lo)} y ${f1(hi)}.</b> Si subes ese precio un 5%, con la competencia y la temporada constantes, perderías entre ${String(Math.abs(Math.round(hi * 5 * 10) / 10)).replace('.', ',')}% y ${String(Math.abs(Math.round(lo * 5 * 10) / 10)).replace('.', ',')}% de esos pasajeros.</p>${desc}`;
+  }).join('');
+  const filas = hist.map(h => `<tr><td>${etqRonda(h.ronda)}</td><td>${money2(precioSeg(h, 'negocio'))}</td><td>${money2(precioSeg(h, 'placer'))}</td><td>${money2(h.precioMercado || 0)}</td><td>${nombreChoque(h.choque)}</td><td>${h.ganadosNegocio ?? '—'}</td><td>${h.ganadosPlacer ?? '—'}</td></tr>`).join('');
+  return `<div class="grupo" style="margin-top:14px;">
+    <div class="grupo-cab"><h3>Premium · tu elasticidad</h3><span class="herramienta">Solo esta ronda</span></div>
+    <div class="explica-dec">
+      <h4 style="margin-top:0;">1. El contexto de cada ronda</h4>
+      <p style="margin:0 0 6px;">Para separar el efecto de tu precio del efecto del contexto, hay que mirar también qué cobró el mercado y si hubo temporada.</p>
+      <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Ronda</th><th>Tu Flex</th><th>Precio para placer</th><th>Precio promedio del mercado</th><th>Temporada</th><th>Pasajeros de negocios</th><th>Pasajeros de placer</th></tr>${filas}</table></div>
+      <h4>2. Tu elasticidad, por segmento: ingenua contra controlada</h4>
+      ${bloques}
+      <h4>3. Los límites de este estudio</h4>
+      <p style="margin:0;">La elasticidad controlada se entrega como un <b>rango</b>, no como un número exacto: ningún estudio real lo es. Tiene dos límites: se estima con pocas rondas de datos, y el precio y la demanda se influyen mutuamente (cuando la demanda sube, las aerolíneas tienden a subir el precio), lo que puede sesgar cualquier cálculo hecho con datos históricos. Úsala como guía para decidir, junto con tu propio criterio.</p>
+    </div>
+  </div>`;
+}
 function vistaMercado(){
   const e = APP.equipo;
   const p = PARAMS.perfiles[e.perfil];
@@ -2967,104 +3205,27 @@ function vistaMercado(){
 
   return `
     <h2 class="titulo">Reporte de Mercado</h2>
-    <p class="sub">Investigaciones compradas: ${tieneWTP ? 'Estudio de mercado (disposición a pagar) — Rondas '+rondasWTP.join(', ') : 'Estudio de mercado (disposición a pagar) — ninguna'} · ${tieneElast ? 'Elasticidad — Rondas '+rondasElast.join(', ') : 'Elasticidad — ninguna'}</p>
+    <p class="sub">Investigación de mercado comprada: ${tieneWTP ? 'Rondas '+rondasWTP.join(', ') : 'ninguna'}${rondasElast.length ? ' (Premium en las Rondas ' + rondasElast.join(', ') + ')' : ''} · ${tieneElast ? 'Elasticidad — Rondas '+rondasElast.join(', ') : 'Elasticidad — ninguna'}</p>
 
     <div class="explica">
       <h4>Qué ya sabías gratis, sin comprar nada</h4>
-      <p style="margin:0 0 8px;">El precio de referencia del mercado y tu piso de costo siempre estuvieron visibles en tu Hoja de decisión, sin pagar nada — son datos que ya existen: lo que cobra la competencia es un hecho público, y tu propio costo es algo que tú ya conoces.</p>
+      <p style="margin:0 0 8px;">El precio de referencia del mercado, el precio de cada competidor y tu piso de costo siempre estuvieron visibles sin pagar nada — son datos que ya existen: lo que cobra la competencia es un hecho público, y tu propio costo es algo que tú ya conoces.</p>
       <p style="margin:0;">Lo único que no podías saber gratis era tu <b>techo</b>: cuánto más que el promedio del mercado tus propios pasajeros están dispuestos a pagar por volar contigo, específicamente. Ese número no vive en lo que cobra la competencia — vive en la cabeza de tus clientes. Nadie te lo puede decir sin preguntarles.</p>
     </div>
 
-    ${tieneWTP ? `
+    ${d.comprarWTP ? `
     <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Precios reales de la competencia</h3><span class="herramienta">Estudio de mercado</span></div>
-      <div class="referencia">
-        ${filasPrecios}
-        <div class="ref-nota">Promedio del perfil ${p.nombre} completo (rutas ${p.rutas.join(' y ')}) — no es la tarifa de una ruta específica.</div>
-      </div>
-    </div>
+      <div class="grupo-cab"><h3>Investigación de mercado ${d.comprarElasticidad ? 'Premium' : 'Estándar'} · Ronda ${ronda}</h3><span class="herramienta">${money(d.comprarElasticidad ? costoPremium(e) : costoEstudioMercado(e))}</span></div>
+      <div class="explica-dec">${contenidoEstudioMercado(e, p)}</div>
+    </div>` : `
+    <div class="grupo" style="margin-top:14px;">
+      <div class="grupo-cab"><h3>Investigación de mercado</h3><span class="herramienta">No comprada esta ronda</span></div>
+      <p class="sub" style="margin:0;">Esta ronda no compraste investigación de mercado. Puedes elegir un nivel en Decidir: el Estándar incluye la encuesta por segmento, el mapa de valor y, al cerrar la ronda, las reservas y la participación de cada aerolínea; el Premium agrega tu elasticidad ingenua y controlada.${rondasWTP.filter(r => r !== ronda).length ? ' Las reservas y la participación de las rondas en que la compraste están en Resultados.' : ''}</p>
+    </div>`}
 
-    <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Encuesta de intención de compra</h3><span class="herramienta">100 clientes</span></div>
-      <table class="tab-pos">
-        <thead><tr><th>Precio candidato</th><th>% que te compraría</th><th>Pasajeros estimados</th><th>Margen del vuelo</th></tr></thead>
-        <tbody>
-          ${encuesta.map((f,i)=>`<tr style="${i===mejorIdx?'color:var(--marca);font-weight:600;':''}">
-            <td>${money2(f.precio)}</td><td>${f.aceptacion}%</td><td>${f.pasajeros}${f.lleno?' (lleno)':''}</td><td>${money(f.margenVuelo)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-      <div class="referencia" style="margin-top:10px;">
-        <div class="ref-nota"><b>Cómo leerla:</b> el % se convierte en pasajeros (como máximo los ${PARAMS.perfiles[e.perfil].capacidad} asientos de tu avión) y cada pasajero te deja su precio menos tu costo variable. La fila marcada es la de mayor margen del vuelo: si la usas de guía, tu precio sería ${money2(encuesta[mejorIdx].precio)}. Si a un precio ya llenarías el avión, bajarlo más solo resta margen.</div>
-        <div class="ref-nota" style="margin-top:8px;"><b>Úsala con criterio:</b> la encuesta es una estimación, no el mercado real. Antes de adoptar su precio, contrástalo con tu propio historial: cómo cambiaron tus pasajeros y tu utilidad cuando moviste la Tarifa Flex en rondas anteriores.</div>
-        <div class="ref-nota" style="margin-top:8px;">La encuesta recoge lo que 100 clientes <i>dicen</i> que harían. Decir y hacer no siempre coinciden: úsala como señal fuerte, no como certeza.</div>
-        <div class="ref-nota" style="margin-top:8px;"><i>Los 4 precios y porcentajes son un ejercicio simulado para practicar el método — no vienen de una encuesta real, se generan a partir de tu propio piso y techo.</i></div>
-      </div>
-    </div>
-
-    <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Otros rubros de referencia</h3><span class="herramienta">Estudio de mercado</span></div>
-      <div class="referencia">
-        <div class="ref-fila"><span>Equipaje adicional — BoA${e.perfil==='internacional'?'/LATAM':''} (dato real)</span><b>${money2(p.refEquipaje)}${e.perfil==='domestica'?'/kg':'/maleta'}</b></div>
-        <div class="ref-fila"><span>Seguro de viaje (estimado)</span><b>${money2(p.refSeguro)}</b></div>
-        <div class="ref-fila"><span>Suscripción tipo Pase Frecuente (estimado)</span><b>${money2(p.refPaseFrecuente)}/mes</b></div>
-        <div class="ref-nota">El dato de equipaje es real y verificado. Ninguna aerolínea boliviana ofrece hoy un Pase Frecuente ni un seguro de viaje exactamente así — las otras dos cifras son una referencia razonada, no un precio publicado.</div>
-      </div>
-    </div>` : ''}
-
-    ${tieneWTP && APP.tablero && APP.tablero.length ? `
-    <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Posición financiera de la competencia</h3><span class="herramienta">Estudio de mercado</span></div>
-      <table class="tab-pos">
-        <thead><tr><th></th><th>Aerolínea</th><th>Perfil</th><th>Ronda</th><th>Caja acumulada</th></tr></thead>
-        <tbody>
-          ${APP.tablero.map((t,i)=>{
-            const yo = t.nombre.toLowerCase() === e.nombre.toLowerCase();
-            return `<tr class="${yo?'yo':''}">
-              <td><span class="puesto ${i===0?'primero':''}">${i+1}</span></td>
-              <td>${esc(t.nombre)}${yo?'<span class="marca-bot">tu equipo</span>':''}</td>
-              <td>${PARAMS.perfiles[t.perfil] ? PARAMS.perfiles[t.perfil].nombre : '—'}</td>
-              <td>${t.rondasJugadas||0}</td>
-              <td>${money(t.caja)}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-      <div class="referencia" style="margin-top:10px;">
-        <div class="ref-nota">La posición financiera de un competidor no es información pública: ninguna aerolínea conoce el saldo de caja de su rival en tiempo real. Solo la ves porque compraste la investigación de mercado — si dejas de comprarla, dejarás de verla.</div>
-      </div>
-    </div>` : ''}
-
-    ${tieneElast ? `
-    <div class="grupo" style="margin-top:14px;">
-      <div class="grupo-cab"><h3>Contexto de mercado, ronda por ronda</h3><span class="herramienta">Elasticidad controlada</span></div>
-      <table class="tab-pos">
-        <thead><tr><th>Ronda</th><th>Tu precio</th><th>Pasajeros</th><th>Ocupación</th><th>Yield</th><th>RASM</th><th>Contexto</th></tr></thead>
-        <tbody>
-          ${hist.map(h=>`<tr>
-            <td>${h.ronda}</td><td>${money2(h.precioFinal)}</td>
-            <td>${h.capacidad?h.capacidad.abordados:'—'}</td>
-            <td>${h.metricas?h.metricas.loadFactor+'%':'—'}</td>
-            <td>${h.metricas?money2(h.metricas.yield):'—'}</td>
-            <td>${h.metricas?money2(h.metricas.rasm):'—'}</td>
-            <td>${nombreChoque(h.choque)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-      <div class="referencia" style="margin-top:10px;">
-        <div class="ref-nota"><b>Por qué esta columna importa:</b> sin saber qué rondas tuvieron condiciones especiales de mercado, comparar dos rondas cualquiera puede llevarte a atribuirle a tu precio un cambio que en realidad vino de la temporada — eso es una elasticidad "ingenua". Comparando solo rondas del mismo contexto, obtienes una elasticidad "controlada".</div>
-      </div>
-    </div>` : ''}
+    ${d.comprarElasticidad ? htmlEstudioElasticidad(e, p) : ''}
   `;
 }
-
-/* ============================================================
-   VISTA — Saldo de Caja (flujo de efectivo propio, 12 rondas)
-   ============================================================ */
-/* ============================================================
-   VISTA — Manual del estudiante (10 secciones, igual al documento)
-   Se usa tanto en la pestaña del panel como en la pantalla de registro.
-   ============================================================ */
 function contenidoManual(){
   return `
     <div class="grupo">
@@ -3439,7 +3600,8 @@ function recolectar(){
   if(document.getElementById('dPromo')) d.tarifaPromocional = n(g('dPromo'));
   if(document.getElementById('dValla')) d.fuerzaValla = g('dValla');
   if(document.getElementById('dMarketing')) d.marketing = n(g('dMarketing')) || 0;
-  if(document.getElementById('dWTP')) d.comprarWTP = ch('dWTP');
+  { const sel = document.querySelector('input[name="dEstudio"]:checked');
+    if(sel && !sel.disabled){ d.comprarWTP = sel.value !== 'ninguno'; d.comprarElasticidad = sel.value === 'premium'; } }
   if(document.getElementById('dEquipaje')) d.precioEquipaje = n(g('dEquipaje')) || 0;
   if(document.getElementById('dSeguro')) d.precioSeguro = n(g('dSeguro')) || 0;
   if(document.getElementById('dCuota')) d.cuotaPaseFrecuente = n(g('dCuota')) || 0;
@@ -3449,7 +3611,6 @@ function recolectar(){
   if(document.getElementById('dOverbooking')) d.overbooking = n(g('dOverbooking')) || 0;
   if(document.getElementById('dDynamic')) d.dynamicPricing = ch('dDynamic');
   if(document.getElementById('dSens')) d.sensibilidadDynamic = n(g('dSens'));
-  if(document.getElementById('dElast')) d.comprarElasticidad = ch('dElast');
   if(document.getElementById('dTalento')) d.talento = n(g('dTalento')) || 4;
   if(document.getElementById('dProcesos')) d.procesos = n(g('dProcesos')) || 4;
   if(document.getElementById('dDatos')) d.datos = n(g('dDatos')) || 4;
@@ -3697,33 +3858,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
       actualizarPanelesEnVivo();
       if(e.target.id === 'dPrecio'){ const pv = document.getElementById('previaVuelo'); if(pv){ APP.decisionActual.precio = parseFloat(String(e.target.value).replace(',', '.')) || 0; pv.innerHTML = htmlPrevia(); } }
     }
-    if(e.target.id === 'dWTP'){
-      if(e.target.checked){
-        APP.decisionActual.comprarWTP = true;
-      } else if(APP.decisionActual.comprarWTP){
-        // Ya viste el dato exacto esta ronda: no se puede "devolver" la compra.
-        e.target.checked = true;
-        alert('Ya viste los datos precisos de esta investigación en esta ronda — no puedes deshacer la compra. Si de verdad no quieres pagarla, recarga la página antes de enviar (perderás el resto de lo que llevas escrito).');
-        return;
-      }
-      const panelExtras = document.getElementById('panelReferenciaExtras');
-      if(panelExtras) panelExtras.innerHTML = contenidoPanelExtrasWTP(APP.decisionActual.comprarWTP, APP.equipo, PARAMS.perfiles[APP.equipo.perfil]);
-      actualizarPanelesEnVivo();
+    if(e.target.name === 'dEstudio'){
+      const v = e.target.value;
+      if(v === 'ninguno') return;
+      APP.decisionActual.comprarWTP = true;
+      APP.decisionActual.comprarElasticidad = v === 'premium';
+      recolectar(); render();
+      return;
     }
     if(e.target.id === 'dValla'){
       recolectar();
       render();
       return;
-    }
-    if(e.target.id === 'dElast'){
-      if(e.target.checked){
-        APP.decisionActual.comprarElasticidad = true;
-      } else if(APP.decisionActual.comprarElasticidad){
-        e.target.checked = true;
-        alert('Ya viste el aviso preciso de elasticidad en esta ronda — no puedes deshacer la compra. Si de verdad no quieres pagarla, recarga la página antes de enviar (perderás el resto de lo que llevas escrito).');
-        return;
-      }
-      actualizarPanelesEnVivo();
     }
   });
 });
