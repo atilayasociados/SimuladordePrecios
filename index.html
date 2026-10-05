@@ -305,6 +305,11 @@ details.repaso[open]>summary{margin-bottom:8px;}
 .glos-cab{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:4px;}
 .glos-cab b{font-size:15px;} .glos-u{font-size:11.5px;color:var(--texto-tenue);white-space:nowrap;}
 .glos-def{font-size:13.5px;line-height:1.55;color:var(--texto);} .glos-def p{margin:0 0 6px;} .glos-def p:last-child{margin:0;}
+
+.calc-pase{background:var(--panel);border:2px dashed rgba(55,213,56,.45);border-radius:10px;padding:12px 14px;margin:6px 0 10px;}
+.calc-fila{display:block;margin:0 0 10px;font-weight:500;}
+.calc-fila input[type=range]{display:block;width:100%;margin-top:6px;accent-color:var(--marca);}
+.calc-valores{background:rgba(55,213,56,.10);border-radius:6px;padding:8px 10px;margin:0 0 10px;}
 </style>
 <style>.logo-marca{height:32px;width:auto;display:block;}.logo-marca-grande{height:32px;width:auto;display:block;margin-bottom:14px;}</style>
 </head>
@@ -1916,6 +1921,56 @@ function explicaExtras(d, p){
     <p>Escribe tus precios abajo y presiona "Actualizar referencias" para recalcular.</p>
   </div>`;
 }
+/* ===== Calculadora del Pase Frecuente (mismas reglas del motor) ===== */
+function actualizarCalcPase(){
+  const eD = document.getElementById('cpDesc'), eN = document.getElementById('cpN'); if(!eD || !eN) return null;
+  const p = PARAMS.perfiles[(APP.equipo && APP.equipo.perfil) || 'domestica'];
+  const vP = document.getElementById('dPrecio'), flex = (vP && parseFloat(vP.value)) || _flexActual(APP.decisionActual || {}, p);
+  const descPct = Number(eD.value), N = Number(eN.value), r = calcPase(flex, descPct, N, p);
+  APP.calcPase = { desc: descPct, N };
+  document.getElementById('cpDescTxt').textContent = descPct + '% (' + money2(r.desc) + ')';
+  document.getElementById('cpNTxt').textContent = N + (N === 1 ? ' vez' : ' veces');
+  document.getElementById('cpSocio').textContent = money2(r.socio);
+  document.getElementById('cpCuota').textContent = money2(r.cuota);
+  document.getElementById('cpRes').innerHTML = htmlCalcPase(r, flex);
+  return r;
+}
+function calcPase(flex, descPct, N, p){
+  const meses = PARAMS.mesesPorRonda || 3, mult = (PARAMS.paseFrecuente && PARAMS.paseFrecuente.multiplicador) || 2;
+  const tipos = PARAMS.tiposSocio || [{vuelos:1,peso:0.4},{vuelos:3,peso:0.4},{vuelos:6,peso:0.2}];
+  const desc = Math.round(flex * descPct) / 100, socio = Math.round((flex - desc) * 100) / 100, cuota = Math.round(desc * N / meses * 100) / 100;
+  const h = _ultimaRonda();
+  const negFlex = h && h.segmentosAbordo ? Math.max(0, (h.segmentosAbordo.negocio || 0) - ((h.dilucion && h.dilucion.pasajerosNegocioDiluidos) || 0)) : 20;
+  const pesoViajes = tipos.reduce((a, t) => a + t.peso * t.vuelos, 0);
+  let viajesSocio = 0, socios = 0;
+  const filas = tipos.map(t => {
+    const ahorro = t.vuelos * (flex - socio) - cuota * meses, tasa = ahorro > 0 ? Math.min(0.8, ahorro / (t.vuelos * flex) * mult) : 0;
+    const viajes = negFlex * (t.peso * t.vuelos) / pesoViajes;
+    viajesSocio += viajes * tasa; socios += viajes * tasa / t.vuelos;
+    return { vuelos: t.vuelos, peso: t.peso, ahorro, tasa };
+  });
+  const perdida = viajesSocio * desc, cuotas = socios * cuota * meses;
+  const b = Math.min(Math.max(0, (flex - socio) - cuota) / flex * mult, PARAMS.topePaseNegocio ?? 0.15);
+  const negCapt = h && h.ganadosNegocio ? h.ganadosNegocio : negFlex, s = h && h.participacion ? h.participacion / 100 : 0.3;
+  // Los pasajeros nuevos solo caben en las reservas que quedaron libres (asientos + sobreventa)
+  const cupo = h && h.capacidad ? (h.capacidad.cupoVenta || p.capacidad) : p.capacidad;
+  const libres = h && h.capacidad ? Math.max(0, cupo - (h.capacidad.reservas || 0)) : 10;
+  const atraidos = negCapt * b * (1 - s), paxNuevos = Math.min(atraidos, libres) * (1 - p.noShowPct), margen = flex - p.iocPorPasajero;
+  const lleno = libres <= 0, limitado = !lleno && atraidos > libres;
+  const ganancia = paxNuevos * margen;
+  return { desc, socio, cuota, filas, negFlex, viajesSocio, socios, perdida, cuotas, b, atraidos, libres, paxNuevos, margen, ganancia, neto: cuotas + ganancia - perdida, lleno, limitado };
+}
+function htmlCalcPase(r, flex){
+  const pc = v => (Math.round(v * 1000) / 10).toString().replace('.', ',') + '%';
+  const n1 = v => (Math.round(v * 10) / 10).toString().replace('.', ',');
+  return `<div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Tipo de viajero de negocios</th><th>Ahorro en el trimestre</th><th>¿Cuántos se suscriben?</th></tr>
+    ${r.filas.map(f => `<tr><td>Vuela ${f.vuelos} ${f.vuelos === 1 ? 'vez' : 'veces'} (${pc(f.peso)})</td><td>${money2(f.ahorro)}</td><td>${f.tasa > 0 ? pc(f.tasa) + ' de ellos' : 'Nadie'}</td></tr>`).join('')}</table></div>
+    <p class="paso-dec" style="margin-top:8px;">Con los <b>${n1(r.negFlex)}</b> viajeros de negocios que pagaron tu Flex en tu última ronda:<br>
+    − <b>Pierdes</b> por el descuento a los socios (canibalización): ${n1(r.viajesSocio)} vuelos de socio × ${money2(r.desc)} = <b>${money2(r.perdida)}</b><br>
+    + <b>Ganas en cuotas:</b> ${n1(r.socios)} socios × ${money2(r.cuota)} × 3 meses = <b>${money2(r.cuotas)}</b><br>
+    + <b>Ganas en pasajeros nuevos:</b> tu atractivo frente a los viajeros de negocios sube ${pc(r.b)}, lo que atraería a unos ${n1(r.atraidos)} pasajeros más. ${r.lleno ? '<span style="color:#E8A23C;">Pero en tu última ronda no te quedaron reservas libres: no cabrían.</span>' : (r.limitado ? `<span style="color:#E8A23C;">Pero solo te quedaron ${r.libres} reserva${r.libres === 1 ? '' : 's'} libre${r.libres === 1 ? '' : 's'}.</span>` : '')} Volarían unos ${n1(r.paxNuevos)} × ${money2(r.margen)} de margen = <b>${money2(r.ganancia)}</b></p>
+    <p class="reco-dec">→ <b>Resultado estimado por ronda: ${r.neto >= 0 ? '+' : '−'}${money2(Math.abs(r.neto))}</b>. ${r.neto > 5 ? 'Este diseño te conviene.' : (r.neto >= -5 ? 'Casi da igual: lo que ganas y lo que pierdes se compensan.' : 'Este diseño te cuesta más de lo que te deja: prueba un descuento menor o una cuota distinta.')} Es una estimación: el resultado real depende también de lo que decida la competencia.</p>`;
+}
 function explicaPase(d, p){
   const flex = _flexActual(d, p), cuota = d.cuotaPaseFrecuente || 0, soc = d.tarifaSocio || 0, meses = PARAMS.mesesPorRonda || 3;
   const tipos = PARAMS.tiposSocio || [{vuelos:1,peso:0.4},{vuelos:3,peso:0.4},{vuelos:6,peso:0.2}];
@@ -1952,7 +2007,19 @@ function explicaPase(d, p){
     &nbsp;&nbsp;<b>Cuota mensual = descuento por vuelo × vuelos de equilibrio ÷ ${meses}</b></p>
     <p><b>Un punto de partida con tu Flex de ${money2(flex)}:</b> con un descuento del 10% (${money2(descSug)}), la tarifa de socio es <b>${money2(socioSug)}</b>. Si quieres que el Pase les convenga solo a quienes vuelan más de 2 veces por trimestre (el que vuela exactamente 2 queda en el límite: ni gana ni pierde), la cuota es ${money2(descSug)} × 2 ÷ ${meses} = <b>${money2(cuotaSug)} al mes</b>. Es una sugerencia para empezar, no la única respuesta.</p>
     <p style="font-size:12.5px;color:var(--texto-tenue);"><b>Un caso real:</b> el Flight Pass de Alaska Airlines (Estados Unidos, desde 2022) cobra una cuota mensual (desde $49, hoy $69 por seis vuelos de ida y vuelta al año) y una tarifa por vuelo casi nula, más impuestos. Es una tarifa de dos partes en su forma extrema: casi todo en la cuota, casi nada por vuelo, pensada para viajeros muy frecuentes. Sus cifras no se pueden copiar a este mercado, pero muestran el mismo principio de diseño.</p>
-    <h4>4. Calcula con tus números</h4>
+    <h4>4. Prueba antes de decidir: la calculadora</h4>
+    <p>Mueve los dos controles y mira el efecto al instante. Cuando encuentres un diseño que te convenza, presiona <b>"Usar estos valores"</b>.</p>
+    <div class="calc-pase">
+      ${(() => { const cp = APP.calcPase || { desc: 10, N: 2 }, r0 = calcPase(flex, cp.desc, cp.N, p); return `
+      <label class="calc-fila">Descuento por vuelo para los socios: <b id="cpDescTxt">${cp.desc}% (${money2(r0.desc)})</b>
+        <input type="range" id="cpDesc" min="2" max="30" step="1" value="${cp.desc}"></label>
+      <label class="calc-fila">Que le convenga a quien vuela más de: <b id="cpNTxt">${cp.N} ${cp.N === 1 ? 'vez' : 'veces'}</b> por trimestre
+        <input type="range" id="cpN" min="1" max="5" step="1" value="${cp.N}"></label>
+      <div class="calc-valores">Tarifa de socio: <b id="cpSocio">${money2(r0.socio)}</b> · Cuota mensual: <b id="cpCuota">${money2(r0.cuota)}</b></div>
+      <div id="cpRes">${htmlCalcPase(r0, flex)}</div>`; })()}
+      <button type="button" class="btn" id="cpUsar" style="width:auto;padding:8px 16px;margin-top:6px;">Usar estos valores</button>
+    </div>
+    <h4>5. Tus valores</h4>
     <p>Lo que paga cada tipo de viajero de negocios en un trimestre (${meses} meses) con tu Flex de ${money2(flex)}${hay ? `, tu cuota de ${money2(cuota)} y tu tarifa de socio de ${money2(soc)}` : ''}:</p>
     <div style="overflow-x:auto;"><table class="tbl-dec"><tr><th>Tipo de viajero</th><th>Sin Pase (vuelos × Flex)</th><th>Con Pase (cuota × ${meses} + vuelos × tarifa de socio)</th><th>Ahorro del socio</th><th>¿Se suscribe?</th></tr>${filas}</table></div>
     ${hay ? equilibrio + '<p style="margin-top:8px;">Mientras más ahorra un tipo de viajero, más de ellos se suscriben (hasta un 80%).</p>' : '<p style="margin-top:8px;"><b>Escribe tu cuota y tu tarifa de socio abajo y presiona "Actualizar referencias"</b>: la tabla mostrará quién se suscribiría y tu punto de equilibrio de uso.</p>'}
@@ -3516,6 +3583,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.addEventListener('click', e=>{
     if(e.target.id === 'irInforme'){ e.preventDefault(); irAlInforme(); return; }
+    if(e.target.id === 'cpUsar'){
+      const r = actualizarCalcPase(); if(!r) return;
+      const c1 = document.getElementById('dCuota'), c2 = document.getElementById('dTarifaSocio');
+      if(c1) c1.value = r.cuota.toFixed(2); if(c2) c2.value = r.socio.toFixed(2);
+      recolectar(); render();
+      const g = document.getElementById('dCuota'); if(g){ g.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      return;
+    }
     const bG = e.target.closest('[data-glos-u]');
     if(bG){ document.querySelectorAll('.glos-f').forEach(x => x.classList.toggle('activo', x === bG)); filtrarGlosario(); return; }
     const bRr = e.target.closest('[data-ronda-reporte]');
@@ -3585,6 +3660,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
      sin reconstruir los campos de entrada (así el cursor nunca salta). */
   document.getElementById('contenido').addEventListener('input', e=>{
     if(e.target.id === 'glosBuscar'){ filtrarGlosario(); return; }
+    if(e.target.id === 'cpDesc' || e.target.id === 'cpN'){ actualizarCalcPase(); return; }
     if(e.target.id === 'dInforme'){ const ei = document.getElementById('estadoInforme'); if(ei) ei.innerHTML = htmlEstadoInforme();
       const ci = document.getElementById('contadorInforme'); if(ci) ci.innerHTML = htmlContadorInforme(); }
     if(['dPrecio','dMarketing'].includes(e.target.id)){
