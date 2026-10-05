@@ -3239,7 +3239,7 @@ function contenidoManual(){
   return `
     <div class="grupo">
       <div class="grupo-cab"><h3>1 · Qué vas a hacer</h3></div>
-      <p style="margin:0 0 10px;">Tu equipo dirige una aerolínea durante 12 trimestres —tres años de operación— compitiendo contra las demás aerolíneas del curso y contra dos operadores reales del mercado boliviano: Boliviana de Aviación y LATAM, cuyos precios están calibrados con tarifas de venta verificadas.</p>
+      <p style="margin:0 0 10px;">Tu equipo dirige una aerolínea durante 12 trimestres —tres años de operación— compitiendo contra las demás aerolíneas del curso y contra operadores reales del mercado boliviano, cuyos precios están calibrados con tarifas de venta verificadas: Boliviana de Aviación (BoA) en las rutas domésticas, y LATAM y BoA en las internacionales.</p>
       <p style="margin:0 0 10px;">Cada trimestre decides cómo compite tu aerolínea: qué precio cobras, cuánto inviertes en marketing, si vendes más asientos de los que tiene el avión, si personalizas precios. El simulador calcula cuántos pasajeros ganas frente a la competencia, y te devuelve un estado de resultados con la utilidad de esa ronda. <b>Gana el equipo que acumule más caja al cierre del módulo.</b></p>
       <div class="referencia">
         <div class="ref-nota"><b>Cómo se gana:</b> nadie decide cuántos pasajeros vuelan contigo. Eso lo determina qué tan atractiva sea tu aerolínea frente a las demás, y eso depende enteramente de las decisiones que tomes: tu precio frente al del mercado, tu inversión en marketing, tu programa de fidelidad, tu madurez organizacional.</div>
@@ -3275,9 +3275,9 @@ function contenidoManual(){
         <div class="ref-fila"><span><b>Decidir</b></span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Tu Hoja de decisión. Cada herramienta explica primero qué es y calcula con tus números, y luego pregunta "¿Cuál es tu decisión para esta ronda?": las casillas donde decides tienen borde verde y el ícono ✎. Las herramientas nuevas de la sesión aparecen marcadas como NUEVA, con su explicación abierta; en las anteriores, la explicación queda en un enlace para repasarla. Abajo verás una vista previa estimada de tu vuelo y el botón para revisar y enviar tu decisión.</div>
         <div class="ref-fila"><span><b>Resultados</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Tu Estado de resultados (con el tamaño y el reparto del mercado de cada ronda, una estadística pública), el Historial de tus rondas, tu Caja y, si compraste investigaciones, el Reporte de Mercado con la encuesta de disposición a pagar.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Tu Estado de resultados, el Historial de tus rondas, tu Caja y la información pública del mercado: el precio de cada competidor y, con una ronda de retraso, los pasajeros que transportó cada aerolínea. Si compras investigación de mercado, ahí verás también el Reporte de Mercado de esa ronda.</div>
         <div class="ref-fila"><span><b>Aprender</b></span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Una lección por unidad (U1 Diagnóstico 3C, U2 Elasticidad y segmentación, U3 Arquitectura de precios, U4 Revenue management y U5 Datos y ética), calculada con los números de tu aerolínea. Primero aparece la de la sesión actual. Aquí también está este Manual.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Una lección por unidad (U1 Diagnóstico 3C, U2 Elasticidad y segmentación, U3 Arquitectura de precios, U4 Revenue management y U5 Datos y ética), calculada con los números de tu aerolínea. Primero aparece la de la sesión actual. Aquí también están el Glosario (108 términos del curso, con buscador y filtro por unidad) y este Manual.</div>
         <div class="ref-fila"><span><b>Mi expediente</b></span></div>
         <div class="ref-nota" style="margin:0;">El botón junto a tu caja, arriba a la derecha. Reúne tus decisiones, resultados e informes en formato imprimible, con tu calificación del simulador.</div>
       </div>
@@ -3288,13 +3288,13 @@ function contenidoManual(){
       <p style="margin:0 0 10px;">Junto al campo donde escribes tu precio hay un panel que se actualiza mientras escribes. Muestra tres números que debes entender antes de decidir:</p>
       <div class="referencia">
         <div class="ref-fila"><span><b>Precio de referencia</b></span></div>
-        <div class="ref-nota" style="margin:0 0 8px;">Lo que cobra el mercado. En la primera ronda son los precios reales de BoA y LATAM; después, el promedio de lo que cobraron todas las aerolíneas la ronda anterior.</div>
+        <div class="ref-nota" style="margin:0 0 8px;">Lo que cobra el mercado. En la primera ronda es el precio real de los competidores de tu ruta (BoA en las domésticas; LATAM y BoA en las internacionales); después, el promedio de lo que cobraron todas las aerolíneas la ronda anterior.</div>
         <div class="ref-fila"><span><b>Piso</b></span></div>
         <div class="ref-nota" style="margin:0 0 8px;">Tu costo total por asiento con el avión lleno: el costo fijo del vuelo repartido entre los asientos, más el costo variable de cada pasajero. Por debajo de esta cifra no cubres tus costos, ni siquiera llenando el avión.</div>
         <div class="ref-fila"><span><b>Techo (EVC)</b></span></div>
         <div class="ref-nota" style="margin:0;">El máximo que puedes cobrar según el valor que entregas. Sube conforme tu puntaje de Valor mejora.</div>
       </div>
-      <p style="margin:12px 0 0;">Si cambias tu precio respecto a la ronda anterior, aparece un aviso que te dice cuánto pueden caer tus ventas antes de que el cambio deje de convenirte. Úsalo: subir el precio no siempre es mejor, y bajarlo tampoco.</p>
+      <p style="margin:12px 0 0;">Si cambias tu precio respecto a la ronda anterior, aparece el aviso de <b>cambio de ventas de equilibrio</b>: cuánto pueden caer tus ventas antes de que el cambio deje de convenirte. Úsalo: subir el precio no siempre es mejor, y bajarlo tampoco.</p>
       <div class="referencia" style="margin-top:12px;">
         <div class="ref-nota"><b>Un recordatorio:</b> el panel de referencia no te dice qué precio poner. Te da la información para que lo decidas tú — que es exactamente lo que hace un área de pricing real.</div>
       </div>
@@ -3307,23 +3307,22 @@ function contenidoManual(){
         <div class="ref-nota" style="margin:0 0 10px;">Tu precio principal. Es la decisión que más pesa en cuántos pasajeros ganas.</div>
         <div class="ref-fila"><span><b>Inversión en marketing</b></span><span>Sesión 1</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Sube el atractivo de tu aerolínea, pero rinde cada vez menos por dólar adicional: duplicar la inversión no duplica el resultado.</div>
+        <div class="ref-fila"><span><b>Investigación de mercado</b></span><span>Sesión 1</span></div>
+        <div class="ref-nota" style="margin:0 0 10px;">Eliges un nivel por ronda: <b>Ninguno</b>, <b>Estándar</b> ($60) o <b>Premium</b> ($100). El Estándar incluye una encuesta de disposición a pagar para viajeros de negocios y de placer, un mapa de valor y, al cerrar la ronda, las reservas y la participación de cada aerolínea. El Premium incluye todo lo del Estándar, más tu elasticidad ingenua y controlada. Lo que compras se ve solo en esa ronda, y una vez elegido el nivel no puede cambiarse. La encuesta exagera la compra (la gente dice que compraría más de lo que compra) y el reporte te enseña a corregirlo.</div>
         <div class="ref-fila"><span><b>Tarifa Promocional y valla</b></span><span>Sesión 2</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Un segundo precio, más bajo, con restricciones que impiden que el viajero de negocios lo aproveche. Ver la sección 8 para entender por qué la valla no resuelve todo.</div>
-        <div class="ref-fila"><span><b>Estudio de mercado (encuesta de disposición a pagar, WTP)</b></span><span>Sesión 2</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Te da el precio real de cada competidor por separado y una encuesta de intención de compra con 4 precios candidatos: cuántos te comprarían a cada uno, cuántos pasajeros cabrían en tu avión y cuánto margen dejaría el vuelo. Es una estimación que supone que la competencia no reacciona. Cuesta dinero, y una vez comprada esa ronda no puede deshacerse.</div>
+        
         <div class="ref-fila"><span><b>Precio de equipaje y seguro</b></span><span>Sesión 3</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Ingresos adicionales sobre los pasajeros que vuelan contigo. Cada extra vendido tiene un costo, y si lo cobras por encima del precio de referencia del mercado, menos pasajeros lo compran y algunos de los que lo necesitan se van con la competencia. Tiene un precio que conviene más que los demás.</div>
         <div class="ref-fila"><span><b>Pase Frecuente</b></span><span>Sesión 3</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Defines dos números: una cuota fija mensual y una tarifa reducida por vuelo para quienes se suscriban. Hay socios que vuelan 1, 3 o 6 veces por trimestre, y cada uno se suscribe solo si le conviene con su propio uso. Un pase que no conviene al que vuela poco solo atrae a los grandes viajeros.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Defines dos números: una cuota fija mensual y una tarifa reducida por vuelo para quienes se suscriban. Hay socios que vuelan 1, 3 o 6 veces por trimestre, y cada uno se suscribe solo si le conviene con su propio uso. Un pase que no conviene al que vuela poco solo atrae a los grandes viajeros. La calculadora del bloque te muestra el resultado estimado antes de decidir.</div>
         <div class="ref-fila"><span><b>Tarifa tachada</b></span><span>Sesión 3</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Mostrar un precio más alto tachado junto al tuyo. Sube la percepción de valor.</div>
+        <div class="ref-nota" style="margin:0 0 10px;">Mostrar un precio más alto tachado junto al tuyo (efecto ancla). Escribes el precio que mostrarás tachado: si es un precio que tu aerolínea realmente cobró antes, es creíble y sube tu atractivo; si nunca lo cobraste, es publicidad engañosa y puede detectarse y sancionarse.</div>
         <div class="ref-fila"><span><b>Overbooking</b></span><span>Sesión 4</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Vender más asientos de los que tiene el avión, apostando a que algunos pasajeros no se presenten. La cantidad de no-shows varía por azar de una ronda a otra: si se presentan más de los que caben, pagas compensación. Solo sirve si tienes demanda para llenar el avión.</div>
         <div class="ref-fila"><span><b>Precio dinámico</b></span><span>Sesión 4</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Deja que el precio se ajuste solo según qué tan rápido se esté vendiendo el vuelo frente a lo esperado.</div>
-        <div class="ref-fila"><span><b>Estudio de elasticidad</b></span><span>Sesión 5</span></div>
-        <div class="ref-nota" style="margin:0 0 10px;">Revela qué condiciones de mercado tuvo cada ronda. Sin ese dato no sabes qué rondas son comparables entre sí. Cuesta dinero.</div>
-        <div class="ref-fila"><span><b>Talento, Procesos y Datos</b></span><span>Sesión 5</span></div>
+                <div class="ref-fila"><span><b>Talento, Procesos y Datos</b></span><span>Sesión 5</span></div>
         <div class="ref-nota" style="margin:0 0 10px;">Mejora la capacidad de tu organización. Todas las aerolíneas arrancan con Talento 5, Procesos 4 y Datos 6. Compras puntos y decides a qué pilar asignarlos; los puntos se acumulan de una ronda a otra. Lo que te limita es tu pilar más bajo, no el promedio.</div>
         <div class="ref-fila"><span><b>Precios personalizados</b></span><span>Sesión 5</span></div>
         <div class="ref-nota" style="margin:0;">Una parte de tus pasajeros paga más que tu Tarifa Flex — ese ingreso lo cobras siempre, se detecte o no. Si te detectan, tu atractivo cae en esa misma ronda; lo ya cobrado nunca se devuelve.</div>
@@ -3335,7 +3334,7 @@ function contenidoManual(){
       <p style="margin:0 0 10px;">La pestaña Historial guarda cada ronda que jugaste: qué precio pusiste, cuántos pasajeros ganaste y con qué ocupación volaste. Es la materia prima para entender cómo responde tu mercado al precio.</p>
       <p style="margin:0 0 10px;">Hay una trampa al leer esa tabla. Si comparas dos rondas cualesquiera y ves que bajaste el precio y subieron las ventas, es tentador concluir que el precio fue la causa. Pero si una de esas rondas tuvo temporada alta, parte de ese aumento vino de la temporada, no de tu decisión.</p>
       <div class="referencia">
-        <div class="ref-nota"><b>Dónde se revela lo que compraste:</b> si compraste el estudio de elasticidad, tu Reporte de Mercado muestra el contexto de cada ronda (normal, temporada alta o baja) — con él puedes comparar solo rondas que tuvieron las mismas condiciones. Esa es la diferencia entre medir el efecto real de tu precio y atribuirle un efecto que no fue suyo.</div>
+        <div class="ref-nota"><b>Dónde se revela lo que compraste:</b> si compras la investigación Premium, en esa ronda tu Reporte de Mercado muestra el contexto de cada ronda (normal, temporada alta o baja) y tu elasticidad controlada — con él puedes comparar solo rondas que tuvieron las mismas condiciones. Esa es la diferencia entre medir el efecto real de tu precio y atribuirle un efecto que no fue suyo.</div>
       </div>
     </div>
 
@@ -3361,7 +3360,7 @@ function contenidoManual(){
         <div class="ref-fila" style="margin-top:8px;"><span>2 · Esos pasajeros se reparten entre todas las aerolíneas según qué tan atractiva sea cada una. Tu atractivo combina tu precio frente al del mercado, tus inversiones y tu reputación</span></div>
         <div class="ref-fila" style="margin-top:8px;"><span>3 · Si ganaste más pasajeros de los que caben en tu avión, los que sobran no vuelan contigo. Algunos pasajeros no se presentan, en una cantidad que varía por azar; si hiciste overbooking y se presentan más de los que caben, pagas compensación por los que no pueden abordar</span></div>
       </div>
-      <p style="margin:12px 0 0;">Después de eso, el simulador arma tu estado de resultados: ingresos menos costos de operación, menos gastos, igual utilidad neta. Esa utilidad se suma a tu caja, y la caja acumulada es lo que define el ranking.</p>
+      <p style="margin:12px 0 0;">Después de eso, el simulador arma tu estado de resultados: ingresos menos costos de operación (el costo fijo del vuelo, el costo variable de cada pasajero y el costo de los extras vendidos), menos gastos, igual utilidad neta, antes de impuestos. En Situación verás además tu punto de equilibrio: cuántos pasajeros necesitabas para cubrir tus costos fijos. Esa utilidad se suma a tu caja, y la caja acumulada es lo que define el ranking.</p>
       <div class="referencia" style="margin-top:12px;">
         <div class="ref-nota"><b>Lo que pasó esta ronda</b> describe los hechos: tu precio frente al del mercado, tu ocupación, cuánto dejó cada pasajero. Son datos, sin interpretación.</div>
         <div class="ref-nota" style="margin-top:8px;"><b>Para conversar con tu equipo</b> aparece solo si tu ronda tuvo algo que revisar, y siempre en forma de pregunta. No trae la respuesta: la idea es que la discutan antes de decidir la ronda siguiente.</div>
@@ -3375,6 +3374,7 @@ function contenidoManual(){
       <p style="margin:0 0 8px;"><b>¿Por qué nuestros números son distintos a los de otro equipo del mismo perfil?</b> Porque tomaron decisiones distintas. Todos arrancan exactamente iguales, así que casi toda la diferencia viene de lo que decidieron. Una parte pequeña viene del azar: la cantidad de pasajeros que no se presentan varía de una ronda a otra.</p>
       <p style="margin:0 0 8px;"><b>¿Bajar mucho el precio garantiza ganar?</b> No. Ganas más pasajeros, pero cada uno deja menos margen, el avión tiene un límite de asientos y la competencia reacciona bajando también. Por debajo del piso no cubres tus costos totales.</p>
       <p style="margin:0 0 8px;"><b>¿Conviene gastar todo el presupuesto en marketing?</b> Tampoco. El marketing rinde cada vez menos por dólar adicional, así que pasado cierto punto estás gastando más de lo que recuperas.</p>
+      <p style="margin:0 0 10px;"><b>¿Qué información es gratis y cuál se compra?</b> Gratis: tus propios resultados, el precio de cada competidor y, con una ronda de retraso, los pasajeros que transportó cada aerolínea. Cuántas personas quisieron viajar, cuántas reservaron con cada aerolínea, tu participación de mercado y cuánto pagarían tus clientes solo se conocen con la investigación de mercado, como en la vida real.</p>
       <p style="margin:0;"><b>¿Los competidores reales (BoA y LATAM) también pueden ganar?</b> No compiten por la evaluación, pero sí por los pasajeros: reaccionan a los precios de los equipos y cobran sus propios extras. Son parte del mercado, no equipos del curso.</p>
     </div>`;
 }

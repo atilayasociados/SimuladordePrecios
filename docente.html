@@ -2942,7 +2942,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <div class="indice">
     <a href="#m-acceso">Acceso</a><a href="#m-simulaciones">Simulaciones</a><a href="#m-calibrar">Calibrar el mercado</a><a href="#m-costos">Costos y constantes</a>
     <a href="#m-ronda">Cada ronda</a><a href="#m-resultados">Resultados</a><a href="#m-eval">Evaluación</a>
-    <a href="#m-equipos">Equipos</a><a href="#m-guion3">Guion Sesión 3</a><a href="#m-guion4">Guion Sesión 4</a><a href="#m-guion5">Guion Sesión 5</a><a href="#m-mantenimiento">Mantenimiento</a><a href="#m-limites">Qué tener en cuenta</a><a href="#m-problemas">Problemas comunes</a>
+    <a href="#m-equipos">Equipos</a><a href="#m-pestanas">Tablero, Para la clase y Glosario</a><a href="#m-guion3">Guion Sesión 3</a><a href="#m-guion4">Guion Sesión 4</a><a href="#m-guion5">Guion Sesión 5</a><a href="#m-mantenimiento">Mantenimiento</a><a href="#m-limites">Qué tener en cuenta</a><a href="#m-problemas">Problemas comunes</a>
   </div>
 
   <h3 id="m-acceso">Acceso al panel</h3>
@@ -2955,6 +2955,13 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   <h3 id="m-equipos">Ver lo que decidió cada equipo</h3>
   <p>La pestaña <b>Equipos</b> muestra las decisiones y los resultados de todos los equipos. En <b>Por ronda</b> eliges una ronda y ves a los equipos lado a lado: su precio, su Promocional y su valla, su marketing y las demás herramientas que usaron, junto con sus pasajeros, ocupación, yield y utilidad. Al tocar un equipo se abre su informe y su Estado de resultados. En la ronda en curso ves las decisiones enviadas hasta ese momento, antes de cerrar. En <b>Por equipo</b> eliges un equipo y ves su trayectoria completa, ronda por ronda, con su caja acumulada.</p>
+
+  <h3 id="m-pestanas">Tablero, Para la clase y Glosario</h3>
+  <ul>
+    <li><b>Tablero:</b> la posición de cada equipo según su caja acumulada, que es lo que define el ranking.</li>
+    <li><b>Para la clase:</b> después de cerrar cada ronda, fichas con las lecciones de esa ronda tomadas de lo que hicieron los equipos (por ejemplo, un equipo que se quedó sin asientos o una tarifa tachada engañosa), cada una con qué pasó, por qué, la lección y una pregunta para discutir. Están pensadas para proyectarlas al inicio de la clase siguiente.</li>
+    <li><b>Glosario:</b> los 108 términos del curso, con buscador y filtro por unidad. Los estudiantes tienen el mismo glosario en <b>Aprender</b>.</li>
+  </ul>
 
   <h3 id="m-simulaciones">Simulaciones: cursos y pruebas por separado</h3>
   <p>Cada <b>simulación</b> tiene su propio mercado, sus rondas y sus equipos. Todo lo que haces en el panel (calibrar, cerrar rondas, evaluar) se aplica solo a la simulación elegida en el selector de la cabecera.</p>
@@ -2989,13 +2996,13 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <ul>
     <li><b>Estado de los equipos:</b> caja y perfil de cada equipo, marcado como <b>Decisión enviada</b> o <b>Pendiente</b>. Usa <b>Actualizar estado</b> para refrescar.</li>
     <li><b>Condiciones del mercado:</b> <b>Mercado normal</b>, <b>Temporada alta (+10% de demanda)</b> o <b>Temporada baja (−10% de demanda)</b>. Afecta a todas las aerolíneas por igual, así que nadie gana ventaja por él.</li>
-    <li><b>Cerrar ronda y calcular resultados:</b> calcula los resultados de todos los equipos y avanza a la ronda siguiente.</li>
+    <li><b>Cerrar ronda y calcular resultados:</b> antes de calcular, el panel muestra un <b>recuadro de verificación</b> con la simulación en la que estás (con un aviso si es de prueba), la ronda y la sesión, la condición del mercado y cuántos equipos enviaron su decisión. También advierte valores inusuales: marketing desproporcionado o en $0 cuando antes invertía, una Tarifa Flex bajo el piso o más de un 25% sobre el precio de referencia, una tarifa tachada engañosa, una sobreventa de más de 8 asientos o precios personalizados activados. Revisa y haz clic en <b>Confirmar y calcular</b>, o en <b>Cancelar</b>. Al confirmar, el panel vuelve a leer la base: si alguien envió su decisión mientras revisabas, actualiza el recuadro antes de calcular.</li>
   </ul>
-  <p>Si quedan equipos pendientes, el sistema lo advierte y pide confirmar: esos equipos reciben una <b>decisión neutra</b> (precio igual al promedio del mercado, sin inversiones y con pérdida de atractivo frente a los que sí decidieron).</p>
+  <p>Los equipos que no enviaron su decisión reciben una <b>decisión neutra</b> (precio igual al promedio del mercado, sin inversiones y con 12% menos de atractivo frente a los que sí decidieron). El recuadro los nombra antes de confirmar.</p>
 
   <h3 id="m-resultados">Cómo leer los resultados de una ronda</h3>
   <p>Tras cerrar la ronda aparece la tabla <b>Resultados de la Ronda N</b>: una fila por aerolínea (equipos y competidores de referencia) con precio, participación, pasajeros a bordo, ocupación y utilidad neta.</p>
-  <p><b>Haz clic en la fila de un equipo</b> para desplegar su Estado de Resultados completo: ingresos por tarifa, equipaje, seguro y Pase Frecuente, costos operativos directos e indirectos, utilidad bruta, gastos administrativos y comerciales, y utilidad neta. Conviene proyectarlo y comentarlo en clase antes de que cada equipo revise su propio reporte.</p>
+  <p><b>Haz clic en la fila de un equipo</b> para desplegar su Estado de Resultados completo: ingresos por tarifa, equipaje, seguro, Pase Frecuente y pasajes promocionales no reembolsables; el costo fijo del vuelo, el costo variable de cada pasajero y el costo de los extras vendidos; la utilidad bruta; los gastos administrativos y comerciales (marketing e investigación de mercado); la compensación por pasajeros en tierra y las sanciones, cada una en su línea; y la utilidad neta, antes de impuestos. Conviene proyectarlo y comentarlo en clase antes de que cada equipo revise su propio reporte.</p>
 
   <h3 id="m-eval">Evaluación y calificación</h3>
   <p>La pestaña <b>Evaluación</b> está siempre visible; mientras no haya equipos registrados, solo muestra un aviso.</p>
@@ -3004,9 +3011,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <tr><td>Constancia en la participación</td><td>20%</td><td>Rondas decididas a tiempo, sin decisión neutra</td></tr>
     <tr><td>Precio dentro del rango razonable</td><td>15%</td><td>Si el precio que escribió quedó entre el piso y el techo que el simulador le mostraba en ese momento</td></tr>
     <tr><td>Amplitud de herramientas usadas</td><td>25%</td><td>Cuántas de las 13 herramientas calificables usó en dos rondas o más (activarla una sola vez no cuenta). Nivel 4 desde 10 herramientas. La valla solo cuenta si se usa junto a una Tarifa Promocional.</td></tr>
-    <tr><td>Uso de la información comprada</td><td>20%</td><td>Si compró estudios de WTP o elasticidad y ajustó su precio después</td></tr>
+    <tr><td>Uso de la información comprada</td><td>20%</td><td>Si compró investigación de mercado (Estándar o Premium) y ajustó su precio después</td></tr>
     <tr><td>Reacción a los resultados</td><td>20%</td><td>Si cambió su estrategia tras una ronda con pérdida</td></tr>
   </tbody></table>
+  <p>En la amplitud de herramientas, la investigación Estándar cuenta como una herramienta y la Premium como dos (investigación de mercado y elasticidad), porque entrega las dos.</p>
   <p>Cada criterio recibe un nivel de 1 a 4 (4 = 100%, 3 = 75%, 2 = 50%, 1 = 25%). La tabla resumen muestra el total y los puntos sobre 40; debajo está el detalle por criterio de cada equipo.</p>
   <p><b>Componente 2, informes por ronda.</b> Cada informe se califica sobre 4 puntos: 2 por aplicar la herramienta con el cálculo visible, 1 por justificar la elección frente a una alternativa y 1 por leer el resultado de la ronda anterior. El panel muestra el informe de cada ronda de cada equipo, o "Sin informe" si no escribieron nada.</p>
   <p>El botón <b>Imprimir o guardar como PDF</b> exporta toda la vista de evaluación.</p>
@@ -3023,7 +3031,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <p>La Sesión 3 desbloquea tres herramientas: <b>Pase Frecuente</b>, <b>tarifa tachada</b> y <b>equipaje y seguro</b>. Tiene solo dos rondas, y el criterio de calificación cuenta una herramienta solo si se usa en <b>dos rondas o más</b>. Díselo a los equipos al comenzar: si activan una herramienta recién en la Ronda 8, no les suma en la nota.</p>
   <table><thead><tr><th>Momento</th><th>Qué hacer</th></tr></thead><tbody>
     <tr><td><b>Inicio de sesión</b> (30 min)</td><td>Aplica los dos experimentos de clase (anclaje y efecto compromiso) antes de explicar el tema; la guía docente tiene el protocolo. Luego presenta la pestaña <b>Arquitectura de precios</b>, que sigue los cuatro pasos de la Unidad 3.</td></tr>
-    <tr><td><b>Ronda 7 · Diseñar y activar</b></td><td>Cada equipo activa las tres herramientas con un diseño inicial y escribe en su informe qué espera de cada una: cuántos socios, cuánto ingreso por extras, qué efecto de la tarifa tachada. Son sus hipótesis.</td></tr>
+    <tr><td><b>Ronda 7 · Diseñar y activar</b></td><td>Cada equipo activa las tres herramientas con un diseño inicial y escribe en su informe qué espera de cada una: cuántos socios, cuánto ingreso por extras, qué efecto de la tarifa tachada. Son sus hipótesis. Para el Pase, la calculadora del bloque estima el resultado antes de decidir. Para la tarifa tachada, recuérdales que deben escribir el precio que mostrarán tachado: solo es creíble si su aerolínea realmente lo cobró antes; si no, es publicidad engañosa, con 30% de probabilidad de detección y una sanción del 10% del ingreso por pasajes.</td></tr>
     <tr><td><b>Ronda 8 · Ajustar con evidencia</b></td><td>Antes de decidir, cada equipo hace tres cálculos: <b>(1)</b> el punto de equilibrio de su pase por trimestre, 3 × cuota ÷ (Flex − tarifa de socio), comprobando si le conviene al socio que vuela 1 vez; <b>(2)</b> el margen por unidad y el porcentaje que compra cada extra, que ve en la pestaña; <b>(3)</b> si su participación cambió con la tarifa tachada. Luego compara sus hipótesis de la Ronda 7 con los resultados y ajusta.</td></tr>
     <tr><td><b>Cierre</b> (10 min)</td><td>Pide a dos equipos que muestren su diseño de pase: uno que convenga a los tres tipos de socio y otro que solo convenga a los grandes viajeros. Compara sus resultados y conecta con la regla del peor escenario de uso. Pregunta quién bajó su Tarifa Flex para ganar con los extras.</td></tr>
   </tbody></table>
@@ -3040,11 +3048,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <p><b>Sobre el azar:</b> con no-shows aleatorios, dos equipos con la misma decisión pueden obtener utilidades algo distintas (del orden de 4% en las pruebas). Esto no afecta la calificación automática, que no depende de la utilidad, pero sí el ranking de caja acumulada. Conviene decirlo en clase.</p>
 
   <h3 id="m-guion5">Guion de la Sesión 5: Rondas 11 y 12 (Unidad 5)</h3>
-  <p>La Sesión 5 desbloquea el <b>estudio de elasticidad</b>, la <b>madurez organizacional</b> y los <b>precios personalizados</b>. Cada aerolínea arranca con el mismo diagnóstico de madurez (Talento 5, Procesos 4, Datos 6) y los puntos comprados se acumulan entre las dos rondas.</p>
+  <p>La Sesión 5 desbloquea la <b>madurez organizacional</b> y los <b>precios personalizados</b>. La elasticidad controlada viene en la <b>investigación Premium</b>, disponible desde la Ronda 1; en esta sesión es cuando más sentido tiene comprarla. Cada aerolínea arranca con el mismo diagnóstico de madurez (Talento 5, Procesos 4, Datos 6) y los puntos comprados se acumulan entre las dos rondas.</p>
   <table><thead><tr><th>Momento</th><th>Qué hacer</th></tr></thead><tbody>
     <tr><td><b>Antes de la sesión</b></td><td>Si en la Sesión 4 activaste una temporada, los equipos que cambiaron su precio en esa ronda tienen una elasticidad "ingenua" inflada: es el material para la heladería de la Unidad 5. Si no la activaste, hazlo ahora en la Ronda 11.</td></tr>
     <tr><td><b>Inicio de sesión</b> (15 min)</td><td>Presenta la pestaña <b>Datos y ética</b>. Pide a un equipo que muestre su tabla de elasticidad y pregunta a la clase qué comparaciones son válidas antes de revelar la columna de temporada.</td></tr>
-    <tr><td><b>Ronda 11 · Diagnosticar y decidir</b></td><td>Cada equipo compra el estudio de elasticidad, identifica su pilar más débil e invierte ahí, y calcula el valor esperado de personalizar precios con la tabla de la pestaña. Deben escribir en su informe si personalizan y por qué.</td></tr>
+    <tr><td><b>Ronda 11 · Diagnosticar y decidir</b></td><td>Cada equipo compra la investigación Premium para ver su elasticidad ingenua y controlada, identifica su pilar más débil e invierte ahí, y calcula el valor esperado de personalizar precios con la tabla de la pestaña. Deben escribir en su informe si personalizan y por qué.</td></tr>
     <tr><td><b>Ronda 12 · Ajustar y cerrar</b></td><td>Los equipos revisan si su inversión movió el cuello de botella a otro pilar y deciden de nuevo. Para mostrar el efecto de la regulación, puedes subir la probabilidad de detección en <b>Configuración</b> antes de cerrar la ronda y anunciarlo como "nueva ley": el valor esperado de personalizar pasa a ser negativo.</td></tr>
     <tr><td><b>Cierre del módulo</b> (20 min)</td><td>Discute la pregunta final de la pestaña: aunque el valor esperado fuera positivo, ¿querrían que sus clientes supieran cómo les fijan el precio? Cierra con la idea de la Unidad 5: las catorce herramientas anteriores necesitan datos, personas y procesos que las sostengan.</td></tr>
   </tbody></table>
@@ -3060,7 +3068,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <li><b>Los extras tienen su propio precio óptimo.</b> Cobrarlos por debajo de su costo pierde dinero, y cobrarlos muy caro espanta pasajeros. La combinación que mejor funciona es una Flex algo más baja con extras razonables (afeitadora y repuestos).</li>
     <li><b>Los no-shows son aleatorios,</b> con 6% de probabilidad por pasajero en el doméstico. La regla del fractil crítico coincide con la mejor sobreventa (3 asientos en el ejemplo de la Unidad 4). Dos equipos con la misma decisión pueden obtener utilidades algo distintas; no afecta la calificación, pero sí el ranking de caja.</li>
     <li><b>El precio dinámico solo reacciona si activas una temporada</b> alta o baja en Control de ronda.</li>
-    <li><b>La encuesta de intención de compra</b> calcula el porcentaje de compra con la misma lógica del motor, pero asume que la competencia no reacciona. Su recomendación rinde entre 85% y 100% del mejor precio posible: es una buena guía, no una respuesta exacta.</li>
+    <li><b>La información del mercado es realista.</b> Gratis: los resultados propios, el precio de cada competidor y, con una ronda de retraso, los pasajeros que transportó cada aerolínea. Solo con la investigación de mercado: las reservas y la participación de cada aerolínea, la demanda total estimada y la disposición a pagar. Tú, en el panel, ves todo.</li>
+    <li><b>La encuesta de la investigación de mercado</b> se hace por segmento (negocios y placer), con 5 precios cercanos al precio del mercado. Usa el mismo modelo de elección del motor, incluido el atractivo de cada competidor, y calcula el margen del vuelo completo con los asientos que comparten los dos segmentos. Incorpora el sesgo hipotético: sobreestima la compra entre 11% y 31% (21% en promedio, como en Schmidt y Bijmolt, 2020), y el reporte enseña a corregirlo. Validada contra el motor, su pronóstico queda a cerca de 5% de lo real y su precio recomendado, a menos de $1 del óptimo.</li>
+    <li><b>El mapa de valor</b> ubica a cada aerolínea por su precio relativo y su valor percibido relativo. En las pruebas, las aerolíneas sobre la línea de valor justo tuvieron menos participación que el promedio, y las que estaban bajo la línea, más.</li>
     <li><b>La madurez organizacional</b> parte de Talento 5, Procesos 4 y Datos 6 para todas las aerolíneas. Invertir en el pilar más débil conviene y en los fuertes no, pero el efecto es modesto: enseña la lógica del cuello de botella sin decidir el ranking.</li>
     <li><b>Los socios del Pase Frecuente deciden sin sesgos:</b> solo se suscriben si realmente les conviene. En la realidad, muchas personas sobreestiman cuánto usarán una membresía (DellaVigna y Malmendier, 2006).</li>
     <li><b>Los valores de calibración</b> (sensibilidad al precio, elasticidades por segmento, aceptación de la valla, comportamiento de los extras) son pedagógicos: su dirección tiene respaldo en la literatura, pero sus magnitudes fueron elegidas para que el simulador enseñe bien. Todos son editables en Configuración, en el bloque "Modelo de demanda y herramientas".</li>
@@ -3072,6 +3082,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <tr><td>Aviso de mercado desalineado en Configuración</td><td>Haz clic en <b>Volver a calcular</b> antes de cerrar la Ronda 1.</td></tr>
     <tr><td>Un equipo dice haberse registrado pero no aparece</td><td>Confirma que entró por la dirección de estudiantes (<code>.../SimuladordePrecios/</code>, sin <code>docente.html</code>) y que completó el registro; luego usa <b>Actualizar conteo de equipos</b>.</td></tr>
     <tr><td>Un equipo no logra enviar su decisión</td><td>Si aparece un aviso, revisa que la Tarifa Promocional sea menor que la Flex y que equipaje y seguro no superen su precio máximo. Si no hay aviso, casi siempre es la conexión: que recargue la página y vuelva a entrar con la misma contraseña.</td></tr>
+    <tr><td>Un equipo eligió la investigación de mercado por error</td><td>No se puede deshacer: al elegir un nivel, el equipo ve los datos de inmediato y la elección queda fija para esa ronda. Se cobra al cerrar la ronda.</td></tr>
     <tr><td>Olvidaste tu contraseña de docente</td><td>No hay recuperación desde el panel; contacta al soporte técnico para restablecerla en la base de datos.</td></tr>
   </tbody></table>
 
