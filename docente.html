@@ -375,7 +375,7 @@ function avisosFormativos(hist, sesionActual, herramientasDisponibles){
   // 6 · Rondas sin decidir
   const neutras = hist.filter(h => h.neutra).length;
   if(neutras >= 2){
-    a.push(`Tu equipo dejó ${neutras} rondas sin decidir y recibió una decisión neutra automática. Además de perder atractivo, esas rondas no muestran ningún criterio propio.`);
+    a.push(`Tu equipo dejó ${neutras} rondas sin decidir: en esas rondas no operó y pagó igual su costo fijo del vuelo, y no muestran ningún criterio propio.`);
   }
 
   return a.slice(0, 3);   // tres a la vez como máximo: más avisos se leen como ruido
@@ -1857,7 +1857,7 @@ function vistaConfiguracion(){
       <div class="campo" style="margin-bottom:14px;">
         <label for="kNoDecidir">Penalización por no decidir (%)</label>
         <input type="number" id="kNoDecidir" min="0" max="50" value="${(c.penalizacionNoDecidir ?? 12)}">
-        <div class="nota" style="margin-top:6px;">Cuánto atractivo pierde un equipo que no envía su decisión y recibe la decisión neutra. Sin esta penalización, no decidir resulta ser la mejor estrategia del simulador: el equipo pasivo obtendría atractivo neutro sin pagar nada, mientras cualquier equipo que decide debe gastar para superar ese mismo nivel. Representa la pérdida de competitividad real de una aerolínea que no gestiona su pricing.</div>
+        <div class="nota" style="margin-top:6px;"><b>Ya no se aplica:</b> desde que los equipos que no deciden no operan (y pagan su costo fijo), este valor no tiene efecto. Se conserva solo por compatibilidad. Antes: cuánto atractivo perdía un equipo que no enviaba su decisión y recibía la decisión neutra. Sin esta penalización, no decidir resulta ser la mejor estrategia del simulador: el equipo pasivo obtendría atractivo neutro sin pagar nada, mientras cualquier equipo que decide debe gastar para superar ese mismo nivel. Representa la pérdida de competitividad real de una aerolínea que no gestiona su pricing.</div>
       </div>
 
       <div class="campo" style="margin-bottom:14px;">
@@ -1905,7 +1905,7 @@ function vistaRonda(){
 
   return `
     <h2 class="titulo">Ronda ${ronda} de 12</h2>
-    <p class="sub">${listos.length} de ${D.equipos.length} equipos han enviado su decisión${faltan>0 ? (faltan === 1 ? '. El equipo que falte al cerrar recibirá' : `. Los ${faltan} equipos que falten al cerrar recibirán`) + ' una decisión neutra: precio igual al promedio del mercado, sin inversiones.' : '. Puedes cerrar la ronda.'}</p>
+    <p class="sub">${listos.length} de ${D.equipos.length} equipos han enviado su decisión${faltan>0 ? (faltan === 1 ? '. El equipo que falte al cerrar recibirá' : `. Los ${faltan} equipos que falten al cerrar recibirán`) + ': no operará esta ronda (sin pasajeros ni ingresos) y pagará igual su costo fijo del vuelo.' : '. Puedes cerrar la ronda.'}</p>
 
     <div class="bloque">
       <h3>Estado de los equipos</h3>
@@ -1970,7 +1970,7 @@ function vistaPreviaPerfil(p){
           const expandida = D.filaExpandida === f.nombre;
           const filaPrincipal = `<tr class="${f.esBot?'bot':''}" ${!f.esBot?`data-fila-equipo="${esc(f.nombre)}" style="cursor:pointer;"`:''}>
             <td>${f.esBot?'':`<span class="puesto ${i===0?'primero':''}">${i+1}</span>`}</td>
-            <td>${esc(f.nombre)}${f.esBot?' <span style="font-size:11px;">referencia de mercado</span>':''}${f.neutra?' <span style="font-size:11px;color:var(--peligro);">no decidió</span>':''}</td>
+            <td>${esc(f.nombre)}${f.esBot?' <span style="font-size:11px;">referencia de mercado</span>':''}${f.neutra?' <span style="font-size:11px;color:var(--peligro);">no decidió: no operó</span>':''}</td>
             <td class="num">${money2(f.precio)}</td>
             <td class="num">${f.participacion === '—' ? '—' : String(f.participacion).replace('.', ',') + '%'}</td>
             <td class="num">${f.abordados}</td>
@@ -2123,8 +2123,8 @@ function fichasDeRonda(R){
     // 7. Equipos que no decidieron
     const neutros = T.filter(t => t.h.neutra);
     if(neutros.length) fichas.push({ t: 'Equipos que no decidieron' + etiq,
-      que: `${neutros.map(t => esc(t.n)).join(', ')} no enviaron su decisión y recibieron una decisión neutra (precio promedio del mercado, sin inversiones).`,
-      por: 'La decisión neutra no aprovecha lo aprendido en rondas anteriores.',
+      que: `${neutros.map(t => esc(t.n)).join(', ')} no ${neutros.length === 1 ? 'envió su decisión' : 'enviaron su decisión'}: no ${neutros.length === 1 ? 'operó' : 'operaron'} esta ronda y ${neutros.length === 1 ? 'perdió' : 'perdieron'} su costo fijo del vuelo, mientras sus pasajeros volaban con la competencia.`,
+      por: 'Los costos fijos se pagan aunque el avión no vuele: el arriendo, la tripulación y el mantenimiento no se detienen.',
       leccion: 'No decidir también es una decisión, y tiene costo.',
       pregunta: '¿Qué habría decidido ese equipo con la información que tenía?' });
   }
@@ -2246,10 +2246,10 @@ function vistaEquipos(){
       const res = enCurso ? '' : (f.h ? `<td class="num">${f.h.pasajerosGanados ?? '—'}</td><td class="num">${f.h.capacidad ? f.h.capacidad.abordados : '—'}</td><td class="num">${f.h.metricas ? _c(f.h.metricas.loadFactor) + '%' : '—'}</td><td class="num">${f.h.metricas ? money2(f.h.metricas.yield) : '—'}</td><td class="num"><b>${f.h.estadoResultados ? money(f.h.estadoResultados.utilidadNeta) : '—'}</b></td>` : '<td colspan="5"></td>');
       const det = abierto && (f.d || f.h) ? `<tr><td colspan="${1 + cols.length + (enCurso ? 0 : 5)}" style="background:var(--panel-alto);">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-            <div><b>Informe del equipo</b>${f.h && f.h.neutra ? ' <span style="color:var(--peligro);">(no envió decisión: se aplicó una neutra)</span>' : ''}<p style="white-space:pre-wrap;line-height:1.5;margin:6px 0 0;">${esc(f.informe || '(sin informe)')}</p></div>
+            <div><b>Informe del equipo</b>${f.h && f.h.neutra ? ' <span style="color:var(--peligro);">(no envió decisión: no operó)</span>' : ''}<p style="white-space:pre-wrap;line-height:1.5;margin:6px 0 0;">${esc(f.informe || '(sin informe)')}</p></div>
             <div>${f.h ? '<b>Estado de resultados</b>' + erDetalle(f.h) : '<span style="color:var(--texto-tenue);">Los resultados aparecen al cerrar la ronda.</span>'}</div>
           </div></td></tr>` : '';
-      return `<tr style="cursor:pointer;" data-eq-det="${key}"><td><b>${esc(f.e.nombre)}</b>${f.h && f.h.neutra ? ' <span style="color:var(--peligro);font-size:12px;">neutra</span>' : ''}</td>${dec}${res}</tr>${det}`;
+      return `<tr style="cursor:pointer;" data-eq-det="${key}"><td><b>${esc(f.e.nombre)}</b>${f.h && f.h.neutra ? ' <span style="color:var(--peligro);font-size:12px;">no operó</span>' : ''}</td>${dec}${res}</tr>${det}`;
     }).join('');
     return `<h2 class="titulo">Equipos · decisiones y resultados</h2>
       <p class="sub">Todos los equipos lado a lado en la ronda que elijas. Toca un equipo para ver su informe y su Estado de resultados.${enCurso ? ' En la ronda en curso ves las decisiones enviadas hasta ahora, antes de cerrar.' : ''}</p>
@@ -2266,7 +2266,7 @@ function vistaEquipos(){
     caja += h.estadoResultados ? h.estadoResultados.utilidadNeta : 0;
     const key = esc(E.nombre) + '|' + h.ronda, abierto = D.eqDet === key;
     const det = abierto ? `<tr><td colspan="${7 + cols.length}" style="background:var(--panel-alto);"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;"><div><b>Informe</b><p style="white-space:pre-wrap;line-height:1.5;margin:6px 0 0;">${esc(h.informe || (h.decision || {}).informe || '(sin informe)')}</p></div><div><b>Estado de resultados</b>${erDetalle(h)}</div></div></td></tr>` : '';
-    return `<tr style="cursor:pointer;" data-eq-det="${key}"><td>Ronda ${h.ronda}${h.neutra ? ' <span style="color:var(--peligro);font-size:12px;">neutra</span>' : ''}</td>${cols.map(c => `<td>${c.v(h.decision || {}, h)}</td>`).join('')}<td class="num">${h.pasajerosGanados ?? '—'}</td><td class="num">${h.capacidad ? h.capacidad.abordados : '—'}</td><td class="num">${h.metricas ? _c(h.metricas.loadFactor) + '%' : '—'}</td><td class="num">${h.metricas ? money2(h.metricas.yield) : '—'}</td><td class="num"><b>${h.estadoResultados ? money(h.estadoResultados.utilidadNeta) : '—'}</b></td><td class="num">${money(caja)}</td></tr>${det}`;
+    return `<tr style="cursor:pointer;" data-eq-det="${key}"><td>Ronda ${h.ronda}${h.neutra ? ' <span style="color:var(--peligro);font-size:12px;">no operó</span>' : ''}</td>${cols.map(c => `<td>${c.v(h.decision || {}, h)}</td>`).join('')}<td class="num">${h.pasajerosGanados ?? '—'}</td><td class="num">${h.capacidad ? h.capacidad.abordados : '—'}</td><td class="num">${h.metricas ? _c(h.metricas.loadFactor) + '%' : '—'}</td><td class="num">${h.metricas ? money2(h.metricas.yield) : '—'}</td><td class="num"><b>${h.estadoResultados ? money(h.estadoResultados.utilidadNeta) : '—'}</b></td><td class="num">${money(caja)}</td></tr>${det}`;
   }).join('');
   return `<h2 class="titulo">Equipos · trayectoria de ${esc(E.nombre)}</h2>
     <p class="sub">Qué decidió y qué obtuvo en cada ronda. Toca una ronda para ver su informe y su Estado de resultados.</p>
@@ -2306,7 +2306,7 @@ function vistaEvaluacion(){
     const rondas = h.map(r => `
       <div style="border-left:3px solid ${ (r.informe||'').trim() ? 'var(--marca)' : 'var(--borde)'};padding-left:12px;margin-bottom:14px;">
         <div style="font-size:12px;color:var(--texto-tenue);margin-bottom:4px;">
-          Ronda ${r.ronda} · precio ${money2(r.precioFinal)} · ${r.capacidad? r.capacidad.abordados : '—'} pasajeros${r.neutra ? ' · <span style="color:var(--alerta);">no decidió</span>' : ''}
+          Ronda ${r.ronda} · precio ${money2(r.precioFinal)} · ${r.capacidad? r.capacidad.abordados : '—'} pasajeros${r.neutra ? ' · <span style="color:var(--alerta);">no decidió: no operó</span>' : ''}
         </div>
         ${ (r.informe||'').trim()
             ? `<div style="white-space:pre-wrap;font-size:14px;">${(r.informe||'').replace(/</g,'&lt;')}</div>`
@@ -2478,7 +2478,7 @@ function revisionCierre(){
   const adv = [];
   if(PARTIDA_DOC && PARTIDA_DOC.tipo === 'prueba') adv.push('Estás en una <b>simulación de prueba</b>. Si querías cerrar la ronda del curso, cancela y cambia la simulación arriba.');
   if(D.choque && D.choque !== 'sin_choque') adv.push(`Activaste <b>${choques[D.choque]}</b>. Confirma que es intencional: afecta a todas las aerolíneas.`);
-  if(faltan.length) adv.push(`<b>${faltan.map(x => esc(x.nombre)).join(', ')}</b> no ${faltan.length === 1 ? 'envió su decisión y recibirá' : 'enviaron su decisión y recibirán'} una decisión neutra.`);
+  if(faltan.length) adv.push(`<b>${faltan.map(x => esc(x.nombre)).join(', ')}</b> no ${faltan.length === 1 ? 'envió su decisión: no operará' : 'enviaron su decisión: no operarán'} esta ronda y ${faltan.length === 1 ? 'pagará' : 'pagarán'} igual su costo fijo del vuelo.`);
   // Referencia: lo que invirtieron los equipos en la ronda anterior (o $100, el marketing del trimestre anterior)
   const mks = D.equipos.map(eq => { const h = (eq.historial || []).filter(x => !x.neutra).slice(-1)[0]; return h && h.decision ? Number(h.decision.marketing) || 0 : 0; }).filter(v => v > 0).sort((a, b) => a - b);
   const mediana = mks.length ? mks[Math.floor(mks.length / 2)] : 100;
@@ -2527,6 +2527,35 @@ function mostrarRevisionCierre(aviso){
   };
 }
 
+/* Registro de una ronda en que el equipo no envió su decisión: no opera, no tiene pasajeros ni ingresos,
+   y paga el costo fijo del vuelo (arriendo del avión, tripulación, mantenimiento). */
+function registroNoOpero(eq, ronda, r, perfil, poolFijo, choque){
+  const fijo = Math.round(perfil.docPorRonda * 100) / 100, cap = perfil.capacidad;
+  const ant = (eq.historial || []).filter(h => !h.neutra).slice(-1)[0] || null;
+  const preciosCompetidores = {};
+  (r ? r.resultados : []).filter(x => x.esBot).forEach(b => { preciosCompetidores[b.nombre] = b.precioFinal; });
+  return {
+    ronda, neutra: true, noOpero: true, choque,
+    precioMercado: r ? r.precioMercado : (ant ? ant.precioMercado : perfil.precioBase), poolDeRonda: r ? r.poolDeRonda : poolFijo, poolTemporada: r ? r.poolTemporada : poolFijo, poolFijo,
+    preciosCompetidores,
+    competidores: (r ? r.resultados : []).filter(x => x.esBot).map(bo => ({ nombre: bo.nombre, precio: bo.precioFinal, participacion: bo.participacion,
+      pasajerosGanados: bo.pasajerosGanados, capacidad: bo.capacidad, ocupacion: bo.metricas ? bo.metricas.loadFactor : null,
+      producto: bo.componentes ? (bo.componentes.producto || 1) * (bo.componentes.confianza || 1) : 1 })),
+    informe: '', decision: {},
+    piso: ant ? ant.piso : null, techo: ant ? ant.techo : null, tresCAnterior: eq.tresC || null,
+    precioDecidido: 0, precioFinal: 0, participacion: 0,
+    pasajerosGanados: 0, ganadosNegocio: 0, ganadosPlacer: 0, segmentosAbordo: { negocio: 0, placer: 0 },
+    capacidad: { asientos: cap, cupoVenta: cap, reservas: 0, abordados: 0, noShows: 0, spill: 0, denegados: 0 },
+    metricas: { loadFactor: 0, yield: 0, rasm: 0 },
+    estadoResultados: { ingresoTarifas: 0, ingresoAncillaries: 0, ingresoPaseFrecuente: 0, ingresoPersonalizado: 0, ingresoNoShows: 0, ingresos: 0,
+      doc: fijo, ioc: 0, costoExtras: 0, utilidadBruta: -fijo, margenBrutoPct: 0,
+      gastosComerciales: 0, gastosAdministrativos: 0, utilidadOperativa: -fijo,
+      compensacionDenegados: 0, sancionAlgoritmica: 0, sancionAnclaje: 0, otrosGastos: 0, utilidadNeta: -fijo },
+    comproWTP: false, comproElasticidad: false,
+    componentes: { producto: 1, confianza: 1, detectado: false, productoDetalle: {} }, anclaje: null
+  };
+}
+
 async function cerrarRonda(){
   D.calculando = true; render();
   const c = D.config, ronda = c.rondaActual;
@@ -2545,9 +2574,12 @@ async function cerrarRonda(){
     const preciosBot = Object.values(PRECIOS_BOT_BASE[perfilKey]);
     const promedioBots = preciosBot.reduce((a,b)=>a+b,0)/preciosBot.length;
 
-    const equiposMotor = delPerfil.map(e=>{
+    // Regla: el equipo que no envía su decisión NO OPERA esa ronda. Queda fuera del mercado (sus pasajeros
+    // eligen entre las aerolíneas que sí operan) y paga igual su costo fijo del vuelo.
+    const noOperan = delPerfil.filter(e => !D.decisiones[e.nombre.toLowerCase()]);
+    const equiposMotor = delPerfil.filter(e => D.decisiones[e.nombre.toLowerCase()]).map(e=>{
       const guardada = D.decisiones[e.nombre.toLowerCase()];
-      const dec = guardada || decisionNeutra(promedioBots);
+      const dec = guardada;
       return {
         nombre: e.nombre,
         puntajeValor: e.tresC ? e.tresC.valor : paramsRonda.benchmarkValor,
@@ -2569,6 +2601,23 @@ async function cerrarRonda(){
       equipos: equiposMotor, semilla: 'nur-mkt202', params: paramsRonda
     });
     mercados[perfilKey] = r.poolDeRonda;   // mercado real de la ronda en este perfil
+
+    // Equipos que no decidieron: ronda sin operación, con pérdida igual al costo fijo del vuelo
+    for(const e of noOperan){
+      const eq = D.equipos.find(x => x.nombre === e.nombre); if(!eq) continue;
+      const reg = registroNoOpero(eq, ronda, r, paramsRonda.perfiles[perfilKey], poolFijo, D.choque);
+      filas.push({ perfil: perfilKey, nombre: eq.nombre, esBot: false, neutra: true, noOpero: true, precio: null, participacion: 0,
+        abordados: 0, ocupacion: 0, utilidadNeta: reg.estadoResultados.utilidadNeta, _caja: eq.caja + reg.estadoResultados.utilidadNeta, _r: reg });
+      eq.caja = eq.caja + reg.estadoResultados.utilidadNeta;
+      eq.rondasJugadas = ronda;
+      eq.historial = eq.historial || [];
+      eq.historial.push(reg);
+      await rpc('docente_actualizar_equipo_v2', { p_partida_id: PID(),
+        p_password: PASS_DOCENTE_ACTUAL, p_nombre: eq.nombre,
+        p_caja: eq.caja, p_tres_c: eq.tresC, p_historial: eq.historial,
+        p_rondas_jugadas: eq.rondasJugadas, p_precio_anterior: eq.precioAnterior
+      });
+    }
 
     for(const res of r.resultados){
       const esNeutra = equiposMotor.find(x=>x.nombre===res.nombre)?._neutra;
@@ -2998,7 +3047,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     <li><b>Condiciones del mercado:</b> <b>Mercado normal</b>, <b>Temporada alta (+10% de demanda)</b> o <b>Temporada baja (−10% de demanda)</b>. Afecta a todas las aerolíneas por igual, así que nadie gana ventaja por él.</li>
     <li><b>Cerrar ronda y calcular resultados:</b> antes de calcular, el panel muestra un <b>recuadro de verificación</b> con la simulación en la que estás (con un aviso si es de prueba), la ronda y la sesión, la condición del mercado y cuántos equipos enviaron su decisión. También advierte valores inusuales: marketing desproporcionado o en $0 cuando antes invertía, una Tarifa Flex bajo el piso o más de un 25% sobre el precio de referencia, una tarifa tachada engañosa, una sobreventa de más de 8 asientos o precios personalizados activados. Revisa y haz clic en <b>Confirmar y calcular</b>, o en <b>Cancelar</b>. Al confirmar, el panel vuelve a leer la base: si alguien envió su decisión mientras revisabas, actualiza el recuadro antes de calcular.</li>
   </ul>
-  <p>Los equipos que no enviaron su decisión reciben una <b>decisión neutra</b> (precio igual al promedio del mercado, sin inversiones y con 12% menos de atractivo frente a los que sí decidieron). El recuadro los nombra antes de confirmar.</p>
+  <p>Los equipos que no enviaron su decisión <b>no operan</b> esa ronda: no tienen pasajeros ni ingresos, pero pagan igual el costo fijo del vuelo ($801,84 en el perfil doméstico), porque el arriendo del avión, la tripulación y el mantenimiento no se detienen. Sus pasajeros eligen entre las aerolíneas que sí operan. El recuadro los nombra antes de confirmar.</p>
 
   <h3 id="m-resultados">Cómo leer los resultados de una ronda</h3>
   <p>Tras cerrar la ronda aparece la tabla <b>Resultados de la Ronda N</b>: una fila por aerolínea (equipos y competidores de referencia) con precio, participación, pasajeros a bordo, ocupación y utilidad neta.</p>
@@ -3008,7 +3057,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <p>La pestaña <b>Evaluación</b> está siempre visible; mientras no haya equipos registrados, solo muestra un aviso.</p>
   <p><b>Calificación automática, 40% de la nota del módulo.</b> Se calcula sola con lo que cada equipo hizo en el simulador; ningún criterio depende de si ganó o perdió.</p>
   <table><thead><tr><th>Criterio</th><th>Peso</th><th>Qué mide</th></tr></thead><tbody>
-    <tr><td>Constancia en la participación</td><td>20%</td><td>Rondas decididas a tiempo, sin decisión neutra</td></tr>
+    <tr><td>Constancia en la participación</td><td>20%</td><td>Rondas decididas a tiempo (sin rondas sin operar)</td></tr>
     <tr><td>Precio dentro del rango razonable</td><td>15%</td><td>Si el precio que escribió quedó entre el piso y el techo que el simulador le mostraba en ese momento</td></tr>
     <tr><td>Amplitud de herramientas usadas</td><td>25%</td><td>Cuántas de las 13 herramientas calificables usó en dos rondas o más (activarla una sola vez no cuenta). Nivel 4 desde 10 herramientas. La valla solo cuenta si se usa junto a una Tarifa Promocional.</td></tr>
     <tr><td>Uso de la información comprada</td><td>20%</td><td>Si compró investigación de mercado (Estándar o Premium) y ajustó su precio después</td></tr>

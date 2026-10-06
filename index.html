@@ -603,7 +603,7 @@ function avisosFormativos(hist, sesionActual, herramientasDisponibles){
   // 6 · Rondas sin decidir
   const neutras = hist.filter(h => h.neutra).length;
   if(neutras >= 2){
-    a.push(`Tu equipo dejó ${neutras} rondas sin decidir y recibió una decisión neutra automática. Además de perder atractivo, esas rondas no muestran ningún criterio propio.`);
+    a.push(`Tu equipo dejó ${neutras} rondas sin decidir: en esas rondas no operó y pagó igual su costo fijo del vuelo, y no muestran ningún criterio propio.`);
   }
 
   return a.slice(0, 3);   // tres a la vez como máximo: más avisos se leen como ruido
@@ -2789,7 +2789,7 @@ function vistaReporte(){
       <h4 style="margin-top:0;">${rep.esAntecedente ? 'Decisiones de la aerolínea en el trimestre anterior' : 'Hoja de decisión de la Ronda ' + rep.ronda}</h4>
       <table class="tbl3c" style="margin:0;">${resumenDecision(dec).map(([k, v]) => `<tr><td style="color:var(--texto-tenue);width:42%;">${k}</td><td><b>${v}</b></td></tr>`).join('')}</table>
       ${rep.esAntecedente ? '' : `<p style="margin:10px 0 0;"><b>Informe del equipo:</b></p><p style="margin:4px 0 0;white-space:pre-wrap;line-height:1.55;">${String(rep.informe || dec.informe || '(sin informe)').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c])}</p>`}
-      ${rep.neutra ? '<p style="margin:8px 0 0;color:var(--peligro);">Tu equipo no envió decisión esta ronda: se aplicó una decisión neutra.</p>' : ''}
+      ${rep.neutra ? `<p style="margin:8px 0 0;color:var(--peligro);">${rep.noOpero ? 'Tu equipo no envió su decisión esta ronda: tu aerolínea no operó, no tuvo pasajeros ni ingresos, y pagó igual su costo fijo del vuelo.' : 'Tu equipo no envió decisión esta ronda: se aplicó una decisión neutra.'}</p>` : ''}
     </div>`;
 
   return `
@@ -2961,6 +2961,8 @@ function observaciones(rep){
    el principio: obligan al equipo a formularlo.
    ============================================================ */
 function diagnosticos(rep){
+  // Ronda sin operación (el equipo no envió su decisión): una sola pregunta
+  if(rep.noOpero) return [`No enviaste tu decisión: tu aerolínea no operó, tus pasajeros volaron con la competencia y perdiste ${money2(-(rep.estadoResultados ? rep.estadoResultados.utilidadNeta : 0))} de costo fijo. ¿Cómo se organizará tu equipo para no volver a quedarse sin decidir?`];
   const er = rep.estadoResultados, cap = rep.capacidad, m = rep.metricas;
   const p = PARAMS.perfiles[APP.equipo.perfil];
   const d = [];
@@ -3014,7 +3016,7 @@ function diagnosticos(rep){
   }
   // Decisión neutra por no haber enviado
   if(rep.neutra){
-    d.push(`No enviaste decisión esta ronda: recibiste el precio promedio del mercado sin ninguna inversión. ¿Dónde habrías competido distinto?`);
+    d.push(rep.noOpero ? `No enviaste tu decisión: tu aerolínea no operó, tus pasajeros volaron con la competencia y perdiste ${money2(-(rep.estadoResultados ? rep.estadoResultados.utilidadNeta : 0))} de costo fijo. ¿Cómo se organizará tu equipo para no volver a quedarse sin decidir?` : `No enviaste decisión esta ronda: recibiste el precio promedio del mercado sin ninguna inversión. ¿Dónde habrías competido distinto?`);
   }
   return d;
 }
@@ -3369,7 +3371,7 @@ function contenidoManual(){
 
     <div class="explica">
       <h4>10 · Preguntas frecuentes</h4>
-      <p style="margin:0 0 8px;"><b>¿Qué pasa si no alcanzamos a decidir antes de que cierre la ronda?</b> Reciben una decisión neutra automática: precio igual al promedio del mercado, sin ninguna inversión. Además, su aerolínea pierde atractivo frente a las que sí decidieron — igual que en la realidad, donde una aerolínea que no gestiona activamente su pricing va perdiendo posición. No pierden la ronda, pero salen debilitados de ella.</p>
+      <p style="margin:0 0 8px;"><b>¿Qué pasa si no alcanzamos a decidir antes de que cierre la ronda?</b> Su aerolínea <b>no opera</b> esa ronda: no tiene pasajeros ni ingresos, sus pasajeros vuelan con la competencia, y pagan igual el costo fijo del vuelo ($801,84 en las rutas domésticas), porque el arriendo del avión, la tripulación y el mantenimiento no se detienen. Además, esa ronda no cuenta para su constancia en la calificación del simulador.</p>
       <p style="margin:0 0 8px;"><b>¿Podemos cambiar nuestra decisión después de enviarla?</b> No dentro de la misma ronda. Revisen bien antes de enviar.</p>
       <p style="margin:0 0 8px;"><b>¿Por qué nuestros números son distintos a los de otro equipo del mismo perfil?</b> Porque tomaron decisiones distintas. Todos arrancan exactamente iguales, así que casi toda la diferencia viene de lo que decidieron. Una parte pequeña viene del azar: la cantidad de pasajeros que no se presentan varía de una ronda a otra.</p>
       <p style="margin:0 0 8px;"><b>¿Bajar mucho el precio garantiza ganar?</b> No. Ganas más pasajeros, pero cada uno deja menos margen, el avión tiene un límite de asientos y la competencia reacciona bajando también. Por debajo del piso no cubres tus costos totales.</p>
